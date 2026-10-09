@@ -1,0 +1,140 @@
+import { useEffect, useState } from "react";
+import type { Candidate } from "../lib/synth";
+import { useFdtd } from "../useFdtd";
+import { ANTENNA_BY_ID } from "../lib/antennas";
+import { parseBands } from "../lib/bands";
+import type { Goal, SynthOptions } from "../lib/synth";
+import { fmtHz } from "../lib/units";
+import { wavelength } from "../lib/rf";
+import { useT } from "../i18n";
+import { set, useStore } from "../store";
+import { fmtLen, fromUnit, toUnit } from "../format";
+import { useSynthesis } from "../useSynthesis";
+import { Num, Select } from "./inputs";
+
+/** Search all antenna types for the best one on the current bands (MoM / analytic engines in a worker). */
+export function SynthPanel() {
+  const t = useT();
+  const unit = useStore((s) => s.unit);
+  const bandsStr = useStore((s) => String(s.params[s.type].bands ?? ""));
+  const bands = parseBands(bandsStr);
+  const [goal, setGoal] = useState<Goal>("balanced");
+  const [family, setFamily] = useState<SynthOptions["family"]>("any");
+  const [pol, setPol] = useState<SynthOptions["pol"]>("any");
+  const [pattern, setPattern] = useState<SynthOptions["pattern"]>("any");
+  const [d, setD] = useState(2e-3);
+  const [er, setEr] = useState(4.4);
+  const [h, setH] = useState(1.6e-3);
+  const { state, run, cancel } = useSynthesis();
+  const [useFd, setUseFd] = useState(true);
+  const fdtd = useFdtd();
+  const [rows, setRows] = useState<Candidate[] | null>(null);
+  const [fdNote, setFdNote] = useState("");
+  // After the wire/analytic search: tune every printed (formula) candidate with FDTD and score it.
+  useEffect(() => {
+    if (state.status !== "done" || !state.result) return;
+    setRows(state.result);
+    if (!useFd) return;
+    let alive = true;
+    (async () => {
+      let list = state.result!;
+      for (const c of state.result!.filter((x) => !Number.isFinite(x.score))) {
+        if (!alive) return;
+        setFdNote(`${t("FDTD tuning")}: ${t(ANTENNA_BY_ID[c.id].name)}`);
+        try {
+          const out = await fdtd.start("tune", c.id, c.params, undefined, "auto");
+          const z0 = c.feedZ0 || 50;
+          const swr = bands.map(([a, b]) => {
+            const pts = out.result.z.filter((p) => p.f >= a && p.f <= b);
+            const s1 = (pts.length ? pts : [out.result.z.reduce((x, y) => (Math.abs(y.f - (a + b) / 2) < Math.abs(x.f - (a + b) / 2) ? y : x))]).map((p) => { const g = Math.hypot(p.r - z0, p.x) / Math.hypot(p.r + z0, p.x); return g >= 1 ? 99 : (1 + g) / (1 - g); });
+            return Math.max(...s1);
+          });
+          const ml = Math.max(...swr.map((x) => { const g = (x - 1) / (x + 1); return -10 * Math.log10(Math.max(1 - g * g, 1e-6)); }));
+          const gain = out.result.pattern?.max.dbi ?? NaN;
+          const score = goal === "match" ? 10 * ml : goal === "gain" ? 4 * ml - gain : goal === "small" ? 4 * ml + 3 * c.size : 6 * ml - 0.4 * gain;
+          const upd: Candidate = { ...c, params: out.params, swr, gain, score, note: `FDTD (${out.engine === "gpu" ? "WebGPU" : "CPU"}) tuned, trim ${Number(out.params.trim ?? 0).toFixed(1)} %` };
+          list = list.map((x) => (x.id === c.id ? upd : x));
+          const scored = list.filter((x) => Number.isFinite(x.score)).sort((a, b) => a.score - b.score);
+          list = [...scored, ...list.filter((x) => !Number.isFinite(x.score))];
+          if (alive) setRows(list);
+        } catch (e) {
+          if (alive) setFdNote(String(e instanceof Error ? e.message : e));
+          return;
+        }
+      }
+      if (alive) setFdNote("");
+    })();
+    return () => { alive = false; fdtd.cancel(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.status, state.result]);
+  const lamLow = wavelength(Math.min(...bands.map((b) => b[0])));
+  const go = () => run({ bands, goal, family, pol, pattern, d, er, h });
+  const apply = (id: string, params: Record<string, number | string>) => {
+    set((s) => ({ type: id, params: { ...s.params, [id]: { ...s.params[id], ...params } }, tab: "design" }));
+  };
+  return (
+    <div className="sim synth">
+      <div className="box">
+        <h3>{t("Synthesize the best antenna")}</h3>
+        <p className="hint">{t("Every antenna type that passes the filters is optimised for the bands below with the built-in solvers, then ranked. Single-band types are scored on every band, so multi-band requests favour antennas that really cover them.")}</p>
+        <div className="kv">
+          <span>{t("Frequency bands")}</span>
+          <span>{bands.map((b, i) => <span key={i} className="chip">{fmtHz(b[0], 3)} – {fmtHz(b[1], 3)}</span>)} <span className="hint">{t("(edit them in the sidebar)")}</span></span>
+        </div>
+        <div className="synth-grid">
+          <label>{t("Goal")}<Select value={goal} onChange={setGoal} options={[["balanced", "Balanced (match, gain, size)"], ["match", "Best match over the bands"], ["gain", "Maximum gain"], ["small", "Smallest antenna"]]} /></label>
+          <label>{t("Family")}<Select value={family} onChange={setFamily} options={[["any", "Any"], ["wire", "Wire / rod"], ["printed", "Printed (PCB)"]]} /></label>
+          <label>{t("Polarisation")}<Select value={pol} onChange={setPol} options={[["any", "Any"], ["vertical", "Vertical"], ["horizontal", "Horizontal"], ["circular", "Circular"]]} /></label>
+          <label>{t("Pattern")}<Select value={pattern} onChange={setPattern} options={[["any", "Any"], ["omni", "Omnidirectional"], ["beam", "Directional (beam)"]]} /></label>
+          <label>{t("Element diameter")} ({unit === "in" ? "in" : "mm"})<Num value={+toUnit(d, unit).toPrecision(6)} min={0.05} onChange={(v) => setD(fromUnit(v, unit))} /></label>
+          <label>{t("Substrate εr")}<Num value={er} min={1} max={15} onChange={setEr} /></label>
+          <label className="check"><input type="checkbox" checked={useFd} onChange={(e) => setUseFd(e.target.checked)} /> {t("Simulate printed candidates with FDTD (WebGPU)")}</label>
+          <label>{t("Substrate thickness")} ({unit === "in" ? "in" : "mm"})<Num value={+toUnit(h, unit).toPrecision(6)} min={0.05} onChange={(v) => setH(fromUnit(v, unit))} /></label>
+        </div>
+        <div className="row-btns">
+          {state.status === "running"
+            ? <><button className="danger" onClick={cancel}>{t("Stop")}</button>
+                <span className="progress"><span style={{ width: `${Math.round(state.progress * 100)}%` }} /></span>
+                <span className="muted small">{Math.round(state.progress * 100)} % · {t(state.current)}</span></>
+            : <button className="primary" onClick={go} disabled={!bands.length}>{t("Synthesize")}</button>}
+        </div>
+        {state.error && <p className="err-text">{state.error}</p>}
+        {fdNote && <p className="muted small">{fdtd.st.status === "running" ? "⏳ " : ""}{fdNote}{fdtd.st.status === "running" ? ` · ${fdtd.st.phase} · ${t("step {0}", fdtd.st.step)}` : ""}</p>}
+      </div>
+      {rows && (
+        <div className="box">
+          <h3>{t("Results")}</h3>
+          {rows.length === 0 && <p className="hint">{t("No antenna type passes these filters for these bands.")}</p>}
+          <div className="scroll-x">
+            <table className="data synth-table">
+              <thead><tr>
+                <th>#</th><th>{t("Antenna")}</th>
+                {bands.map((_, i) => <th key={i} className="num">{t("Worst SWR, band {0}", i + 1)}</th>)}
+                <th className="num">{t("Gain (worst band)")}</th><th className="num">{t("Size")}</th><th />
+              </tr></thead>
+              <tbody>
+                {rows.map((c, i) => (
+                  <tr key={c.id} className={i === 0 && Number.isFinite(c.score) ? "best" : ""}>
+                    <td>{Number.isFinite(c.score) ? i + 1 : "—"}</td>
+                    <td>
+                      <b>{t(ANTENNA_BY_ID[c.id].name)}</b>
+                      {ANTENNA_BY_ID[c.id].id === "yagi" && <span className="muted small"> · {c.params.n} el.</span>}
+                      {ANTENNA_BY_ID[c.id].id === "helix" && <span className="muted small"> · {c.params.turns} {t("turns")}</span>}
+                      {c.feedZ0 !== 50 && <span className="muted small"> · Z0 {Math.round(c.feedZ0)} Ω</span>}
+                      {c.note && <div className="hint">{c.note.startsWith("FDTD (") ? c.note : t(c.note)}</div>}
+                    </td>
+                    {bands.map((_, j) => <td key={j} className={"num " + (c.swr[j] == null ? "" : c.swr[j] < 2 ? "ok-text" : c.swr[j] > 3 ? "err-text" : "")}>{c.swr[j] == null ? "—" : c.swr[j] >= 20 ? "> 20" : c.swr[j].toFixed(2)}</td>)}
+                    <td className="num">{Number.isFinite(c.gain) ? `${c.gain.toFixed(1)} dBi` : "—"}</td>
+                    <td className="num">{c.size ? `${c.size.toFixed(2)} λ · ${fmtLen(c.size * lamLow, unit)}` : "—"}</td>
+                    <td><button className="small primary" onClick={() => apply(c.id, c.params)}>{t("Apply")}</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="hint">{t("SWR is against each antenna's natural feed impedance (Z0 shown when it is not 50 Ω: use the matching balun or transformer). Gain is the peak gain on the worst band. Size is the largest dimension at the lowest band.")}</p>
+        </div>
+      )}
+    </div>
+  );
+}
