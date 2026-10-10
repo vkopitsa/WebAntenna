@@ -78,7 +78,7 @@ export const dShape = (M: M, r: number, flat: number): CrossSection =>
 /** Bottoms of the stacked pieces of a body of height H: equal pieces no taller than SEG_H. */
 export const pieceBottoms = (H: number): number[] => { const k = Math.ceil(H / SEG_H); return Array.from({ length: k }, (_, i) => (i * H) / k); };
 
-export type Joint = { below: Manifold; aboveAdd?: Manifold; aboveCut?: Manifold };
+export type Joint = { below?: Manifold; aboveAdd?: Manifold; aboveCut?: Manifold };
 
 /** Cut a body standing on z = 0 into the pieces of `pieceBottoms(H)`, each moved down to stand on z = 0. At each cut zc,
  *  `joint(zc)` gives the spigot the piece below gains and what the piece above gains or loses (all in body coordinates). */
@@ -88,7 +88,7 @@ export function stack(body: Manifold, H: number, joint: (zc: number) => Joint): 
   return zs.map((z0, i) => {
     const z1 = i + 1 < zs.length ? zs[i + 1] : Infinity;
     let p = body.trimByPlane([0, 0, 1], z0);
-    if (z1 !== Infinity) p = p.trimByPlane([0, 0, -1], -z1).add(joint(z1).below);
+    if (z1 !== Infinity) { p = p.trimByPlane([0, 0, -1], -z1); const j = joint(z1); if (j.below) p = p.add(j.below); }
     if (i > 0) { const j = joint(z0); if (j.aboveAdd) p = p.add(j.aboveAdd); if (j.aboveCut) p = p.subtract(j.aboveCut); }
     return p.translate([0, 0, -z0]);
   });
