@@ -38,15 +38,17 @@ Afterwards a test enforces that **every wire antenna returns at least one part**
   - Quad: `bd` "Boom diameter", length 10–60 mm, default 25 mm.
   - Collinear: `rid` "Radome inner diameter", length 8–60 mm, default 20 mm.
 - **shapes.ts**
-  - `twistGroove(M, R, d, z0, z1, S, hand)`: a circle of diameter d + CLEAR centred at radius R, extruded
-    from z0 to z1 with `twistDegrees = ±360·(z1−z0)/S` (manifold `extrude`, ~48 divisions per turn). Sign
-    from the handedness of the design wires. This is the exact helix path and is cheap to build.
+  - `twistGroove(M, R, d, z0, z1, S, hand)`: the horizontal slice of a tube of diameter d + CLEAR round
+    the helix (at a 10–16° pitch that slice is a long curved bean, not a circle: the union of the discs cut
+    from balls along the helix), extruded from z0 to z1 with `twistDegrees = ±360·(z1−z0)/S` (manifold
+    `extrude`; divisions chosen so the chord sag stays < 0.05 mm). Exact helix path, cheap to build.
   - `cornerCap(M, rodD, wireD, corner, legA, legB, spreader)`: a sleeve on the spreader rod end and a
     head with a V channel through the wire corner, open outward so the wire is pressed in.
   - `segments(M, body, zMax, joint)`: cut a tall body into equal stacked pieces ≤ 170 mm (room for the
-    spigot) with a keyed spigot/socket at each cut, so grooves line up across joints.
+    spigot) with a keyed spigot/socket at each cut, so grooves line up across joints. The key is a
+    D-shaped spigot (`dShape`: a circle cut flat on one side).
 - **New failure message** (thrown from `build`, shown like "Too large"): "Wire too thick for this
-  former". The parameter-extreme test accepts it (and the collinear "Radome too narrow for the coax") alongside "Too large to print in one piece".
+  part". The parameter-extreme test accepts it (and the collinear "Radome too narrow for the coax") alongside "Too large to print in one piece".
 - All strings in `*_STRINGS` / `*_HOWTO`, added to `PRINT_STRINGS`, with Ukrainian translations.
 
 ## Helix (`families/former.ts`)
@@ -68,7 +70,7 @@ From the design wires: radius R, wire diameter d, turn spacing S, turns n, first
 - Base flange at z = 0..2 mm, radius R + d/2 + 8, three M3 holes: it screws to the reflector and is the
   drilling template for it.
 - Height above 170 mm → `segments()`. Diameter above 180 mm → "Too large". R too small for the groove
-  and a wall → "Wire too thick for this former".
+  and a wall → "Wire too thick for this part".
 
 Prints upright with no supports (a 10–16° groove is a shallow overhang). The paper wrap template stays.
 
@@ -104,13 +106,14 @@ Base: `flangeCut` (N/SO-239), also the reflector drilling template.
 
 - **J-pole stub spacers:** a block with two bores (d + CLEAR) at the stub spacing s, slid on before the
   shorting bar is soldered; qty max(2, ceil(stub / 120 mm)).
-- **J-pole feed-tap gauge:** the same block with height tap − d/2, standing on the shorting bar; its top
-  edge marks where the coax is attached; zip slot for the coax.
+- **J-pole feed-tap gauge:** the same outline with height tap − d/2, C-shaped so it clips onto both legs,
+  standing on the shorting bar; its top edge marks where the coax is attached. Skipped when shorter than 4 mm.
 - **Fan centre block:** the dipole centre generalised to n channel pairs at the fan angles (`dipoleArms`
   takes driven + parasitic wires).
-- **Fan leg spreaders:** a plate across the legs at 1/3 and 2/3 of the longest arm, with channels along
-  each wire's own direction, only for wires that reach that far; qty 2 each (same part on both legs).
-  A plate that would exceed 180 mm is skipped at that position (`warn`).
+- **Fan leg spreaders:** a plate across the legs at two distances Y from the centre, with channels along
+  each wire's own direction, only for wires that reach past Y; qty 2 each (same part on both legs).
+  Y is chosen so the wire spread fits the bed: Ymax = min(⅔ of the longest arm, distance where the spread
+  reaches ~150 mm), positions Ymax/2 and Ymax. Fewer than 2 wires at a position → no spreader there.
 - **Collinear radome spacers:** a disc of diameter rid − CLEAR with a bore od + CLEAR and vent notches,
   slid to the middle of each section; qty n. rid < od + 2·WALL → its own message "Radome too narrow for
   the coax" (also accepted by the extremes test).
