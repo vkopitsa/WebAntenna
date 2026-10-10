@@ -3,9 +3,9 @@ import type { Manifold, ManifoldToplevel } from "manifold-3d";
 import { ANTENNA_BY_ID } from "../../antennas";
 import type { Params } from "../../types";
 import { loadManifold } from "../manifold";
-import { partsFor } from "..";
+import { buildPart, partsFor } from "..";
 import { rod, type V3 } from "../shapes";
-import { CLEAR } from "../rules";
+import { CLEAR, INSULATE } from "../rules";
 import { dipoleArms } from "./centre";
 import { radialDirs } from "./hub";
 
@@ -50,5 +50,34 @@ describe("ground plane", () => {
         expect(inside(hub, along([0, 0, 0], u, 20, 45, wireD + CLEAR + 2))).toBeGreaterThan(1);
       }
     }
+  });
+});
+
+describe("yagi", () => {
+  it("insulated: n − 1 clips and a driven block; through-boom: one drilling guide", () => {
+    const { p, d } = setup("yagi");
+    expect(partsFor("yagi", p, d).map((s) => [s.id, s.qty])).toEqual([["yagi-clip", Number(p.n) - 1], ["yagi-driven", 1]]);
+    const t = setup("yagi", { boom: "through" });
+    expect(partsFor("yagi", t.p, t.d).map((s) => s.id)).toEqual(["yagi-drill"]);
+  });
+  it("clip: the element fits with 0.3 mm clearance and sits on 2 mm of plastic above the boom", () => {
+    const { d } = setup("yagi");
+    const elemD = 2000 * d.wires.find((w) => !w.drawOnly)!.r;
+    const clip = part("yagi", "yagi-clip").build(M)[0];
+    expect(inside(clip, along([0, 0, 0], [0, 1, 0], -20, 20, elemD))).toBeLessThan(1e-3);
+    expect(inside(clip, along([0, 0, 0], [0, 1, 0], -20, 20, elemD + CLEAR + 0.4))).toBeGreaterThan(0.1);
+    const wall = M.Manifold.cube([1, 1, INSULATE * 0.8], true).translate([0, 6, -(elemD + CLEAR) / 2 - INSULATE / 2]);
+    expect(inside(clip, wall)).toBeCloseTo(INSULATE * 0.8, 3);
+  });
+  it("folded driven block: both conductors fit, spaced as in the model", () => {
+    const { d } = setup("yagi", { driven: "folded" });
+    const elemD = 2000 * d.wires.find((w) => !w.drawOnly)!.r;
+    const fs = 1000 * Math.max(...d.wires.filter((w) => w.group === "driven").map((w) => w.a[2]));
+    const block = part("yagi", "yagi-driven").build(M)[0];
+    expect(inside(block, along([0, 0, fs], [0, 1, 0], -20, 20, elemD))).toBeLessThan(1e-3);
+    expect(inside(block, along([0, 0, 0], [0, 1, 0], 2, 20, elemD))).toBeLessThan(1e-3);
+  });
+  it("a boom too wide for the printer is reported, not exported", () => {
+    expect(buildPart(M, part("yagi", "yagi-clip", { bd: 0.2 }), "x").ok).toBe(false);
   });
 });
