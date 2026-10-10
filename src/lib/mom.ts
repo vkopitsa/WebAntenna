@@ -14,7 +14,7 @@ const MU0 = 4e-7 * Math.PI;
 const EPS0 = 1 / (MU0 * C0 * C0);
 const ETA0 = MU0 * C0;
 
-interface Seg { p: Vec3; q: Vec3; mid: Vec3; L: number; r: number }
+export interface Seg { p: Vec3; q: Vec3; mid: Vec3; L: number; r: number }
 /** Half-segment oriented along the current path. */
 interface Half { from: Vec3; to: Vec3; seg: number }
 interface Unknown { h1: Half; h2: Half }
@@ -250,19 +250,45 @@ export function solve(mesh: Mesh, f: number): Solution | null {
   return { f, z: [Ir / d, -Ii / d], ir: br, ii: bi, mesh };
 }
 
+/** A current element: one half-segment of a path unknown (direction and length dl, midpoint, current, wire radius). */
+export interface CurrentElement { dl: Vec3; mid: Vec3; cr: number; ci: number; r: number }
+
+/** The solved currents as short elements, exactly the basis `gainFn` integrates. */
+export function currentElements(sol: Solution): CurrentElement[] {
+  const { mesh, ir, ii } = sol;
+  const el: CurrentElement[] = [];
+  mesh.unknowns.forEach((u, i) => {
+    for (const h of [u.h1, u.h2]) el.push({ dl: sub(h.to, h.from), mid: scale(add(h.from, h.to), 0.5), cr: ir[i], ci: ii[i], r: mesh.segs[h.seg].r });
+  });
+  return el;
+}
+
+/** Complex current at each segment midpoint, positive along p → q: the mean of its two half-segments' currents. */
+export function segCurrents(sol: Solution): { ir: Float64Array; ii: Float64Array } {
+  const { mesh, ir, ii } = sol;
+  const n = mesh.segs.length;
+  const or = new Float64Array(n), oi = new Float64Array(n);
+  mesh.unknowns.forEach((u, i) => {
+    for (const h of [u.h1, u.h2]) {
+      const s = mesh.segs[h.seg];
+      const d = sub(h.to, h.from), a = sub(s.q, s.p);
+      const sign = d[0] * a[0] + d[1] * a[1] + d[2] * a[2] >= 0 ? 1 : -1;
+      or[h.seg] += (sign * ir[i]) / 2;
+      oi[h.seg] += (sign * ii[i]) / 2;
+    }
+  });
+  return { ir: or, ii: oi };
+}
+
 /**
  * Far-field power gain (dBi, total of both polarisations) in direction (θ, φ) from the solved currents.
  * Gain = 4πU / Pin, with Pin = ½ Re(V I*) for the 1 V source (lossless wires).
  */
 export function gainFn(sol: Solution): (theta: number, phi: number) => number {
-  const { mesh, ir, ii, f } = sol;
+  const { f } = sol;
   const k = (2 * Math.PI * f) / C0;
   const w = 2 * Math.PI * f;
-  // Each unknown's two halves: current element ∫ŝ dl with its midpoint.
-  const el: { dl: Vec3; mid: Vec3; cr: number; ci: number }[] = [];
-  mesh.unknowns.forEach((u, i) => {
-    for (const h of [u.h1, u.h2]) el.push({ dl: sub(h.to, h.from), mid: scale(add(h.from, h.to), 0.5), cr: ir[i], ci: ii[i] });
-  });
+  const el = currentElements(sol);
   const zr = sol.z[0], zi = sol.z[1];
   // I_in = 1/Z → Pin = ½ Re(1/Z*) = ½ R/|Z|²
   const pin = 0.5 * zr / (zr * zr + zi * zi);
