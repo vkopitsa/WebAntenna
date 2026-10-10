@@ -15,8 +15,9 @@ export const collinear: AntennaDef = {
     { key: "n", label: "Number of λ/2 sections", kind: "int", min: 2, max: 16, step: 1 },
     { key: "vf", label: "Coax velocity factor", kind: "number", min: 0.5, max: 1, step: 0.01, hint: "Solid PE 0.66, foam 0.80–0.85" },
     { key: "od", label: "Coax outer diameter", kind: "length", min: 1e-3, max: 0.03 },
+    { key: "rid", label: "Radome inner diameter", kind: "length", min: 8e-3, max: 60e-3, hint: "For the printed spacers" },
   ],
-  defaults: { bands: "863e6-870e6", n: 8, vf: 0.66, od: 5e-3 },
+  defaults: { bands: "863e6-870e6", n: 8, vf: 0.66, od: 5e-3, rid: 20e-3 },
   build(p): Design {
     const { f, sweeps } = band(p);
     const n = Math.round(num(p, "n", 8)), vf = num(p, "vf", 0.66), od = num(p, "od", 5e-3);
