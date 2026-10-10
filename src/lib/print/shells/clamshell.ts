@@ -17,6 +17,13 @@ export function earCentres(inner: Box3, wall: number): V3[] {
   return [[o.lo[0] - k, o.lo[1] - k, 0], [o.hi[0] + k, o.lo[1] - k, 0], [o.lo[0] - k, o.hi[1] + k, 0], [o.hi[0] + k, o.hi[1] + k, 0]];
 }
 
+/** The drain hole (outdoor): a Ø3 hole through the floor near the low corner, reaching 1 mm into the cavity. */
+export const DRAIN = 3;
+export function drainAt(inner: Box3): [number, number] {
+  const off = Math.min(4, Math.min(inner.hi[0] - inner.lo[0], inner.hi[1] - inner.lo[1]) / 2 - 1.5);
+  return [inner.lo[0] + off, inner.lo[1] + off];
+}
+
 export function clamshell(M: ManifoldToplevel, o: ClamOpts): [Manifold, Manifold] {
   if (!(o.splitZ > o.inner.lo[2] && o.splitZ < o.inner.hi[2])) throw new Error("clamshell: splitZ must lie strictly inside the cavity");
   const out = grow(o.inner, o.wall), lipOut = grow(o.inner, o.wall / 2);
@@ -35,10 +42,7 @@ export function clamshell(M: ManifoldToplevel, o: ClamOpts): [Manifold, Manifold
   body = body.subtract(box(M, o.inner.lo, o.inner.hi));
   const cuts: Manifold[] = [...(o.cuts ?? [])];
   for (const c of earCentres(o.inner, o.wall)) cuts.push(m3(M, c[0], c[1], z0, z1, false));
-  if (o.drain) {
-    const off = Math.min(4, Math.min(o.inner.hi[0] - o.inner.lo[0], o.inner.hi[1] - o.inner.lo[1]) / 2 - 1.5);
-    cuts.push(rod(M, [o.inner.lo[0] + off, o.inner.lo[1] + off, z0 - 1], [o.inner.lo[0] + off, o.inner.lo[1] + off, o.inner.lo[2] + 1], 3));
-  }
+  if (o.drain) { const [x, y] = drainAt(o.inner); cuts.push(rod(M, [x, y, z0 - 1], [x, y, o.inner.lo[2] + 1], DRAIN)); }
   // the lip: a band half a wall thick round the cavity, LIP_H above the split, on the bottom half
   const lip = box(M, [lipOut.lo[0], lipOut.lo[1], o.splitZ - 0.01], [lipOut.hi[0], lipOut.hi[1], o.splitZ + lipH]).subtract(box(M, [o.inner.lo[0], o.inner.lo[1], o.splitZ - 1], [o.inner.hi[0], o.inner.hi[1], o.splitZ + lipH + 1]));
   const recess = box(M, [lipOut.lo[0] - CLEAR / 2, lipOut.lo[1] - CLEAR / 2, o.splitZ - 1], [lipOut.hi[0] + CLEAR / 2, lipOut.hi[1] + CLEAR / 2, o.splitZ + lipH + CLEAR]);

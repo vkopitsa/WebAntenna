@@ -43,7 +43,7 @@ export const SHELL_HOWTO = {
   ],
   pcb: [
     "Print each half on its flat outer face.",
-    "Solder the coax pigtail (or the SMA jack under a probe feed) to the board, then lay the board on the posts of the bottom half with the coax through its hole.",
+    "Solder the coax pigtail (or the SMA jack under a probe feed) to the board, then lay the board in the bottom half between its edge stops, with the coax through its hole.",
     "Close the top half and fit four M3 screws and nuts; where there are no posts, fix the board with a drop of hot glue next to the coax.",
   ],
   /** Ground plane only, before the sealing step. */

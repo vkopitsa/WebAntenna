@@ -1,33 +1,29 @@
 import type { Manifold, ManifoldToplevel } from "manifold-3d";
 import type { Design } from "../../types";
-import { isProbe } from "../../pcb";
-import { mm } from "../rules";
+import { isProbe, type PcbRect } from "../../pcb";
+import { CLEAR, mm } from "../rules";
 import { box, rod, type V3 } from "../shapes";
-import { clamshell } from "./clamshell";
+import { clamshell, DRAIN, drainAt } from "./clamshell";
 import { envelope, grow, STYLE, styleOf, type Box3 } from "./geometry";
 
-/** Enclosure for a printed antenna: the board floats on small posts that touch it only where there is no copper,
- *  with air above and below the copper, and the coax enters on the board edge nearest the port. */
-const POST = 3, PIGTAIL = 3.5, SMA = 6.5;
+/** Enclosure for a printed antenna. The board rests on small posts (on copper-free board or on the ground pour, a gap
+ *  away from the radiator) and is located by edge stops on all four sides: ribs from the side walls that touch only the
+ *  board's edge, with a 1 mm ledge under and a 1 mm overhang over the rim where the rim is clear of the radiator. The
+ *  coax enters on the board edge nearest the port, over the ground pour when there is one; a probe feed gets an SMA
+ *  hole underneath. */
+const POST = 3, STOP = 3, RIM = 1, PIGTAIL = 3.5, SMA = 6.5, PROBE_KEEP = 7;
 
-export function postSpots(d: Design, layer: "top" | "bottom"): V3[] {
-  const pcb = d.pcb!, b = pcb.board, k = POST / 2 + 0.5;
-  let x0 = mm(b.x0) + 2 + POST / 2, x1 = mm(b.x1) - 2 - POST / 2, y0 = mm(b.y0) + 2 + POST / 2, y1 = mm(b.y1) - 2 - POST / 2;
-  if (x0 > x1) x0 = x1 = mm(b.x0 + b.x1) / 2;                       // board narrower than two posts: one row on the centre line
-  if (y0 > y1) y0 = y1 = mm(b.y0 + b.y1) / 2;
-  const xm = (x0 + x1) / 2, ym = (y0 + y1) / 2;
-  const cand: V3[] = [[x0, y0, 0], [x1, y0, 0], [x0, y1, 0], [x1, y1, 0], [xm, y0, 0], [xm, y1, 0], [x0, ym, 0], [x1, ym, 0]];
-  // the coax pigtail lies on the port's side of the board, straight from the port to its entry: no post on that path
-  const e = pcbEntry(d), c = portCentre(d), side = c[2] > mm(pcb.h) / 2 ? "top" : "bottom";
-  const onPigtail = (s: V3) => !e.probe && side === layer && segDist(s, c, e.at) < POST / 2 + PIGTAIL / 2;
-  const free: V3[] = [];
-  for (const s of cand) {
-    if (free.some((f) => Math.max(Math.abs(f[0] - s[0]), Math.abs(f[1] - s[1])) < POST)) continue;   // overlapping post
-    if (onPigtail(s)) continue;
-    if (pcb.rects.filter((r) => r.layer === layer).every((r) => s[0] + k < mm(r.x0) || s[0] - k > mm(r.x1) || s[1] + k < mm(r.y0) || s[1] - k > mm(r.y1))) free.push(s);
-  }
-  return free.length >= 2 ? free : [];
-}
+type Layer = "top" | "bottom";
+type Rect = { x0: number; y0: number; x1: number; y1: number };
+/** An edge stop: board side (axis i, sign s: −1 the low edge), its centre along the edge, and whether it has the
+ *  ledge under the rim (bottom support) and the overhang over it (top clamp). */
+export type Stop = { i: 0 | 1; s: 1 | -1; c: number; ledge: boolean; clamp: boolean };
+
+const isGround = (r: PcbRect) => r.label.startsWith("Ground");
+const rmm = (r: PcbRect): Rect => ({ x0: mm(r.x0), y0: mm(r.y0), x1: mm(r.x1), y1: mm(r.y1) });
+/** Distance between two axis-aligned rectangles (0 when they overlap). */
+const rdist = (a: Rect, b: Rect) => Math.hypot(Math.max(0, b.x0 - a.x1, a.x0 - b.x1), Math.max(0, b.y0 - a.y1, a.y0 - b.y1));
+const sq = (x: number, y: number, k: number): Rect => ({ x0: x - k, y0: y - k, x1: x + k, y1: y + k });
 
 const portCentre = (d: Design): V3 => {
   const q = d.pcb!.port;
@@ -41,6 +37,106 @@ function segDist(p: V3, a: V3, b: V3): number {
   return Math.hypot(p[0] - a[0] - t * ux, p[1] - a[1] - t * uy);
 }
 
+/** Non-ground copper of a layer (both layers when omitted), in mm. */
+const radiator = (d: Design, layer?: Layer) => d.pcb!.rects.filter((r) => !isGround(r) && (!layer || r.layer === layer)).map(rmm);
+
+/** Edges of the ground pour that face the radiator: the sides of each ground rectangle that are not on the board outline. */
+function groundEdges(d: Design): Rect[] {
+  const b = d.pcb!.board, e = 1e-9, out: Rect[] = [];
+  for (const g of d.pcb!.rects.filter(isGround)) {
+    if (g.x0 > b.x0 + e) out.push({ x0: g.x0, x1: g.x0, y0: g.y0, y1: g.y1 });
+    if (g.x1 < b.x1 - e) out.push({ x0: g.x1, x1: g.x1, y0: g.y0, y1: g.y1 });
+    if (g.y0 > b.y0 + e) out.push({ x0: g.x0, x1: g.x1, y0: g.y0, y1: g.y0 });
+    if (g.y1 < b.y1 - e) out.push({ x0: g.x0, x1: g.x1, y0: g.y1, y1: g.y1 });
+  }
+  return out.map((r) => ({ x0: mm(r.x0), y0: mm(r.y0), x1: mm(r.x1), y1: mm(r.y1) }));
+}
+
+/** Plastic touching the board at this footprint is allowed: a gap from the layer's radiator copper and from the ground
+ *  pour's radiator-facing edge, 7 mm from a probe port, and clear of the drain hole. */
+function touchOk(d: Design, f: Rect, layer: Layer): boolean {
+  const gap = STYLE[styleOf(d)].gap;
+  if (radiator(d, layer).some((r) => rdist(f, r) < gap)) return false;
+  if (groundEdges(d).some((r) => rdist(f, r) < gap)) return false;
+  if (isProbe(d.pcb!)) { const c = portCentre(d); if (rdist(f, sq(c[0], c[1], 0)) < PROBE_KEEP) return false; }
+  return !hitsDrain(d, f);
+}
+
+function hitsDrain(d: Design, f: Rect): boolean {
+  if (styleOf(d) !== "outdoor") return false;
+  const [x, y] = drainAt(pcbCavity(d));
+  return rdist(f, sq(x, y, 0)) < DRAIN / 2 + 0.5;
+}
+
+const area2 = (a: V3, b: V3, c: V3) => Math.abs((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]));
+/** The points do not all lie on one line (twice the largest triangle area above 1 mm²). */
+export function spread(pts: V3[]): boolean {
+  for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) for (let k = j + 1; k < pts.length; k++) if (area2(pts[i], pts[j], pts[k]) > 1) return true;
+  return false;
+}
+
+const lin = (a: number, b: number) => {
+  if (a > b) return [(a + b) / 2];
+  const n = Math.min(40, Math.max(2, Math.ceil((b - a) / 4) + 1));
+  return Array.from({ length: n }, (_, k) => a + ((b - a) * k) / (n - 1));
+};
+
+/** Post centres under (bottom) or over (top) the board: the allowed spot furthest towards each corner, plus one off
+ *  their line when they all lie on one; none when fewer than 2 spots are allowed. */
+export function postSpots(d: Design, layer: Layer): V3[] {
+  const pcb = d.pcb!, b = pcb.board, k = 2 + POST / 2;
+  const e = pcbEntry(d), c = portCentre(d);
+  const ok: V3[] = [];
+  for (const x of lin(mm(b.x0) + k, mm(b.x1) - k)) for (const y of lin(mm(b.y0) + k, mm(b.y1) - k)) {
+    const s: V3 = [x, y, 0];
+    if (!touchOk(d, sq(x, y, POST / 2), layer)) continue;
+    // the coax pigtail lies on the top face, straight from the entry to the port: no post on that path
+    if (!e.probe && layer === "top" && segDist(s, e.at, c) < POST / 2 + PIGTAIL / 2) continue;
+    ok.push(s);
+  }
+  const out: V3[] = [];
+  const put = (s: V3) => { if (!out.some((f) => Math.max(Math.abs(f[0] - s[0]), Math.abs(f[1] - s[1])) < POST)) out.push(s); };
+  for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) if (ok.length) put(ok.reduce((m, s) => (sx * s[0] + sy * s[1] > sx * m[0] + sy * m[1] ? s : m)));
+  if (out.length >= 2 && !spread(out)) {
+    const far = ok.reduce((m, s) => (area2(out[0], out[out.length - 1], s) > area2(out[0], out[out.length - 1], m) ? s : m));
+    if (area2(out[0], out[out.length - 1], far) > 1) put(far);
+  }
+  return out.length >= 2 ? out : [];
+}
+
+/** Edge stops: three spots along each side (ends and middle), skipped where the rib comes within the gap of radiator
+ *  copper, where the coax enters or where the drain would cut it. Ledge/overhang only where that rim is clear. */
+export function edgeStops(d: Design): Stop[] {
+  const b = d.pcb!.board, inner = pcbCavity(d), gap = STYLE[styleOf(d)].gap, e = pcbEntry(d);
+  const lo = [mm(b.x0), mm(b.y0)], hi = [mm(b.x1), mm(b.y1)], out: Stop[] = [];
+  for (const i of [0, 1] as const) for (const s of [-1, 1] as const) {
+    const j = 1 - i, E = s > 0 ? hi[i] : lo[i], F = s > 0 ? inner.hi[i] : inner.lo[i];
+    const a = lo[j] + STOP / 2 + 1, z = hi[j] - STOP / 2 - 1;
+    const cs = a > z ? [(lo[j] + hi[j]) / 2] : [a, (a + z) / 2, z];
+    for (const c of cs) {
+      const fp = (n0: number, n1: number): Rect => {
+        const p = [Math.min(n0, n1), Math.max(n0, n1)], q = [c - STOP / 2, c + STOP / 2];
+        return i === 0 ? { x0: p[0], x1: p[1], y0: q[0], y1: q[1] } : { x0: q[0], x1: q[1], y0: p[0], y1: p[1] };
+      };
+      const rib = fp(E, F), rim = fp(E - s * RIM, E);
+      if (radiator(d).some((r) => rdist(rib, r) < gap) || hitsDrain(d, fp(E - s * RIM, F))) continue;
+      if (!e.probe && e.dir[i] === s && Math.abs(e.at[j] - c) < PIGTAIL / 2 + STOP / 2 + 1) continue;   // the coax hole
+      out.push({ i, s, c, ledge: touchOk(d, rim, "bottom"), clamp: touchOk(d, rim, "top") });
+    }
+  }
+  return out;
+}
+
+/** Where the board is supported, per face: posts, and the ledges (bottom) or overhangs (top) of the edge stops. */
+export function supports(d: Design): { bottom: V3[]; top: V3[] } {
+  const b = d.pcb!.board, st = edgeStops(d);
+  const rimPt = (t: Stop): V3 => { const E = mm(t.s > 0 ? (t.i === 0 ? b.x1 : b.y1) : t.i === 0 ? b.x0 : b.y0) - (t.s * RIM) / 2; return t.i === 0 ? [E, t.c, 0] : [t.c, E, 0]; };
+  return {
+    bottom: [...postSpots(d, "bottom"), ...st.filter((t) => t.ledge).map(rimPt)],
+    top: [...postSpots(d, "top"), ...st.filter((t) => t.clamp).map(rimPt)],
+  };
+}
+
 export function pcbEntry(d: Design): { at: V3; dir: V3; probe: boolean } {
   const pcb = d.pcb!, h = mm(pcb.h), b = pcb.board, c = portCentre(d);
   if (isProbe(pcb)) return { at: [c[0], c[1], 0], dir: [0, 0, -1], probe: true };
@@ -51,6 +147,16 @@ export function pcbEntry(d: Design): { at: V3; dir: V3; probe: boolean } {
     { dist: mm(b.y1) - c[1], at: [c[0], mm(b.y1), h / 2], dir: [0, 1, 0] },
   ];
   const e = edges.reduce((m, x) => (x.dist < m.dist ? x : m));
+  // with a ground pour on top reaching this edge, the cable comes in over the pour: (gap + cable radius) inside its edge
+  const i = e.dir[0] !== 0 ? 0 : 1, j = 1 - i, E = e.at[i], k = STYLE[styleOf(d)].gap + PIGTAIL / 2;
+  let best: number | null = null;
+  for (const g of pcb.rects.filter((r) => isGround(r) && r.layer === "top").map(rmm)) {
+    const lo = [g.x0, g.y0], hi = [g.x1, g.y1];
+    if (Math.abs((e.dir[i] > 0 ? hi[i] : lo[i]) - E) > 1e-6 || lo[j] + k > hi[j] - k) continue;
+    const v = Math.min(Math.max(e.at[j], lo[j] + k), hi[j] - k);
+    if (best === null || Math.abs(v - e.at[j]) < Math.abs(best - e.at[j])) best = v;
+  }
+  if (best !== null) e.at[j] = best;
   return { at: e.at, dir: e.dir, probe: false };
 }
 
@@ -58,6 +164,30 @@ export function pcbEntry(d: Design): { at: V3; dir: V3; probe: boolean } {
 export function pcbCavity(d: Design): Box3 {
   const { gap } = STYLE[styleOf(d)], e = grow(envelope(d), gap), h = mm(d.pcb!.h);
   return { lo: [e.lo[0], e.lo[1], -gap], hi: [e.hi[0], e.hi[1], h + gap] };
+}
+
+/** Plastic that holds the board, per half: posts, edge-stop ribs with their ledges, and the overhangs. */
+export function holders(M: ManifoldToplevel, d: Design): { bottom: Manifold[]; top: Manifold[] } {
+  const { gap } = STYLE[styleOf(d)], h = mm(d.pcb!.h), inner = pcbCavity(d), b = d.pcb!.board, zs = h / 2;
+  const bottom = postSpots(d, "bottom").map((p) => box(M, [p[0] - POST / 2, p[1] - POST / 2, -gap - 0.5], [p[0] + POST / 2, p[1] + POST / 2, 0]));
+  const top = postSpots(d, "top").map((p) => box(M, [p[0] - POST / 2, p[1] - POST / 2, h], [p[0] + POST / 2, p[1] + POST / 2, h + gap + 0.5]));
+  const lo = [mm(b.x0), mm(b.y0)], hi = [mm(b.x1), mm(b.y1)];
+  for (const t of edgeStops(d)) {
+    const { i, s, c } = t, E = s > 0 ? hi[i] : lo[i], F = s > 0 ? inner.hi[i] : inner.lo[i];
+    // a box spanning n0..n1 across the edge (normal), the stop's width along it, and z0..z1
+    const part = (n0: number, n1: number, z0: number, z1: number) => {
+      const a: V3 = [0, 0, z0], q: V3 = [0, 0, z1];
+      a[i] = Math.min(n0, n1); q[i] = Math.max(n0, n1); a[1 - i] = c - STOP / 2; q[1 - i] = c + STOP / 2;
+      return box(M, a, q);
+    };
+    // bottom half: the rib (into the wall below the split, a clearance off the top half's wall above it) and the ledge
+    bottom.push(part(E + (s * CLEAR) / 2, F + s * 0.5, -gap - 0.5, zs));
+    if (h - CLEAR > zs) bottom.push(part(E + (s * CLEAR) / 2, F - (s * CLEAR) / 2, zs - 0.01, h - CLEAR));
+    if (t.ledge) bottom.push(part(E - s * RIM, E + (s * CLEAR) / 2 + 0.01, -gap - 0.5, 0));
+    // top half: the overhang hangs from the roof, a clearance off the bottom half's rib
+    if (t.clamp) top.push(part(E - s * RIM, F - (s * CLEAR) / 2, h, inner.hi[2] + 0.5));
+  }
+  return { bottom, top };
 }
 
 export function pcbShell(M: ManifoldToplevel, d: Design): Manifold[] {
@@ -75,7 +205,5 @@ export function pcbShell(M: ManifoldToplevel, d: Design): Manifold[] {
     const i = e.dir[0] !== 0 ? 0 : 1, sg = e.dir[i], L = (sg > 0 ? inner.hi[i] - e.at[i] : e.at[i] - inner.lo[i]) + wall + 3;
     entry = rod(M, e.at, [e.at[0] + e.dir[0] * L, e.at[1] + e.dir[1] * L, e.at[2]], PIGTAIL);
   }
-  const bottom = postSpots(d, "bottom").map((p) => box(M, [p[0] - POST / 2, p[1] - POST / 2, -gap - 0.5], [p[0] + POST / 2, p[1] + POST / 2, 0]));
-  const top = postSpots(d, "top").map((p) => box(M, [p[0] - POST / 2, p[1] - POST / 2, h], [p[0] + POST / 2, p[1] + POST / 2, h + gap + 0.5]));
-  return clamshell(M, { inner, wall, splitZ: h / 2, cuts: [entry], adds: { bottom, top }, drain: s === "outdoor" });
+  return clamshell(M, { inner, wall, splitZ: h / 2, cuts: [entry], adds: holders(M, d), drain: s === "outdoor" });
 }
