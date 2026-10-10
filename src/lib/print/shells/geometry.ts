@@ -29,9 +29,12 @@ export function envelope(d: Design): Box3 {
     const r = mm(w.r);
     for (const p of [mmv(w.a), mmv(w.b)]) pts.push(sub(p, [r, r, r]), add(p, [r, r, r]));
   }
-  // PCB copper plates sit on the board faces (±35 µm outside z 0..h), so the board stands for them
-  if (!d.pcb) for (const pl of d.plates ?? []) for (const p of pl.pts) pts.push(mmv(p));
-  if (d.pcb) { const b = d.pcb.board; pts.push([mm(b.x0), mm(b.y0), 0], [mm(b.x1), mm(b.y1), mm(d.pcb.h)]); }
+  // PCB copper plates (the arm can overrun the board): the board united with every copper rectangle in x/y, z -t .. h+t
+  if (d.pcb) {
+    const b = d.pcb.board, t = mm(d.pcb.t), xs = [b.x0, b.x1], ys = [b.y0, b.y1];
+    for (const q of d.pcb.rects) { xs.push(q.x0, q.x1); ys.push(q.y0, q.y1); }
+    pts.push([mm(Math.min(...xs)), mm(Math.min(...ys)), -t], [mm(Math.max(...xs)), mm(Math.max(...ys)), mm(d.pcb.h) + t]);
+  } else for (const pl of d.plates ?? []) for (const p of pl.pts) pts.push(mmv(p));
   return bounds(pts);
 }
 
@@ -62,7 +65,10 @@ export function exits(d: Design, b: Box3): Exit[] {
     if (!hit) continue;
     const dir = unit(u), dw = mm(2 * w.r);
     if (t0 > 1e-9) out.push({ at: add(a, scale(u, t0)), dir: scale(dir, -1), d: dw });
-    if (t1 < 1 - 1e-9) out.push({ at: add(a, scale(u, t1)), dir, d: dw });
+    // an endpoint exactly on a face, with the wire pointing through it, counts as crossing that face
+    const onFace = (p: V3, sgn: number) => [0, 1, 2].some((i) => Math.abs(u[i]) > 1e-12 && Math.abs(p[i] - (u[i] * sgn > 0 ? b.hi[i] : b.lo[i])) < 1e-9);
+    if (t0 <= 1e-9 && t1 > 1e-9 && onFace(a, -1)) out.push({ at: a, dir: scale(dir, -1), d: dw });
+    if (t1 < 1 - 1e-9 || (t1 >= 1 - 1e-9 && onFace(c, 1))) out.push({ at: add(a, scale(u, t1)), dir, d: dw });
   }
   // a polyline vertex exactly on the surface gives the same exit twice
   return out.filter((x, i) => !out.slice(0, i).some((y) => Math.hypot(...sub(x.at, y.at)) < 0.5 && x.dir[0] * y.dir[0] + x.dir[1] * y.dir[1] + x.dir[2] * y.dir[2] > 0.999));
