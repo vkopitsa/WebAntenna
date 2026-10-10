@@ -3,11 +3,13 @@ import { ANTENNA_BY_ID } from "./lib/antennas";
 import { simulate } from "./lib/simulate";
 import type { Params } from "./lib/types";
 import { synthesize, type SynthOptions } from "./lib/synth";
-import { solveField, type FieldPlane } from "./lib/nearfield";
+import { fieldSolver, type FieldPlane } from "./lib/nearfield";
 
 export interface SimRequest { id: number; type: string; params: Params; patternF?: number; synth?: undefined; field?: undefined }
 export interface SynthRequest { id: number; synth: SynthOptions; field?: undefined }
 export interface FieldRequest { id: number; field: { type: string; params: Params; plane: FieldPlane }; synth?: undefined }
+
+const solveField = fieldSolver();
 
 self.onmessage = (e: MessageEvent<SimRequest | SynthRequest | FieldRequest>) => {
   if (e.data.field) {

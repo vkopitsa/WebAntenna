@@ -22,18 +22,18 @@ export type RGB = [number, number, number];
 export function fieldAt(els: CurrentElement[], k: number, pt: Vec3, out: Float64Array): void {
   out.fill(0);
   for (const el of els) {
-    const L = Math.hypot(el.dl[0], el.dl[1], el.dl[2]);
+    const L = Math.sqrt(el.dl[0] * el.dl[0] + el.dl[1] * el.dl[1] + el.dl[2] * el.dl[2]);
     if (L === 0) continue;
     const px = el.dl[0] / L, py = el.dl[1] / L, pz = el.dl[2] / L;
     let dx = pt[0] - el.mid[0], dy = pt[1] - el.mid[1], dz = pt[2] - el.mid[2];
-    let r = Math.hypot(dx, dy, dz);
+    let r = Math.sqrt(dx * dx + dy * dy + dz * dz);
     const rmin = Math.max(el.r, L);
     if (r < rmin) {
       // Inside the element's own reach: evaluate at rmin, broadside if exactly on it (no singularity).
       if (r < 1e-12 * rmin) {
         const t = Math.abs(px) < 0.9 ? [1, 0, 0] : [0, 1, 0];
         dx = t[1] * pz - t[2] * py; dy = t[2] * px - t[0] * pz; dz = t[0] * py - t[1] * px;
-        r = Math.hypot(dx, dy, dz);
+        r = Math.sqrt(dx * dx + dy * dy + dz * dz);
       }
       const s = rmin / r;
       dx *= s; dy *= s; dz *= s; r = rmin;
@@ -68,22 +68,47 @@ export function nearField(els: CurrentElement[], f: number, plane: FieldPlane): 
       e.set(out, 6 * p);
       rr[p] = Math.hypot(pt[0] - ref[0], pt[1] - ref[1], pt[2] - ref[2]);
       let dmin = Infinity;
-      for (const el of els) dmin = Math.min(dmin, Math.hypot(pt[0] - el.mid[0], pt[1] - el.mid[1], pt[2] - el.mid[2]));
-      dd[p] = dmin;
+      for (const el of els) { const x = pt[0] - el.mid[0], y = pt[1] - el.mid[1], z = pt[2] - el.mid[2]; dmin = Math.min(dmin, x * x + y * y + z * z); }
+      dd[p] = Math.sqrt(dmin);
     }
   return { nx, ny, e, r: rr, d: dd };
 }
 
 /** Solve the design at d.f and sample its near field on the plane; null when the wire solver can't model it. */
 export function solveField(defId: string, d: Design, plane: FieldPlane): RadiationField | null {
-  if (!momEligible(defId, d)) return null;
-  const m = buildMesh(d, wavelength(d.f), 60, 450);
-  const s = m && solve(m, d.f);
-  if (!s) return null;
-  const segs = new Float64Array(6 * s.mesh.segs.length);
-  s.mesh.segs.forEach((g, i) => segs.set([...g.p, ...g.q], 6 * i));
-  const { ir, ii } = segCurrents(s);
-  return { f: d.f, grid: nearField(currentElements(s), d.f, plane), segs, ir, ii };
+  return fieldSolver()(defId, d, plane);
+}
+
+type Solved = { els: CurrentElement[]; segs: Float64Array; ir: Float64Array; ii: Float64Array } | null;
+
+/**
+ * solveField that keeps the last MoM solution: a new view (plane) of the same design only re-samples the field.
+ * `solves` counts the MoM solves.
+ */
+export function fieldSolver(): ((defId: string, d: Design, plane: FieldPlane) => RadiationField | null) & { solves: number } {
+  let key = "", last: Solved = null;
+  const run = (defId: string, d: Design, plane: FieldPlane): RadiationField | null => {
+    const k = JSON.stringify([defId, d.f, d.feed, d.wires]);
+    if (k !== key) {
+      key = k;
+      last = null;
+      if (momEligible(defId, d)) {
+        const m = buildMesh(d, wavelength(d.f), 60, 450);
+        const s = m && solve(m, d.f);
+        run.solves++;
+        if (s) {
+          const segs = new Float64Array(6 * s.mesh.segs.length);
+          s.mesh.segs.forEach((g, i) => segs.set([...g.p, ...g.q], 6 * i));
+          last = { els: currentElements(s), segs, ...segCurrents(s) };
+        }
+      }
+    }
+    if (!last) return null;
+    // copies: the worker transfers these buffers away
+    return { f: d.f, grid: nearField(last.els, d.f, plane), segs: last.segs.slice(), ir: last.ir.slice(), ii: last.ii.slice() };
+  };
+  run.solves = 0;
+  return run;
 }
 
 /** Peak over φ of |Re(E e^{jφ})| at pixel p (handles elliptical polarisation). */

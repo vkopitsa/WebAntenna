@@ -15,6 +15,8 @@ import { C0 } from "../lib/rf";
 const VIEWS: Record<Exclude<ViewMode, "3d">, [number, number]> = { top: [90, 90], front: [180, 0], side: [90, 0] };
 const W = 800, H = 540, PAD = 48;
 const RAD_SPAN = 3, RAD_PAD = 2;
+/** Field grid columns: 160 keeps a view change on a 9-element Yagi near 1 s in the worker. */
+const FIELD_NX = 160;
 
 /**
  * Orthographic right-handed camera: looks along d = (cos ψ, sin ψ) tilted down by θ; screen-right = d × ẑ.
@@ -79,7 +81,7 @@ export function Preview({ design, svgRef, type, params }: { design: Design; svgR
   const { pw, pp, S, k, P, ox, oy, fp, fpw } = scene;
   const [playing, setPlaying] = useState(true);
   const theme = useStore((s) => s.theme);
-  const plane = useMemo(() => (on ? screenPlane(cy, cp, { ox, oy, k, W, H }, fpw, 200) : null), [on, cy, cp, ox, oy, k, fpw]);
+  const plane = useMemo(() => (on ? screenPlane(cy, cp, { ox, oy, k, W, H }, fpw, FIELD_NX) : null), [on, cy, cp, ox, oy, k, fpw]);
   const field = useNearField(type, params, plane, on);
   const fieldKey = JSON.stringify([type, params, plane]);
   const fresh = field.status === "done" && field.key === fieldKey ? field.data : null;

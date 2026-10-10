@@ -24,9 +24,6 @@ export function RadiationLayer({ data, toScreen, W, H, theme, playing }: {
     mq.addEventListener("change", on);
     return () => mq.removeEventListener("change", on);
   }, []);
-  // theme / scheme: re-read the tokens when the colours change
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const colours = useMemo(() => ({ lut: rampLUT(token("--field-lo"), token("--field-mid"), token("--field-hi")), glow: token("--field-hi") }), [theme, scheme]);
   const scale = useMemo(() => fieldScale(data.grid, C0 / data.f / 2), [data]);
   const segs = useMemo(() => {
     const n = data.ir.length, pts: { a: [number, number]; b: [number, number] }[] = [];
@@ -47,10 +44,12 @@ export function RadiationLayer({ data, toScreen, W, H, theme, playing }: {
     const img = octx.createImageData(nx, ny);
     const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
     const animate = playing && !reduced;
-    const [r, g, b] = colours.glow;
+    // Colours are read in the first frame: App applies data-theme in an effect that runs after this one.
+    let colours: { lut: Uint8ClampedArray; glow: string } | null = null;
     let raf = 0;
     const t0 = performance.now();
     const draw = (now: number) => {
+      if (!colours) { const [r, g, b] = token("--field-hi"); colours = { lut: rampLUT(token("--field-lo"), token("--field-mid"), [r, g, b]), glow: `rgb(${r},${g},${b})` }; }
       // E(t) = Re(E e^{jωt}); with e^{−jkr} the wavefronts move outward
       const phase = animate ? (2 * Math.PI * (now - t0)) / PERIOD : null;
       shade(data.grid, phase, scale, colours.lut, img.data);
@@ -59,7 +58,7 @@ export function RadiationLayer({ data, toScreen, W, H, theme, playing }: {
       ctx.drawImage(off, 0, 0, W, H);
       const c = phase == null ? 0 : Math.cos(phase), s = phase == null ? 0 : Math.sin(phase);
       ctx.lineCap = "round"; ctx.lineWidth = 8;
-      ctx.shadowColor = ctx.strokeStyle = `rgb(${r},${g},${b})`; ctx.shadowBlur = 14;
+      ctx.shadowColor = ctx.strokeStyle = colours.glow; ctx.shadowBlur = 14;
       segs.pts.forEach(({ a, b: q }, i) => {
         const ir = data.ir[i], ii = data.ii[i];
         const m = phase == null ? Math.hypot(ir, ii) : Math.abs(ir * c - ii * s);
@@ -73,7 +72,7 @@ export function RadiationLayer({ data, toScreen, W, H, theme, playing }: {
     document.addEventListener("visibilitychange", onVis);
     raf = requestAnimationFrame(draw);
     return () => { cancelAnimationFrame(raf); document.removeEventListener("visibilitychange", onVis); };
-  }, [data, scale, colours, segs, playing, W, H]);
+  }, [data, scale, segs, playing, W, H, theme, scheme]);
 
   return <canvas ref={canvas} width={W} height={H} className="radiation-canvas" aria-hidden="true" />;
 }

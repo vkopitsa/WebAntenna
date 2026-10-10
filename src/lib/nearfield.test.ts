@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ANTENNA_BY_ID } from "./antennas";
 import { buildMesh, currentElements, gainFn, segCurrents, solve } from "./mom";
 import { wavelength } from "./rf";
-import { envelope, fieldAt, fieldScale, nearField, rampLUT, shade, solveField, type FieldPlane } from "./nearfield";
+import { envelope, fieldAt, fieldScale, fieldSolver, nearField, rampLUT, shade, solveField, type FieldPlane } from "./nearfield";
 import { momEligible } from "./simulate";
 import type { CurrentElement } from "./mom";
 
@@ -147,5 +147,17 @@ describe("near field", () => {
     const g = nearField(el, f, { origin: [0, 0, 0], u: [1, 0, 0], v: [0, 1, 0], w: 2, h: 1, nx: 2, ny: 1, ref: [0, 0, 0] });
     expect(g.d[0]).toBeCloseTo(Math.hypot(0.5, 0.5));
     expect(g.d[1]).toBeCloseTo(Math.hypot(1.5, 0.5));
+  });
+
+  it("fieldSolver re-solves MoM only when the design changes, not when the plane does", () => {
+    const solver = fieldSolver();
+    const def = ANTENNA_BY_ID.dipole, d = def.build(def.defaults), lam0 = C0 / d.f;
+    const a = solver("dipole", d, planeXY(lam0, 10))!;
+    const b = solver("dipole", def.build(def.defaults), planeXY(2 * lam0, 10))!;
+    expect(solver.solves).toBe(1);
+    expect(b.grid.e).not.toEqual(a.grid.e);
+    expect(b.grid.e).toEqual(solveField("dipole", d, planeXY(2 * lam0, 10))!.grid.e);
+    solver("dipole", def.build({ ...def.defaults, droop: 30 }), planeXY(lam0, 10));
+    expect(solver.solves).toBe(2);
   });
 });
