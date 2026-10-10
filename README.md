@@ -8,6 +8,14 @@ It is a static React + TypeScript site and runs entirely in the browser.
 
 [![Deploy to GitHub Pages](https://github.com/vkopitsa/webantenna/actions/workflows/deploy.yml/badge.svg)](https://github.com/vkopitsa/webantenna/actions/workflows/deploy.yml)
 
+![Antenna Generator Simulation tab for a 9-element 2 m Yagi: S11, input impedance and SWR over the band, Smith chart, and horizontal and vertical radiation patterns](docs/screenshot.jpg)
+
+*Simulation tab: a 9-element Yagi for 2 m, solved by the built-in MoM solver (13.3 dBi, F/B 17.7 dB).*
+
+![Antenna Generator Design tab: parameter panel on the left, 3D wire drawing of the Yagi with labelled elements and feed point, dimension table below](docs/screenshot-design.jpg)
+
+*Design tab: parameters, 3D drawing and dimensions.*
+
 **Printed (PCB) antennas:** trace monopole, meander line monopole, inverted-F (IFA), printed dipole, small loop with matching capacitors, and the rectangular microstrip patch. Each exports a ready-to-run **openEMS** script.
 
 **Antennas:** half-wave dipole / inverted V, fan (parallel) multi-band dipole, quarter-wave ground plane, J-pole, coaxial collinear (COCO),
