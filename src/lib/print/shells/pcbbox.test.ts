@@ -125,24 +125,28 @@ describe("PCB enclosures", () => {
       }
     }
   });
-  it("the cable lies on the board in a channel of the top half, under a roof at least a wall thick", () => {
+  it("the cable lies on the board under a raised roof, and both halves keep a flat outer face", () => {
     for (const [id, extra] of BOARDS) {
-      const { p, d } = setup(id, extra), path = cablePath(d);
-      if (!path) { expect(pcbEntry(d).probe, id).toBe(true); continue; }
-      const { wall } = STYLE[styleOf(d)], h = d.pcb!.h * 1000, [, top] = partsFor(id, p, d)[0].build(M);
-      expect(top.decompose().length, name(id, extra)).toBe(1);
-      const at = (u: V3, z: number): V3 => [u[0], u[1], z];
-      for (const [a, b] of [[path[0], path[1]], [path[1], path[2]]]) {
-        const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
-        if (L < 1e-6) continue;
-        expect(M.Manifold.union(partsFor(id, p, d)[0].build(M)).intersect(rod(M, at(a, h + 1.75), at(b, h + 1.75), 3.5)).volume(), `${name(id, extra)} cable`).toBeLessThan(1e-2);
-        // the roof over the channel: a thin band from the channel's top up one wall thickness is solid plastic
-        const zt = h + 1.75 + (3.5 + 0.3) / 2;
-        for (let k = 0; k <= 10; k++) {
-          const x = a[0] + ((b[0] - a[0]) * k) / 10, y = a[1] + ((b[1] - a[1]) * k) / 10;
-          const probe = box(M, [x - 0.25, y - 0.25, zt + 0.05], [x + 0.25, y + 0.25, zt + wall - 0.05]);
-          expect(top.intersect(probe).volume() / probe.volume(), `${name(id, extra)} roof at ${x.toFixed(1)},${y.toFixed(1)}`).toBeGreaterThan(0.999);
-        }
+      const { p, d } = setup(id, extra), path = cablePath(d), halves = partsFor(id, p, d)[0].build(M);
+      const shell = M.Manifold.union(halves), h = d.pcb!.h * 1000;
+      if (path) {
+        for (const [a, b] of [[path[0], path[1]], [path[1], path[2]]]) if (Math.hypot(b[0] - a[0], b[1] - a[1]) > 1e-6)
+          expect(shell.intersect(rod(M, [a[0], a[1], h + 1.75], [b[0], b[1], h + 1.75], 3.5)).volume(), `${name(id, extra)} cable`).toBeLessThan(1e-2);
+      } else expect(pcbEntry(d).probe, id).toBe(true);
+      // the outer bottom face of the bottom half and the outer top face of the top half: a 0.5 mm slab, ears left out
+      const { wall } = STYLE[styleOf(d)], o = pcbCavity(d), lo = [o.lo[0] - wall, o.lo[1] - wall], hi = [o.hi[0] + wall, o.hi[1] + wall], E = 6;
+      const faces: [number, number, number][] = [[0, o.lo[2] - wall, o.lo[2] - wall + 0.5], [1, o.hi[2] + wall - 0.5, o.hi[2] + wall]];
+      for (const [k, z0, z1] of faces) {
+        const half = halves[k], bb = half.boundingBox();
+        expect(k === 0 ? bb.min[2] : bb.max[2], `${name(id, extra)} half ${k} face height`).toBeCloseTo(k === 0 ? z0 : z1, 6);
+        // through-holes are not part of the face: the SMA hole under a probe feed and the outdoor drain
+        const e = pcbEntry(d), [dx, dy] = drainAt(o), holes = [
+          ...(e.probe ? [rod(M, [e.at[0], e.at[1], z0 - 1], [e.at[0], e.at[1], z1 + 1], 6.6)] : []),
+          ...(styleOf(d) === "outdoor" ? [rod(M, [dx, dy, z0 - 1], [dx, dy, z1 + 1], 3.1)] : []),
+        ];
+        for (const probe of [box(M, [lo[0] + E, lo[1], z0], [hi[0] - E, hi[1], z1]), box(M, [lo[0], lo[1] + E, z0], [hi[0], hi[1] - E, z1])].map((b) => holes.reduce((q, x) => q.subtract(x), b)))
+          expect(half.intersect(probe).volume() / probe.volume(), `${name(id, extra)} half ${k} flat face`).toBeGreaterThan(0.99);
+        expect(half.decompose().length, `${name(id, extra)} half ${k}`).toBe(1);
       }
     }
   });

@@ -12,7 +12,7 @@ import { envelope, grow, STYLE, styleOf, type Box3 } from "./geometry";
  *  coax enters on the board edge nearest the port, over the ground pour when there is one; a probe feed gets an SMA
  *  hole underneath. */
 const POST = 3, STOP = 3, RIM = 1, PIGTAIL = 3.5, SMA = 6.5, PROBE_KEEP = 7;
-const CHANNEL = PIGTAIL + CLEAR;
+const CHANNEL = PIGTAIL + CLEAR;   // the cable lying on the board, with clearance
 
 type Layer = "top" | "bottom";
 type Rect = { x0: number; y0: number; x1: number; y1: number };
@@ -139,13 +139,13 @@ export function supports(d: Design): { bottom: V3[]; top: V3[] } {
 }
 
 export function pcbEntry(d: Design): { at: V3; dir: V3; probe: boolean } {
-  const pcb = d.pcb!, h = mm(pcb.h), b = pcb.board, c = portCentre(d);
+  const pcb = d.pcb!, b = pcb.board, c = portCentre(d), z = pcbSplit(d);
   if (isProbe(pcb)) return { at: [c[0], c[1], 0], dir: [0, 0, -1], probe: true };
   const edges: { dist: number; at: V3; dir: V3 }[] = [
-    { dist: c[0] - mm(b.x0), at: [mm(b.x0), c[1], h / 2], dir: [-1, 0, 0] },
-    { dist: mm(b.x1) - c[0], at: [mm(b.x1), c[1], h / 2], dir: [1, 0, 0] },
-    { dist: c[1] - mm(b.y0), at: [c[0], mm(b.y0), h / 2], dir: [0, -1, 0] },
-    { dist: mm(b.y1) - c[1], at: [c[0], mm(b.y1), h / 2], dir: [0, 1, 0] },
+    { dist: c[0] - mm(b.x0), at: [mm(b.x0), c[1], z], dir: [-1, 0, 0] },
+    { dist: mm(b.x1) - c[0], at: [mm(b.x1), c[1], z], dir: [1, 0, 0] },
+    { dist: c[1] - mm(b.y0), at: [c[0], mm(b.y0), z], dir: [0, -1, 0] },
+    { dist: mm(b.y1) - c[1], at: [c[0], mm(b.y1), z], dir: [0, 1, 0] },
   ];
   const e = edges.reduce((m, x) => (x.dist < m.dist ? x : m));
   // with a ground pour on top reaching this edge, the cable comes in over the pour: (gap + cable radius) inside its edge
@@ -161,17 +161,25 @@ export function pcbEntry(d: Design): { at: V3; dir: V3; probe: boolean } {
   return { at: e.at, dir: e.dir, probe: false };
 }
 
-/** The cavity: the board and every copper rectangle (copper may overrun the board) grown by the gap in x/y, z −gap .. h + gap. */
+/** Air over the board: the gap, or room for the coax pigtail lying on the board when it is edge-fed (both halves keep
+ *  a flat outer face; a probe feed's SMA jack is underneath). */
+/** The split between the halves: through the board for a probe feed; for an edge feed at the height of the cable lying
+ *  on the board, so the coax is clamped straight between the halves. */
+export const pcbSplit = (d: Design) => mm(d.pcb!.h) + (isProbe(d.pcb!) ? -mm(d.pcb!.h) / 2 : PIGTAIL / 2);
+
+export const airAbove = (d: Design) => { const { gap } = STYLE[styleOf(d)]; return isProbe(d.pcb!) ? gap : Math.max(gap, CHANNEL + 0.2); };
+
+/** The cavity: the board and every copper rectangle (copper may overrun the board) grown by the gap in x/y, z −gap .. h + air. */
 export function pcbCavity(d: Design): Box3 {
   const { gap } = STYLE[styleOf(d)], e = grow(envelope(d), gap), h = mm(d.pcb!.h);
-  return { lo: [e.lo[0], e.lo[1], -gap], hi: [e.hi[0], e.hi[1], h + gap] };
+  return { lo: [e.lo[0], e.lo[1], -gap], hi: [e.hi[0], e.hi[1], h + airAbove(d)] };
 }
 
 /** Plastic that holds the board, per half: posts, edge-stop ribs with their ledges, and the overhangs. */
 export function holders(M: ManifoldToplevel, d: Design): { bottom: Manifold[]; top: Manifold[] } {
-  const { gap } = STYLE[styleOf(d)], h = mm(d.pcb!.h), inner = pcbCavity(d), b = d.pcb!.board, zs = h / 2;
+  const { gap } = STYLE[styleOf(d)], h = mm(d.pcb!.h), inner = pcbCavity(d), b = d.pcb!.board, zs = pcbSplit(d);
   const bottom = postSpots(d, "bottom").map((p) => box(M, [p[0] - POST / 2, p[1] - POST / 2, -gap - 0.5], [p[0] + POST / 2, p[1] + POST / 2, 0]));
-  const top = postSpots(d, "top").map((p) => box(M, [p[0] - POST / 2, p[1] - POST / 2, h], [p[0] + POST / 2, p[1] + POST / 2, h + gap + 0.5]));
+  const top = postSpots(d, "top").map((p) => box(M, [p[0] - POST / 2, p[1] - POST / 2, h], [p[0] + POST / 2, p[1] + POST / 2, inner.hi[2] + 0.5]));
   const lo = [mm(b.x0), mm(b.y0)], hi = [mm(b.x1), mm(b.y1)];
   for (const t of edgeStops(d)) {
     const { i, s, c } = t, E = s > 0 ? hi[i] : lo[i], F = s > 0 ? inner.hi[i] : inner.lo[i];
@@ -182,10 +190,11 @@ export function holders(M: ManifoldToplevel, d: Design): { bottom: Manifold[]; t
       return box(M, a, q);
     };
     // bottom half: the rib (into the wall below the split, a clearance off the top half's wall above it) and the ledge
-    bottom.push(part(E + (s * CLEAR) / 2, F + s * 0.5, -gap - 0.5, zs));
+    bottom.push(part(E + (s * CLEAR) / 2, F + s * 0.5, -gap - 0.5, Math.min(zs, h - CLEAR)));
     if (h - CLEAR > zs) bottom.push(part(E + (s * CLEAR) / 2, F - (s * CLEAR) / 2, zs - 0.01, h - CLEAR));
     if (t.ledge) bottom.push(part(E - s * RIM, E + (s * CLEAR) / 2 + 0.01, -gap - 0.5, 0));
-    // top half: the overhang hangs from the roof, a clearance off the bottom half's rib
+    // top half: the overhang hangs from the roof (below the split too, when that lies above the board), a clearance
+    // off the bottom half's rib and wall
     if (t.clamp) top.push(part(E - s * RIM, F - (s * CLEAR) / 2, h, inner.hi[2] + 0.5));
   }
   return { bottom, top };
@@ -198,7 +207,7 @@ export function pcbShell(M: ManifoldToplevel, d: Design): Manifold[] {
     const at: V3 = [(inner.lo[0] + inner.hi[0]) / 2, inner.lo[1], zm];
     return clamshell(M, { inner, wall, splitZ: zm, cuts: [rod(M, [at[0], at[1] + 1, zm], [at[0], at[1] - wall - 3, zm], PIGTAIL)], drain: s === "outdoor" });
   }
-  const h = mm(d.pcb.h), inner = pcbCavity(d), e = pcbEntry(d);
+  const inner = pcbCavity(d), e = pcbEntry(d);
   let entry: Manifold;
   if (e.probe) entry = rod(M, [e.at[0], e.at[1], 0.01], [e.at[0], e.at[1], -gap - wall - 2], SMA);
   else {
@@ -206,25 +215,11 @@ export function pcbShell(M: ManifoldToplevel, d: Design): Manifold[] {
     const i = e.dir[0] !== 0 ? 0 : 1, sg = e.dir[i], L = (sg > 0 ? inner.hi[i] - e.at[i] : e.at[i] - inner.lo[i]) + wall + 3;
     entry = rod(M, e.at, [e.at[0] + e.dir[0] * L, e.at[1] + e.dir[1] * L, e.at[2]], PIGTAIL);
   }
-  const adds = holders(M, d), cuts = [entry];
-  const path = cablePath(d);
-  if (path) {
-    // the cable lies on the board: a channel in the top half from the side wall's inner face to the port
-    for (const [a, b] of [[path[0], path[1]], [path[1], path[2]]]) if (Math.hypot(b[0] - a[0], b[1] - a[1]) > 1e-6) cuts.push(rod(M, a, b, CHANNEL));
-    const chTop = path[1][2] + CHANNEL / 2, roof = inner.hi[2] + wall;
-    if (chTop + wall > roof) {
-      // the channel thins or opens the roof: a raised rib over it keeps a wall of plastic, within the box outline
-      const W = PIGTAIL + 2 * wall, out = grow(inner, wall), z0 = inner.hi[2] + wall / 2, z1 = chTop + wall;
-      const sqAt = (p: V3) => box(M, [p[0] - W / 2, p[1] - W / 2, z0], [p[0] + W / 2, p[1] + W / 2, z1]);
-      const rib = M.Manifold.hull([sqAt(path[0]), sqAt(path[1]), sqAt(path[2])]).intersect(box(M, [out.lo[0], out.lo[1], z0 - 1], [out.hi[0], out.hi[1], z1 + 1]));
-      adds.top.push(rib);
-    }
-  }
-  return clamshell(M, { inner, wall, splitZ: h / 2, cuts, adds, drain: s === "outdoor" });
+  return clamshell(M, { inner, wall, splitZ: pcbSplit(d), cuts: [entry], adds: holders(M, d), drain: s === "outdoor" });
 }
 
-/** The cable's path over the board at z = h + PIGTAIL/2: from the side wall's inner face at the entry, to the board
- *  edge, to the port. Null for a probe feed (the SMA jack is underneath). */
+/** The cable's path over the board at z = h + PIGTAIL/2 (the roof is raised for it): from the side wall's inner face
+ *  at the entry, to the board edge, to the port. Null for a probe feed (the SMA jack is underneath). */
 export function cablePath(d: Design): [V3, V3, V3] | null {
   const e = pcbEntry(d);
   if (e.probe) return null;
