@@ -184,6 +184,17 @@ The S11 sweep can be exported as Touchstone `.s1p` (load it in WebVNA as an over
 
 The NEC export now uses λ/80.
 
+### Radiation view (`src/lib/nearfield.ts`)
+Preview's **Radiation** toggle draws Re(E·e^{jωt})·r on the screen plane through the feed, at the design frequency.
+Each MoM current element (half-segment, the basis `gainFn` integrates) is a short dipole with its full field:
+E = η I dl e^{−jkr}/(4π) · [r̂(r̂·p̂)(a + b) − p̂ b], a = 2/r² − 2j/(k r³), b = jk/r + 1/r² − j/(k r³).
+Points closer than max(wire radius, element length) are evaluated at that distance.
+- Checks (`nearfield.test.ts`): one element matches the analytic Hertzian dipole within 1 % at 0.1 λ and 5 λ;
+  the λ/2 dipole's |E| at 30 λ broadside gives the same gain as `gainFn` within 0.1 dB; a Yagi's far arc in front is > 3× the one behind.
+- Display: × r removes the 1/r decay; brightness is normalised by the 99th percentile of the envelope over pixels ≥ λ/2
+  from every wire (otherwise the near field at element tips sets the scale and the radiated wave is invisible).
+  The view zooms out to ≥ 3 λ and the antenna + 2 λ so wavefronts show.
+
 ## NEC-2 export
 
 The deck is in free space:

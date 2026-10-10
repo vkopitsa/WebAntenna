@@ -79,6 +79,14 @@ illustration, so a Yagi visibly beams forward, a reflector cancels behind it, an
 - i18n coverage test passes; typecheck and lint clean.
 - Manual check in the browser: dipole, Yagi, quad, J-pole in top/front/side and 3D; theme switch; reduced motion.
 
+## Deviations (made while planning and in the browser check)
+- The toggle is local Preview state like the view, not persisted.
+- The wire glow is drawn on the same canvas (under the SVG wires), not as per-frame SVG strokes.
+- `nearField` takes the MoM half-segment current elements (the `gainFn` basis) rather than segment currents.
+- Radiation mode zooms the view to ≥ 3 λ and the antenna + 2 λ; without it the field showed no wavefronts.
+- The normalisation uses pixels ≥ λ/2 from every wire (the element tips' near field hid the wave on a Yagi);
+  gamma 2.5 for thin crests on a dark field.
+
 ## Performance
 One MoM solve (same mesh as the pattern solve) + ≈ 27 k px × ≤ 700 segments of dipole sums in the worker,
 ≈ 0.1–0.3 s. Per frame on the main thread: 27 k px × 3 complex components, well under 2 ms.
