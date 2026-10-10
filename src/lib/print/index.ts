@@ -16,7 +16,7 @@ const FAMILIES: Record<string, (p: Params, d: Design) => PartSpec[]> = {
   groundplane: (_p, d) => groundPlaneParts(d),
   yagi: yagiParts,
   helix: (_p, d) => helixParts(d),
-  discone: (_p, d) => disconeParts(d),
+  discone: disconeParts,
 };
 
 /** Printable parts for an antenna design; empty when the type has none (yet). Cheap: nothing is built here. */

@@ -16,8 +16,9 @@ export const discone: AntennaDef = {
     { key: "d", label: "Rod diameter", kind: "length", min: 0.1e-3, max: 0.05 },
     { key: "rods", label: "Rods (disc and cone each)", kind: "int", min: 6, max: 32, step: 2 },
     { key: "half", label: "Cone half-angle", kind: "angle", min: 20, max: 45, step: 1, hint: "30° (60° apex) is standard" },
+    { key: "mast", label: "Mast diameter", kind: "length", min: 10e-3, max: 50e-3, hint: "For the printed hub" },
   ],
-  defaults: { bands: "100e6-800e6", d: 3e-3, rods: 16, half: 30 },
+  defaults: { bands: "100e6-800e6", d: 3e-3, rods: 16, half: 30, mast: 25e-3 },
   build(p): Design {
     const { bands } = band(p);
     const fLow = Math.min(...bands.map((b) => b[0])), fHigh = Math.max(...bands.map((b) => b[1]));
