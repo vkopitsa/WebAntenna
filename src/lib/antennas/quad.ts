@@ -10,8 +10,10 @@ export const quad: AntennaDef = {
   category: "Directional",
   traits: { pol: "horizontal", pattern: "beam" },
   summary: "Full-wave square loops: a driven loop and a reflector loop.",
-  params: [BANDS, DIAM, { key: "sp", label: "Element spacing (λ)", kind: "number", min: 0.08, max: 0.3, step: 0.01 }],
-  defaults: { bands: "144e6-146e6", d: 2e-3, sp: 0.15 },
+  params: [BANDS, DIAM, { key: "sp", label: "Element spacing (λ)", kind: "number", min: 0.08, max: 0.3, step: 0.01 },
+    { key: "rod", label: "Spreader rod diameter", kind: "length", min: 3e-3, max: 25e-3, hint: "For the printed parts; 8.5 mm = 3/8\" fibreglass" },
+    { key: "bd", label: "Boom diameter", kind: "length", min: 10e-3, max: 60e-3 }],
+  defaults: { bands: "144e6-146e6", d: 2e-3, sp: 0.15, rod: 8.5e-3, bd: 25e-3 },
   build(p): Design {
     const { f, sweeps } = band(p);
     const d = num(p, "d"), sp = num(p, "sp", 0.15);

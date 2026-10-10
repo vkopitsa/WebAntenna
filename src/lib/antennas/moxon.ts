@@ -23,8 +23,8 @@ export const moxon: AntennaDef = {
   category: "Directional",
   traits: { pol: "horizontal", pattern: "beam" },
   summary: "Two-element beam with folded-back tips. Direct 50 Ω feed and a deep rear null.",
-  params: [BANDS, DIAM],
-  defaults: { bands: "144e6-146e6", d: 2e-3 },
+  params: [BANDS, DIAM, { key: "rod", label: "Spreader rod diameter", kind: "length", min: 3e-3, max: 25e-3, hint: "For the printed parts; 8.5 mm = 3/8\" fibreglass" }],
+  defaults: { bands: "144e6-146e6", d: 2e-3, rod: 8.5e-3 },
   build(p): Design {
     const { f, sweeps } = band(p);
     const d = num(p, "d");
