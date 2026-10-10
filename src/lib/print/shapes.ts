@@ -80,7 +80,8 @@ export const pieceBottoms = (H: number): number[] => { const k = Math.ceil(H / S
 
 export type Joint = { below?: Manifold; aboveAdd?: Manifold; aboveCut?: Manifold };
 
-/** Cut a body standing on z = 0 into the pieces of `pieceBottoms(H)`, each moved down to stand on z = 0. At each cut zc,
+/** Cut a body standing on z = 0 into the pieces of `pieceBottoms(H)`, each moved down so its cut is at z = 0 (a joint that adds
+ *  a skirt below the cut puts the piece's lowest point below z = 0). At each cut zc,
  *  `joint(zc)` gives the spigot the piece below gains and what the piece above gains or loses (all in body coordinates). */
 export function stack(body: Manifold, H: number, joint: (zc: number) => Joint): Manifold[] {
   const zs = pieceBottoms(H);
