@@ -45,7 +45,7 @@ export function helixGeometry(d: Design) {
 }
 export type HelixGeometry = ReturnType<typeof helixGeometry>;
 
-const ribs = (g: HelixGeometry) => (2 * Math.PI * g.R > 160 ? 6 : 4);
+export const ribs = (g: HelixGeometry) => (2 * Math.PI * g.R > 160 ? 6 : 4);
 
 export function formerBody(M: ManifoldToplevel, style: "tube" | "frame", g: HelixGeometry): Manifold[] {
   const CS = M.CrossSection, c = g.wireD + CLEAR, inner = g.R - c / 2;     // groove bottom radius
@@ -58,7 +58,9 @@ export function formerBody(M: ManifoldToplevel, style: "tube" | "frame", g: Heli
   const fr = g.R + g.wireD / 2 + 8, hr = g.R + g.wireD / 2 + 4.5;
   const body = M.Manifold.union([M.Manifold.extrude(prof, g.H), M.Manifold.cylinder(FLANGE_T, fr, fr, sides(fr))]);
   const cuts = M.Manifold.union([
-    twistGroove(M, g.R, g.wireD, g.h0, g.H + 1, g.S, g.hand),
+    // start one wire diameter low so the lower half of the wire at the first turn is in the groove, then turn it
+    // back so the groove is at angle 0 at h0 again
+    twistGroove(M, g.R, g.wireD, g.h0 - c, g.H + 1, g.S, g.hand).rotate([0, 0, (-g.hand * 360 * c) / g.S]),
     box(M, [-c / 2, -c / 2, -1], [g.R + g.wireD, c / 2, g.h0 + c / 2]),               // feed slot: the wire's L slides in from below
     M.Manifold.cylinder(FLANGE_T + 2, 2.1, 2.1, 24).translate([0, 0, -1]),               // SMA pin and PTFE
     ...[60, 180, 300].map((a) => M.Manifold.cylinder(FLANGE_T + 2, M3_HOLE / 2, M3_HOLE / 2, 16)
