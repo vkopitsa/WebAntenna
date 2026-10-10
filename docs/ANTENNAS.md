@@ -142,8 +142,9 @@ Every wire antenna gets 3D-printable parts built from `Design.wires`. Dipole: ce
 Yagi: element clips and driven block. Helix: grooved tube or rib frame (print one; base flange with SMA hole and feed slot, stacked
 with D-keyed spigots above 170 mm). Discone: rod hub with an axial mast socket (`mast` param). Moxon: spreader hub, front and rear
 corner caps (one part, turned over) and 2 tip-gap insulators set to C. Quad: a hub per loop and 8 corner caps. Biquad: feed standoff
-with a 5 mm plate and a 45° connector flange. J-pole: stub spacers and a clip-on feed-tap gauge. Fan dipole: centre block and leg
+with a 5 mm plate, a 45° connector flange, a feed-gap slot, and leg grooves that run out past the plate (works at 5.8 GHz). J-pole: stub spacers and a clip-on feed-tap gauge. Fan dipole: centre block and leg
 spreaders. Collinear: radome spacers, one per section (`rid` param). Print-only params `rod`, `bd`, `rid`, `mast` do not affect NEC or MoM.
+Fan spreaders use only wires within 60° of the leg, between Ymin = gap/2 + 50 mm and Ymax = min(⅔ of the longest arm, gap/2 + 150 mm / spread); midway and Ymax, or only Ymax when closer than 20 mm; none if Ymax < Ymin or fewer than 2 holes.
 
 ## Built-in simulator (`src/lib/mom.ts`, `src/lib/simulate.ts`)
 

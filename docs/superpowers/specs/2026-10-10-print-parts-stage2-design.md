@@ -111,9 +111,11 @@ Base: `flangeCut` (N/SO-239), also the reflector drilling template.
 - **Fan centre block:** the dipole centre generalised to n channel pairs at the fan angles (`dipoleArms`
   takes driven + parasitic wires).
 - **Fan leg spreaders:** a plate across the legs at two distances Y from the centre, with channels along
-  each wire's own direction, only for wires that reach past Y; qty 2 each (same part on both legs).
-  Y is chosen so the wire spread fits the bed: Ymax = min(⅔ of the longest arm, distance where the spread
-  reaches ~150 mm), positions Ymax/2 and Ymax. Fewer than 2 wires at a position → no spreader there.
+  each wire's own direction; qty 2 each (same part on both legs). Only wires within 60° of the leg
+  are used (|u_y| ≥ 0.5). Positions lie between Ymin = gap/2 + 35 + 15 and
+  Ymax = min(⅔ of the longest arm reach in y, gap/2 + 150/spread), the spread measured from the feed ends.
+  Positions are midway and Ymax, or only Ymax when they are within 20 mm of each other. None when
+  Ymax < Ymin or fewer than 2 holes. Hole length follows the wire angle so holes always go through.
 - **Collinear radome spacers:** a disc of diameter rid − CLEAR with a bore od + CLEAR and four Ø≤4 mm vent holes at 45°/135°/225°/315° midway between bore and rim,
   slid to the middle of each section; qty n. rid < od + 2·WALL → its own message "Radome too narrow for
   the coax" (also accepted by the extremes test).
