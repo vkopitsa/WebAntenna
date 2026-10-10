@@ -623,4 +623,13 @@ export const UK: Record<string, string> = {
   "Zip-tie the guide on the boom with its hole over a mark.": "Закріпіть кондуктор на траверсі стяжкою отвором над позначкою.",
   "Drill a small pilot hole through the guide, then open it to {0}; the guide keeps the drill on the boom's centre line.": "Просвердліть через кондуктор тонкий напрямний отвір, потім розсвердліть до {0}; кондуктор тримає свердло на осі траверси.",
   "Move the guide to the next mark and repeat.": "Перемістіть кондуктор на наступну позначку й повторіть.",
+  "3D-printed parts": "Деталі для 3D-друку",
+  "No printed parts for this antenna yet.": "Для цієї антени ще немає деталей для друку.",
+  "All parts (.zip)": "Усі деталі (.zip)",
+  "Building parts…": "Будуються деталі…",
+  "Could not load the 3D geometry engine: {0}": "Не вдалося завантажити 3D-рушій геометрії: {0}",
+  "Use": "Призначення",
+  "What it does": "Що робить",
+  "Click a part to see it and how to use it. STL in millimetres. PETG or ASA for parts that stay outdoors; PLA is fine for jigs. Slice with your printer's usual settings; the zip has every part and a README with the instructions.": "Натисніть на деталь, щоб побачити її та як нею користуватися. STL у міліметрах. PETG або ASA для деталей, що стоять надворі; для кондукторів підійде PLA. Друкуйте зі звичайними налаштуваннями свого принтера; zip містить усі деталі та README з інструкціями.",
+  "How to use: {0}": "Як користуватися: {0}",
 };

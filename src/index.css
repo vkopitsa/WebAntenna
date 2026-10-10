@@ -275,3 +275,11 @@ label.button-like:hover { border-color: var(--accent); }
   .preview svg { max-height: none; }
   .box, .preview { break-inside: avoid; }
 }
+
+/* 3D-printed parts */
+.print-parts tbody tr { cursor: pointer; }
+.print-parts tbody tr.on td { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.mesh-view { display: block; margin: 8px auto; max-width: 100%; height: auto; }
+.print-detail { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+.print-detail > div { flex: 1 1 280px; }
+.print-detail h4 { margin: 8px 0 4px; font-size: 13px; }
