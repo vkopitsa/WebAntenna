@@ -3,7 +3,7 @@ import { cleanup } from "manifold-3d/lib/garbage-collector.js";
 import type { Design, Params } from "../types";
 import type { BuiltPart, PartSpec } from "./parts";
 import { buildPart, PART_STRINGS } from "./parts";
-import { CENTRE_HOWTO, CENTRE_STRINGS, dipoleParts } from "./families/centre";
+import { CENTRE_HOWTO, CENTRE_STRINGS, FAN_HOWTO, FAN_STRINGS, dipoleParts, fanParts } from "./families/centre";
 import { DISCONE_HOWTO, DISCONE_STRINGS, disconeParts, HUB_HOWTO, HUB_STRINGS, groundPlaneParts } from "./families/hub";
 import { BOOM_HOWTO, BOOM_STRINGS, yagiParts } from "./families/boom";
 import { FORMER_HOWTO, FORMER_STRINGS, helixParts } from "./families/former";
@@ -16,6 +16,7 @@ export { buildPart, USE_LABELS, type BuiltPart, type PartSpec, type Segment } fr
 
 const FAMILIES: Record<string, (p: Params, d: Design) => PartSpec[]> = {
   dipole: (_p, d) => dipoleParts(d),
+  fandipole: (_p, d) => fanParts(d),
   groundplane: (_p, d) => groundPlaneParts(d),
   yagi: yagiParts,
   helix: (_p, d) => helixParts(d),
@@ -37,8 +38,8 @@ export function buildParts(M: ManifoldToplevel, defId: string, p: Params, d: Des
 
 /** Every English string the print parts can show, for the i18n coverage test. */
 export const PRINT_STRINGS = [
-  ...PART_STRINGS, ...CENTRE_STRINGS, ...HUB_STRINGS, ...BOOM_STRINGS, ...FORMER_STRINGS, ...DISCONE_STRINGS, ...SPREADER_STRINGS, ...STANDOFF_STRINGS, ...SPACER_STRINGS,
-  ...Object.values(CENTRE_HOWTO).flat(), ...HUB_HOWTO, ...Object.values(BOOM_HOWTO).flat(), ...FORMER_HOWTO, ...DISCONE_HOWTO, ...Object.values(SPREADER_HOWTO).flat(), ...STANDOFF_HOWTO, ...Object.values(SPACER_HOWTO).flat(),
+  ...PART_STRINGS, ...CENTRE_STRINGS, ...HUB_STRINGS, ...BOOM_STRINGS, ...FORMER_STRINGS, ...DISCONE_STRINGS, ...SPREADER_STRINGS, ...STANDOFF_STRINGS, ...SPACER_STRINGS, ...FAN_STRINGS,
+  ...Object.values(CENTRE_HOWTO).flat(), ...HUB_HOWTO, ...Object.values(BOOM_HOWTO).flat(), ...FORMER_HOWTO, ...DISCONE_HOWTO, ...Object.values(SPREADER_HOWTO).flat(), ...STANDOFF_HOWTO, ...Object.values(SPACER_HOWTO).flat(), ...Object.values(FAN_HOWTO).flat(),
 ];
 
 /** README.txt for the parts zip: every part with its quantity, purpose and how-to steps, in English with lengths in mm. */

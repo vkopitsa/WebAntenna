@@ -696,4 +696,12 @@ export const UK: Record<string, string> = {
   "Clip the gauge onto both legs and push it down onto the shorting bar.": "Защепніть шаблон на обидві трубки і опустіть його на перемичку.",
   "Attach the coax to both legs at the gauge's top edge, then remove the gauge.": "Приєднайте коаксіал до обох трубок на рівні верхнього краю шаблону, потім зніміть шаблон.",
   "Clip a spacer onto the middle of each section before sliding the antenna into the radome.": "Защепніть розпірку посередині кожної секції, перш ніж вставити антену в обтічник.",
+  "Fan dipole centre insulator": "Центральний ізолятор віяльного диполя",
+  "Leg spreader": "Розпірка плеча",
+  "Holds {0} band elements fanned out from a {1} feed gap; all of them are soldered to the coax in the front window.": "Тримає {0} елементів діапазонів віялом від зазору живлення {1}; усі припаюються до коаксіалу в передньому вікні.",
+  "Keeps the band wires at their designed spacing {0} out from the centre; one on each leg.": "Тримає дроти діапазонів на розрахунковій відстані {0} від центру; по одній на кожному плечі.",
+  "Push each element's arms into their channels from the outside until the ends show in the front window.": "Вставте плечі кожного елемента в їхні канали ззовні, доки кінці не з'являться в передньому вікні.",
+  "Solder all elements on one side to the coax centre conductor and all on the other side to the braid.": "Припаяйте всі елементи з одного боку до центральної жили коаксіалу, а всі з іншого боку до обплетення.",
+  "Thread the wires through the spreader in order, the longest element in the middle hole row as in the model.": "Протягніть дроти крізь розпірку по порядку, найдовший елемент у середньому отворі, як у моделі.",
+  "Slide it out to the given distance from the centre and fix each wire with a drop of glue.": "Відсуньте її на вказану відстань від центру і закріпіть кожен дріт краплею клею.",
 };
