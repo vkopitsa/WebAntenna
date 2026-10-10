@@ -3,7 +3,7 @@
 Static browser app (React 19 + TypeScript 6 + Vite 8, no state library) that designs antennas, **simulates** them
 (built-in thin-wire MoM in a Web Worker, plus an in-browser WebGPU/CPU FDTD for printed antennas) and exports NEC-2 / FreeCAD / SVG / CSV / JSON / Touchstone, plus
 **openEMS (FDTD) Python scripts** for printed (PCB) antennas.
-Same stack and conventions as the WebVNA project (`~/Projects/webvna`). Will be deployed to GitHub Pages.
+Same stack and conventions as the WebVNA project (`~/Projects/webvna`). Repo: github.com/vkopitsa/webantenna, deployed to GitHub Pages at https://vkopitsa.github.io/webantenna/.
 
 ## Commands
 ```bash
@@ -13,6 +13,11 @@ npm run typecheck    # tsc -b
 npm run lint         # oxlint src
 npm run build        # dist/ (base './', the solver ships as its own worker chunk)
 ```
+
+## CI (`.github/workflows`, same as WebVNA)
+- `ci.yml`: on pull requests, Node 22: `npm ci`, test, typecheck, lint.
+- `deploy.yml`: on push to `main`: test, build, upload `dist/` and deploy with `actions/deploy-pages`.
+  Pages source must be "GitHub Actions". Relative `base './'` means no repo-name path is needed in vite.config.ts.
 
 ## Layout
 ```

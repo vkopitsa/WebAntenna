@@ -4,6 +4,10 @@ A browser app that designs common antennas. Pick a type, enter the frequency and
 build dimensions, a 3D drawing and expected performance. You can export to NEC-2, FreeCAD, SVG, CSV or JSON.
 It is a static React + TypeScript site and runs entirely in the browser.
 
+**Try it now: [vkopitsa.github.io/webantenna](https://vkopitsa.github.io/webantenna/)**
+
+[![Deploy to GitHub Pages](https://github.com/vkopitsa/webantenna/actions/workflows/deploy.yml/badge.svg)](https://github.com/vkopitsa/webantenna/actions/workflows/deploy.yml)
+
 **Printed (PCB) antennas:** trace monopole, meander line monopole, inverted-F (IFA), printed dipole, small loop with matching capacitors, and the rectangular microstrip patch. Each exports a ready-to-run **openEMS** script.
 
 **Antennas:** half-wave dipole / inverted V, fan (parallel) multi-band dipole, quarter-wave ground plane, J-pole, coaxial collinear (COCO),
@@ -64,6 +68,10 @@ npm run typecheck  # tsc -b
 npm run lint       # oxlint src
 npm run build      # static site in dist/ (relative paths, base './')
 ```
+
+**CI:** `.github/workflows/ci.yml` runs tests, typecheck and lint on every pull request.
+`.github/workflows/deploy.yml` tests, builds and publishes `dist/` to GitHub Pages on every push to `main`
+(Settings → Pages → Source: **GitHub Actions**).
 
 ```
 src/lib/               NO DOM, NO React, NO i18n: runs in Node
