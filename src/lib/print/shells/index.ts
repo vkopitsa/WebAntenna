@@ -94,8 +94,8 @@ function domePlan(defId: string, p: Params, d: Design, s: Style): DomeOpts | nul
     const g = helixGeometry(d), fr = g.R + g.wireD / 2 + 8;
     return { r: g.R + g.wireD / 2 + gap, z0: 0, z1: Math.max(g.H, g.top + g.wireD / 2) + gap, wall, base: { kind: "flange", pocketR: fr + CLEAR, pocketH: 2 + CLEAR, ringR: fr + 10, holeR: fr + 5 }, drain: s === "outdoor" };
   }
-  if (defId === "cloverleaf") {
-    // the "mushroom": a round radome over the leaves, the connector through the bottom plate
+  if (defId === "cloverleaf" || defId === "pagoda") {
+    // the "mushroom": a round radome over the leaves (or the pagoda's boards), the connector through the bottom plate
     const e = envelope(d), r = Math.max(...[e.lo[0], e.lo[1], e.hi[0], e.hi[1]].map(Math.abs)) + gap;
     return { r, z0: e.lo[2] - gap, z1: e.hi[2] + gap, wall, base: { kind: "mast", mastD: CLOVER_JACK }, drain: s === "outdoor" };
   }

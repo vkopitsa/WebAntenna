@@ -3,7 +3,8 @@ import { ANTENNA_BY_ID } from "./antennas";
 import { buildMesh, currentElements, gainFn, segCurrents, solve } from "./mom";
 import { wavelength } from "./rf";
 import { envelope, fieldAt, fieldScale, fieldSolver, nearField, rampLUT, shade, solveField, type FieldPlane } from "./nearfield";
-import { momEligible } from "./simulate";
+import { momEligible, radiationEligible } from "./simulate";
+import { pcbStandIn } from "./pcbwires";
 import type { CurrentElement } from "./mom";
 
 const solved = (id: string, extra = {}) => {
@@ -105,15 +106,42 @@ describe("near field", () => {
     expect(arc(0)).toBeGreaterThan(3 * arc(Math.PI)); // gainFn: forward is +x
   });
 
-  it("solveField: wire antennas solve; printed / analytic types return null", () => {
+  it("solveField: wire antennas solve with MoM, printed ones on a copper stand-in, analytic ones from assumed currents", () => {
     const def = ANTENNA_BY_ID.dipole, d = def.build(def.defaults);
     const res = solveField("dipole", d, planeXY(C0 / d.f, 20))!;
     expect(res.grid.nx).toBe(20);
     expect(res.segs.length).toBe(6 * res.ir.length);
-    for (const id of ["patch", "collinear", "pcbloop", "ifa"]) {
+    expect(res.model).toBe("mom");
+    for (const [id, model] of [["patch", "ideal"], ["collinear", "ideal"], ["pcbloop", "ideal"], ["ifa", "standin"], ["printedvdipole", "standin"], ["dualbanddipole", "standin"]]) {
       const dd = ANTENNA_BY_ID[id].build(ANTENNA_BY_ID[id].defaults);
       expect(momEligible(id, dd)).toBe(false);
-      expect(solveField(id, dd, planeXY(0.1, 4))).toBeNull();
+      expect(radiationEligible(id, dd), id).toBe(true);
+      const r = solveField(id, dd, planeXY(0.1, 4))!;
+      expect(r.model, id).toBe(model);
+      expect(r.f).toBe(dd.f);
+      expect(Array.from(r.grid.e).every(Number.isFinite), id).toBe(true);
+      expect(Math.max(...Array.from(r.ir).map(Math.abs)), id).toBeGreaterThan(0);
+    }
+  });
+
+  it("PCB stand-in: the printed dipole's wires resonate near the design frequency, every copper shape is joined", () => {
+    for (const id of ["printeddipole", "printedvdipole", "sleevedipole", "pcbmonopole", "ifa", "meander", "dualbanddipole"]) {
+      const def = ANTENNA_BY_ID[id], d = def.build(def.defaults), st = pcbStandIn(d)!;
+      expect(st, id).not.toBeNull();
+      // connected: walking the wire graph from the feed reaches every wire
+      const key = (p: number[]) => p.map((c) => c.toFixed(9)).join(",");
+      const adj = new Map<string, number[]>();
+      st.design.wires.forEach((w, i) => { for (const e of [w.a, w.b]) adj.set(key(e), [...(adj.get(key(e)) ?? []), i]); });
+      const seen = new Set([0]), todo = [0];
+      while (todo.length) { const w = st.design.wires[todo.pop()!]; for (const e of [w.a, w.b]) for (const j of adj.get(key(e)) ?? []) if (!seen.has(j)) { seen.add(j); todo.push(j); } }
+      expect(seen.size, id).toBe(st.design.wires.length);
+    }
+    for (const id of ["printeddipole", "sleevedipole"]) {
+      const def = ANTENNA_BY_ID[id], d = def.build(def.defaults), st = pcbStandIn(d)!;
+      const m = buildMesh(st.design, C0 / st.fs, 60, 450)!;
+      const lo = solve(m, st.fs * 0.93)!.z[1], hi = solve(m, st.fs * 1.07)!.z[1];
+      expect(lo, id).toBeLessThan(0);
+      expect(hi, id).toBeGreaterThan(0);
     }
   });
 

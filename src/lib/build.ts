@@ -5,7 +5,7 @@
 import type { AntennaDef, Design, Params, Vec3, Wire } from "./types";
 import { num } from "./types";
 import { centre, formatBands, parseBands } from "./bands";
-import { copperBoxes, isProbe, type Pcb } from "./pcb";
+import { boardsOf, copperBoxes, isProbe, type Pcb } from "./pcb";
 import type { ZPoint } from "./simulate";
 
 export type Arg = string | number | { len: number } | { hz: number } | { pct: number };
@@ -109,6 +109,7 @@ const NOT_TRIMMED: Record<string, string> = {
   discone: "Broadband: check the SWR across your bands rather than trimming. Lengthen the cone rods to lower the cut-off frequency.",
   collinear: "The coax sections are fixed by the velocity factor. Check the SWR; small corrections are made on the top whip.",
   biquad: "The biquad is broadband (roughly 10 %): check the SWR across the band. The spacing to the reflector sets the match.",
+  pagoda: "Not tuned by trimming: the board spacing sets the centre frequency (Baert's table: D1 grows about 0.15 mm and D2 about 0.24 mm per 100 MHz lower). Check the SWR across the band.",
   pcbloop: "Tune the small loop with the capacitors: Cs sets the resonance, Cp the match. A trimmer capacitor for Cs makes this easy.",
 };
 
@@ -128,6 +129,8 @@ const PRINTED: Record<string, { what: string; how: string; points: number; dim: 
   meander: { what: "Meander trace (total)", how: "Trim {0} off the end of the last run", points: 1, dim: (p) => sumLong(p, /Meander|Feed lead/) },
   printeddipole: { what: "Dipole arms", how: "Trim {0} off the end of each arm", points: 2, dim: (p) => sumLong(p, /^Arm/) },
   printedvdipole: { what: "Dipole arms", how: "Trim {0} off the end of each arm", points: 2, dim: (p) => sumLong(p, /^Arm/) + polyLong(p, /^Arm/) },
+  dualbanddipole: { what: "Main strips", how: "Trim {0} off the end of each main strip (band 1; the branches set band 2)", points: 2, dim: (p) => sumLong(p, /^Arm/) },
+  sleevedipole: { what: "Radiator", how: "Trim {0} off the radiator tip", points: 1, dim: (p) => sumLong(p, /^Radiator/) },
   patch: { what: "Patch length", how: "Trim {0} off the radiating edge opposite the feed", points: 1, dim: (p) => extentX(p, /Patch/) },
 };
 function sumLong(p: Pcb, re: RegExp) { return p.rects.filter((q) => re.test(q.label)).reduce((s, q) => s + Math.max(q.x1 - q.x0, q.y1 - q.y0), 0); }
@@ -195,7 +198,7 @@ export function tuning(def: AntennaDef, p: Params, d = def.build(p)): { rows: Tu
 export interface BomRow { item: Msg; qty: Msg; note?: Msg }
 export interface CutRow { tag: string; what: Msg; qty: number; length: number; cut: number; dia: number; note?: Msg }
 
-const BALANCED = new Set(["dipole", "fandipole", "yagi", "moxon", "quad", "printeddipole", "printedvdipole"]);
+const BALANCED = new Set(["dipole", "fandipole", "yagi", "moxon", "quad", "printeddipole", "printedvdipole", "dualbanddipole"]);
 
 function connector(f: number, printed: boolean, probe: boolean): Msg {
   if (probe) return M("SMA panel jack (probe through the board)");
@@ -219,6 +222,7 @@ function cutWhat(pc: Piece, def: AntennaDef): string {
   if (pc.mech) return "Boom or support";
   if (def.id === "helix" && pc.group === "driven") return "Helix wire";
   if (def.id === "cloverleaf" && pc.group === "driven") return "Leaf wire";
+  if (def.id === "spring" && pc.group === "driven") return "Spring wire (lead + coil, straightened)";
   if (def.id === "discone") return pc.group === "ground" ? "Cone rod" : "Disc rod";
   if (def.id === "collinear" && pc.group === "line") return "Top whip";
   if (def.id === "yagi" && pc.closed) return "Folded dipole";
@@ -280,10 +284,12 @@ export function bom(def: AntennaDef, d: Design, cuts: CutRow[]): BomRow[] {
     return rows;
   }
   if (pcb) {
-    const b = pcb.board;
-    const layers = new Set(copperBoxes(pcb).map((q) => q.layer)).size;
-    rows.push({ item: M("PCB {0} × {1}, {2} thick, εr {3}", { len: b.x1 - b.x0 }, { len: b.y1 - b.y0 }, { len: pcb.h }, pcb.er), qty: M("{0} pc", 1), note: layers > 1 ? M("Copper on both sides") : M("Copper on the top side") });
-    rows.push({ item: connector(d.f, true, isProbe(pcb)), qty: M("{0} pc", 1) });
+    for (const { pcb: bd } of boardsOf(pcb)) {
+      const bb = bd.board, layers = new Set(copperBoxes(bd).map((q) => q.layer)).size;
+      rows.push({ item: M("PCB {0} × {1}, {2} thick, εr {3}", { len: bb.x1 - bb.x0 }, { len: bb.y1 - bb.y0 }, { len: pcb.h }, pcb.er), qty: M("{0} pc", 1), note: layers > 1 ? M("Copper on both sides") : M("Copper on the top side") });
+    }
+    if (pcb.coaxFeed) rows.push({ item: M("Semi-rigid coax RG402 (Ø3.6 mm) with an SMA plug, about 9 cm"), qty: M("{0} pc", 1), note: M("Runs through the boards: the shield is soldered to them") });
+    else rows.push({ item: connector(d.f, true, isProbe(pcb)), qty: M("{0} pc", 1) });
   } else {
     const byDia = new Map<string, { dia: number; n: number; L: number; coax: boolean }>();
     for (const c of cuts) {
@@ -345,7 +351,8 @@ export function steps(d: Design, hasBoom: boolean, tunable: boolean): Msg[] {
   const s: Msg[] = [];
   if (d.pcb) {
     s.push(M("Order the board from the Gerber files, or etch it at home with the 1:1 template (for toner transfer, print it mirrored)."));
-    s.push(M("Solder the connector at the feed port and keep the joint short."));
+    if (d.pcb.levels?.length) s.push(M("Stack the boards on the coax at the listed spacings (a printed jig holds them to ±0.1 mm) and solder them in place."));
+    else s.push(M("Solder the connector at the feed port and keep the joint short."));
     const grounds = d.pcb.rects.filter((q) => /Ground/.test(q.label));
     if (new Set(grounds.map((q) => q.layer)).size > 1) s.push(M("Stitch the top and bottom ground pours with vias along their edges (usual practice; not part of the model)."));
   } else {
@@ -423,7 +430,7 @@ export const BUILD_STRINGS = [
   ...Object.values(NOT_TRIMMED), ...Object.values(PRINTED).flatMap((x) => [x.what, x.how]),
   "Band element", "Folded dipole", "Move each end of the folded dipole in by {0}", "Disc rod", "Cone rod", "Top whip",
   "Wind it on a former; see the helix dimensions", "PCB with the loop trace ({0} × {1} loop)", "Reflector loop", "Driven loop", "Radiator", "Driven element", "Director", "Reflector", "Parasitic element", "Radial",
-  "Matching section or stub", "Wire", "Boom or support", "Helix wire", "Leaf wire", "Coax section (cut braid to braid)",
+  "Matching section or stub", "Wire", "Boom or support", "Helix wire", "Leaf wire", "Semi-rigid coax RG402 (Ø3.6 mm) with an SMA plug, about 9 cm", "Runs through the boards: the shield is soldered to them", "Stack the boards on the coax at the listed spacings (a printed jig holds them to ±0.1 mm) and solder them in place.", "Spring wire (lead + coil, straightened)", "Coax section (cut braid to braid)",
   "Shorten the loop by {0} (at the joint or overlap)", "Trim {0} off the open end", "Trim {0} off each end",
   "SMA panel jack (probe through the board)", "SMA edge-mount or u.FL connector", "SMA edge-mount connector",
   "SO-239 (UHF) or N chassis socket", "N or SMA chassis socket", "SMA chassis socket",

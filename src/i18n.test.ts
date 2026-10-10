@@ -22,6 +22,8 @@ const VARIANTS: Record<string, Params[]> = {
   ifa: [{ bw: 0.01 }],
   helix: [{ bands: "1e9-3e9" }],
   cloverleaf: [{ leaves: "4", hand: "lhcp" }],
+  dualbanddipole: [{ bands: "2.4e9-2.5e9" }],
+  pagoda: [{ bands: "2.4e9-2.5e9", version: "3B", hand: "lhcp" }],
   biquad: [{ bands: "2e9-3e9" }],
 };
 

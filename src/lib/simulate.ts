@@ -152,6 +152,14 @@ export function momEligible(defId: string, d: Design): boolean {
   return defId !== "patch" && defId !== "collinear" && defId !== "pcbloop" && !d.pcb && !!d.necSupported && !!d.feed;
 }
 
+/**
+ * True when the Radiation view can show this design: MoM currents, a wire stand-in of the PCB copper
+ * (pcbwires.ts) or an assumed current distribution (idealcurrents.ts).
+ */
+export function radiationEligible(defId: string, d: Design): boolean {
+  return momEligible(defId, d) || !!d.pcb || defId === "collinear" || defId === "pcbloop";
+}
+
 export interface SimOptions {
   /** Pattern frequency; default the design frequency. */
   patternF?: number;

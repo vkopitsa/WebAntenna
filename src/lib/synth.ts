@@ -72,6 +72,7 @@ function variants(id: string, o: SynthOptions): Params[] {
 function candidates(o: SynthOptions): AntennaDef[] {
   return ANTENNAS.filter((a) => {
     if (a.id === "collinear") return false; // no impedance model
+    if (a.id === "spring") return false; // R of a few ohms: never a 50 Ω match without a network, and slow to solve
     const printed = a.category === "Printed";
     if (o.family === "wire" && printed) return false;
     if (o.family === "printed" && !printed) return false;

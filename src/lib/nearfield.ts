@@ -7,6 +7,8 @@ import type { Design, Vec3 } from "./types";
 import { buildMesh, currentElements, segCurrents, solve, type CurrentElement } from "./mom";
 import { momEligible } from "./simulate";
 import { C0, wavelength } from "./rf";
+import { pcbStandIn } from "./pcbwires";
+import { idealCurrents } from "./idealcurrents";
 
 const ETA0 = 4e-7 * Math.PI * C0;
 
@@ -15,7 +17,9 @@ export interface FieldPlane { origin: Vec3; u: Vec3; v: Vec3; w: number; h: numb
 /** e: 6 floats per pixel (ExR ExI EyR EyI EzR EzI, V/m for a 1 V source); r: distance from the plane's ref; d: to the nearest current element. */
 export interface FieldGrid { nx: number; ny: number; e: Float32Array; r: Float32Array; d: Float32Array }
 /** segs: 6 floats per MoM segment (p, q); ir/ii: segment midpoint currents along p → q. */
-export interface RadiationField { f: number; grid: FieldGrid; segs: Float64Array; ir: Float64Array; ii: Float64Array }
+/** model: where the currents come from (MoM on the wires, MoM on a PCB copper stand-in, or an assumed distribution). */
+export interface RadiationField { f: number; grid: FieldGrid; segs: Float64Array; ir: Float64Array; ii: Float64Array; model: FieldModel }
+export type FieldModel = "mom" | "standin" | "ideal";
 export type RGB = [number, number, number];
 
 /** Total E (complex, 3 components) at pt into out = [ExR, ExI, EyR, EyI, EzR, EzI]. */
@@ -79,7 +83,7 @@ export function solveField(defId: string, d: Design, plane: FieldPlane): Radiati
   return fieldSolver()(defId, d, plane);
 }
 
-type Solved = { els: CurrentElement[]; segs: Float64Array; ir: Float64Array; ii: Float64Array } | null;
+type Solved = { els: CurrentElement[]; segs: Float64Array; ir: Float64Array; ii: Float64Array; model: FieldModel } | null;
 
 /**
  * solveField that keeps the last MoM solution: a new view (plane) of the same design only re-samples the field.
@@ -88,24 +92,28 @@ type Solved = { els: CurrentElement[]; segs: Float64Array; ir: Float64Array; ii:
 export function fieldSolver(): ((defId: string, d: Design, plane: FieldPlane) => RadiationField | null) & { solves: number } {
   let key = "", last: Solved = null;
   const run = (defId: string, d: Design, plane: FieldPlane): RadiationField | null => {
-    const k = JSON.stringify([defId, d.f, d.feed, d.wires]);
+    const k = JSON.stringify([defId, d.f, d.feed, d.wires, d.pcb ?? null]);
     if (k !== key) {
       key = k;
-      last = null;
-      if (momEligible(defId, d)) {
-        const m = buildMesh(d, wavelength(d.f), 60, 450);
-        const s = m && solve(m, d.f);
+      const ideal = idealCurrents(defId, d);
+      last = ideal && { ...ideal, model: "ideal" };
+      // MoM on the wires, or on the PCB copper's wire stand-in at its scaled frequency (the field radiates at d.f)
+      const st = last || momEligible(defId, d) ? null : pcbStandIn(d);
+      const md = st ? st.design : d, fs = st ? st.fs : d.f;
+      if (!last && (st || momEligible(defId, d))) {
+        const m = buildMesh(md, wavelength(fs), 60, 450);
+        const s = m && solve(m, fs);
         run.solves++;
         if (s) {
           const segs = new Float64Array(6 * s.mesh.segs.length);
           s.mesh.segs.forEach((g, i) => segs.set([...g.p, ...g.q], 6 * i));
-          last = { els: currentElements(s), segs, ...segCurrents(s) };
+          last = { els: currentElements(s), segs, ...segCurrents(s), model: st ? "standin" : "mom" };
         }
       }
     }
     if (!last) return null;
     // copies: the worker transfers these buffers away
-    return { f: d.f, grid: nearField(last.els, d.f, plane), segs: last.segs.slice(), ir: last.ir.slice(), ii: last.ii.slice() };
+    return { f: d.f, grid: nearField(last.els, d.f, plane), segs: last.segs.slice(), ir: last.ir.slice(), ii: last.ii.slice(), model: last.model };
   };
   run.solves = 0;
   return run;

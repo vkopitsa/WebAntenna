@@ -4,10 +4,13 @@ import { moxonLambda } from "./antennas/moxon";
 import { patchDesign } from "./antennas/patch";
 import { helixEstimates } from "./antennas/helix";
 import { leafK } from "./antennas/cloverleaf";
+import { springTurns } from "./antennas/spring";
+import { buildMesh, solve } from "./mom";
 import { yagiGainDbi } from "./antennas/yagi";
 import { endEffect, microstripWidth, microstripZ0, wavelength } from "./rf";
 import { dist } from "./geom";
 import { formatBands, parseBands } from "./bands";
+import type { Params } from "./types";
 
 const dim = (id: string, label: string, p = {}) => {
   const def = ANTENNA_BY_ID[id];
@@ -236,5 +239,50 @@ describe("printed V dipole", () => {
     const [a, b] = v90.pcb!.polys!;
     const dir = (q: typeof a) => { const [p0, p1] = q.pts; return Math.atan2(p1[1] - p0[1], p1[0] - p0[0]); };
     expect(Math.abs(dir(a) - dir(b)) * 180 / Math.PI).toBeCloseTo(90, 6);
+  });
+});
+
+describe("spring (normal-mode helix)", () => {
+  it("resonates at the design frequency in the MoM (the fitted table) from 315 to 868 MHz and on a 2 m coil", () => {
+    const def = ANTENNA_BY_ID.spring;
+    for (const p of [{}, { bands: "315e6-316e6" }, { bands: "868e6-868.6e6" }, { bands: "144e6-146e6", D: 20e-3, pitch: 6e-3, d: 2e-3 }] as Params[]) {
+      const d = def.build({ ...def.defaults, ...p });
+      const x = (k: number) => { const f = d.f * k, m = buildMesh(d, wavelength(f), 60, 450)!; return solve(m, f)!.z[1]; };
+      expect(x(0.98), JSON.stringify(p)).toBeLessThan(0);
+      expect(x(1.02), JSON.stringify(p)).toBeGreaterThan(0);
+    }
+  }, 120_000);
+  it("more turns for a smaller coil (in λ), a few-ohm radiation resistance", () => {
+    const H = (bands: string) => dim("spring", "Coil length (axial)", { bands });
+    expect(H("315e6-316e6")).toBeGreaterThan(H("433.05e6-434.79e6"));
+    expect(springTurns(0.00722, 0.267, 0.67).R).toBeGreaterThan(1);
+    expect(springTurns(0.00722, 0.267, 0.67).R).toBeLessThan(3);
+  });
+});
+
+describe("pagoda", () => {
+  const def = ANTENNA_BY_ID.pagoda;
+  it("reproduces Baert's published Pagoda-3 spacings (assembly drawing table)", () => {
+    for (const [f, d1, d2] of [[5.3e9, 4.39e-3, 11.63e-3], [5.8e9, 3.65e-3, 10.45e-3], [6.0e9, 3.36e-3, 9.98e-3]]) {
+      const d = def.build({ ...def.defaults, bands: `${f - 1e6}-${f + 1e6}` });
+      expect(d.dims.find((x) => x.key === "D1")!.value).toBeCloseTo(d1, 5);
+      expect(d.dims.find((x) => x.key === "D2")!.value).toBeCloseTo(d2, 5);
+    }
+  });
+  it("three boards on a shield column; LHCP mirrors RHCP; outside 5.3–6 GHz the whole design scales", () => {
+    const r = def.build(def.defaults), l = def.build({ ...def.defaults, hand: "lhcp" }), p = r.pcb!;
+    expect(p.levels!.length).toBe(2);
+    expect(p.pec![0].z1).toBe(0);
+    expect(p.port.start[2]).toBe(0); expect(p.port.stop[2]).toBe(p.h);
+    // x → −x maps the RHCP legs onto the LHCP legs (as a set: legs 210° and 330° swap; pads and rings are round)
+    const all = (d: typeof r) => [...d.pcb!.polys!, ...d.pcb!.levels!.flatMap((v) => v.polys!)].filter((q) => q.label === "Arm");
+    const r3 = (v: number) => Math.round(v * 1e9) / 1e3 + 0;
+    const key = (pts: [number, number][], sx: number) => pts.map(([x, y]) => `${r3(sx * x)},${r3(y)}`).sort().join(" ");
+    const mirrored = new Set(all(r).map((q) => key(q.pts, -1)));
+    expect(all(l).length).toBe(all(r).length);
+    for (const q of all(l)) expect(mirrored.has(key(q.pts, 1))).toBe(true);
+    const s = def.build({ ...def.defaults, bands: "2.899e9-2.901e9" });
+    expect(s.pcb!.h / p.h).toBeCloseTo(5.3 / 2.9, 9); // scaled from the nearest published end
+    expect(s.notes.some((n) => n.startsWith("Outside 5.3–6.0 GHz"))).toBe(true);
   });
 });

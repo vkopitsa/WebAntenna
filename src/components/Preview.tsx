@@ -8,7 +8,7 @@ import { Select } from "./inputs";
 import { cameraBasis, screenPlane } from "./plane";
 import { RadiationLayer } from "./RadiationLayer";
 import { useNearField } from "../useNearField";
-import { momEligible } from "../lib/simulate";
+import { radiationEligible } from "../lib/simulate";
 import { C0 } from "../lib/rf";
 
 /** [yaw, pitch]: top = x right / y up; front = looking along −x (y right); side = looking along +y (x right). */
@@ -49,7 +49,7 @@ export function Preview({ design, svgRef, type, params }: { design: Design; svgR
   const drag = useRef<{ x: number; y: number; yaw: number; pitch: number } | null>(null);
 
   const [radiation, setRadiation] = useState(false);
-  const eligible = momEligible(type, design);
+  const eligible = radiationEligible(type, design);
   const on = radiation && eligible;
   // Radiation view: at least RAD_SPAN wavelengths, and RAD_PAD/2 wavelengths around the antenna, so the wavefronts are visible.
   const minSpan = on ? RAD_SPAN * (C0 / design.f) : 0, radPad = on ? RAD_PAD * (C0 / design.f) : 0;
@@ -101,7 +101,7 @@ export function Preview({ design, svgRef, type, params }: { design: Design; svgR
     <div className="preview">
       <div className="preview-tools">
         <Select value={view} ariaLabel="View" options={[["3d", "3D (drag to rotate)"], ["top", "Top"], ["front", "Front"], ["side", "Side"]]} onChange={(v) => setView(v)} />
-        <button className={on ? "on" : ""} aria-pressed={on} disabled={!eligible} title={eligible ? undefined : t("Wire antennas only (MoM)")} onClick={() => setRadiation((r) => !r)}>{t("Radiation")}</button>
+        <button className={on ? "on" : ""} aria-pressed={on} disabled={!eligible} title={eligible ? undefined : t("No field model for this antenna")} onClick={() => setRadiation((r) => !r)}>{t("Radiation")}</button>
         {on && <button onClick={() => setPlaying((p) => !p)}>{playing ? t("Pause") : t("Play")}</button>}
       </div>
       {fresh && <RadiationLayer data={fresh} toScreen={toScreen} W={W} H={H} theme={theme} playing={playing} />}
@@ -151,8 +151,8 @@ export function Preview({ design, svgRef, type, params }: { design: Design; svgR
         <div className="radiation-legend">
           {field.status === "running" || (field.status === "done" && field.key !== fieldKey) ? <span>{t("Computing field…")}</span>
             : field.status === "error" ? <span>{field.error}</span>
-            : field.status === "done" && !field.data ? <span>{t("Wire antennas only (MoM)")}</span>
-            : fresh ? <><span className="ramp" />{t("Electric field (instantaneous, × distance)")}<span className="glow" />{t("Current on the wire")}</> : null}
+            : field.status === "done" && !field.data ? <span>{t("No field model for this antenna")}</span>
+            : fresh ? <><span className="ramp" />{t("Electric field (instantaneous, × distance)")}<span className="glow" />{t("Current on the wire")}{fresh.model === "standin" ? <em>{t("Approximate: wire model of the copper, substrate as a frequency scale")}</em> : fresh.model === "ideal" ? <em>{t("Assumed current distribution")}</em> : null}</> : null}
         </div>
       )}
     </div>

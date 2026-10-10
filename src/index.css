@@ -154,6 +154,7 @@ label { color: var(--muted); font-size: 12px; }
   background: color-mix(in srgb, var(--chart-bg) 75%, transparent); padding: 2px 6px; border-radius: 4px; }
 .radiation-legend .ramp { width: 48px; height: 8px; border-radius: 2px; background: linear-gradient(90deg, var(--field-lo), var(--field-mid), var(--field-hi)); }
 .radiation-legend .glow { width: 18px; height: 3px; margin-left: 6px; background: var(--field-hi); box-shadow: 0 0 6px var(--field-hi); }
+.radiation-legend em { margin-left: 6px; font-style: normal; opacity: 0.75; }
 .preview-tools { display: flex; gap: 6px; }
 .preview-tools button.on { outline: 2px solid var(--series-1); }
 .wire { stroke: var(--driven); }

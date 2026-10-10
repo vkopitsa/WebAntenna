@@ -33,8 +33,9 @@ const FAMILIES: Record<string, (p: Params, d: Design) => PartSpec[]> = {
  *  Cheap: nothing is built here. */
 export const partsFor = (defId: string, p: Params, d: Design): PartSpec[] => {
   const family = FAMILIES[defId]?.(p, d) ?? [];
-  // printed antennas get the PCB enclosure: every one has a board model except the PCB loop (drawn as plates only)
-  const shell = shellFor(defId, p, d, !!d.pcb || defId === "pcbloop");
+  // printed antennas get the PCB enclosure: every one has a board model except the PCB loop (drawn as plates only);
+  // a stacked build (pagoda) is round and gets a radome like the cloverleaf
+  const shell = shellFor(defId, p, d, (!!d.pcb && !d.pcb.levels?.length) || defId === "pcbloop");
   return shell ? [...family, shell] : family;
 };
 

@@ -6,7 +6,7 @@
 import type { AntennaDef, Design, Params, Vec3 } from "./types";
 import { A4, type Page, type Prim, toPDF, toSVG, wrap } from "./drawing";
 import { buildPack, en, pieces, type Msg } from "./build";
-import { copperBoxes, isProbe, type Pcb } from "./pcb";
+import { boardsOf, copperBoxes, isProbe, type Pcb } from "./pcb";
 import { PROBE_CLEAR, PROBE_DRILL } from "./fab";
 
 /** A drawing in mm, origin at its own top-left. */
@@ -21,7 +21,7 @@ function pcbDrawing(p: Pcb, layer: "top" | "bottom", mirror: boolean, name: stri
   const P = 8, b = p.board;
   const W = (b.x1 - b.x0) * 1e3, H = (b.y1 - b.y0) * 1e3;
   const X = (x: number) => P + (mirror ? (b.x1 - x) : (x - b.x0)) * 1e3, Y = (y: number) => P + (b.y1 - y) * 1e3;
-  const prims: Prim[] = [{ k: "rect", x: P, y: P, w: W, h: H, dash: true, lw: 0.2 }];
+  const prims: Prim[] = [p.outline ? { k: "poly", pts: p.outline.map(([x, y]): [number, number] => [X(x), Y(y)]), closed: true, lw: 0.2 } : { k: "rect", x: P, y: P, w: W, h: H, dash: true, lw: 0.2 }];
   for (const q of p.rects.filter((r) => r.layer === layer)) {
     const x0 = Math.min(X(q.x0), X(q.x1)), x1 = Math.max(X(q.x0), X(q.x1));
     prims.push({ k: "rect", x: x0, y: Y(q.y1), w: x1 - x0, h: (q.y1 - q.y0) * 1e3, fill: true });
@@ -32,7 +32,8 @@ function pcbDrawing(p: Pcb, layer: "top" | "bottom", mirror: boolean, name: stri
     prims.push({ k: "line", x1: cx + sx * 1.5, y1: cy, x2: cx + sx * 6, y2: cy, w: 0.15 }, { k: "line", x1: cx, y1: cy + sy * 1.5, x2: cx, y2: cy + sy * 6, w: 0.15 });
   }
   const s = p.port.start, t = p.port.stop;
-  if (isProbe(p)) {
+  for (const q of p.drills ?? []) prims.push({ k: "circle", cx: X(q.x), cy: Y(q.y), r: q.d * 500, fill: true, white: true });
+  if (p.drills) { /* holes drawn above; the feed is the coax through them */ } else if (isProbe(p)) {
     const cx = X(s[0]), cy = Y(s[1]);
     if (layer === "bottom") prims.push({ k: "circle", cx, cy, r: PROBE_CLEAR * 500, fill: true, white: true });
     prims.push({ k: "circle", cx, cy, r: PROBE_DRILL * 500, fill: true, white: true }, { k: "line", x1: cx - 2.5, y1: cy, x2: cx + 2.5, y2: cy, w: 0.15, grey: true }, { k: "line", x1: cx, y1: cy - 2.5, x2: cx, y2: cy + 2.5, w: 0.15, grey: true });
@@ -42,6 +43,17 @@ function pcbDrawing(p: Pcb, layer: "top" | "bottom", mirror: boolean, name: stri
   }
   const what = layer === "top" ? (mirror ? "Top copper, MIRRORED for toner transfer" : "Top copper, seen from the top") : mirror ? "Bottom copper, as seen from below (prints right for toner transfer)" : "Bottom copper, seen through the board from the top";
   return { w: W + 2 * P, h: H + 2 * P, prims, caption: `${name} - ${what} - board ${W.toFixed(1)} x ${H.toFixed(1)} mm` };
+}
+
+/** Every board's copper layers (a stacked build: one pair per board, named in the caption). */
+function pcbDrawings(p: Pcb, mirror: boolean, name: string): Drawing[] {
+  return boardsOf(p).flatMap(({ label, pcb }) => {
+    const n = label ? `${name} ${label}` : name;
+    const ds = [];
+    if (copperBoxes(pcb).some((q) => q.layer === "top")) ds.push(pcbDrawing(pcb, "top", mirror, n));
+    if (copperBoxes(pcb).some((q) => q.layer === "bottom")) ds.push(pcbDrawing(pcb, "bottom", mirror, n));
+    return ds;
+  });
 }
 
 // ---------------------------------------------------------------- wire projection
@@ -261,9 +273,7 @@ export function templateKind(def: AntennaDef, d: Design): TemplateKind {
 export function templatePages(def: AntennaDef, d: Design, mirror: boolean): Page[] {
   const name = def.name;
   if (d.pcb) {
-    const ds = [pcbDrawing(d.pcb, "top", mirror, name)];
-    if (copperBoxes(d.pcb).some((q) => q.layer === "bottom")) ds.push(pcbDrawing(d.pcb, "bottom", mirror, name));
-    return layout(ds, `${name}: 1:1 PCB template`, "Black = copper. For toner transfer or photo etching use the mirrored option. Check the scale bar before you etch.");
+    return layout(pcbDrawings(d.pcb, mirror, name), `${name}: 1:1 PCB template`, "Black = copper. For toner transfer or photo etching use the mirrored option. Check the scale bar before you etch.");
   }
   const bm = boomMarks(d);
   if (bm) return stripPages(`${name}: boom drilling strip`, bm.L, bm.marks);
@@ -277,8 +287,7 @@ export function templatePages(def: AntennaDef, d: Design, mirror: boolean): Page
 export function templateSVG(def: AntennaDef, d: Design, mirror: boolean): string | null {
   const ds: Drawing[] = [];
   if (d.pcb) {
-    ds.push(pcbDrawing(d.pcb, "top", mirror, def.name));
-    if (copperBoxes(d.pcb).some((q) => q.layer === "bottom")) ds.push(pcbDrawing(d.pcb, "bottom", mirror, def.name));
+    ds.push(...pcbDrawings(d.pcb, mirror, def.name));
   } else {
     const bm = boomMarks(d);
     if (bm) {

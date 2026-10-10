@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ANTENNA_BY_ID } from "./antennas";
 import { toOpenEMS } from "./openems";
-import { gerberCopper, toDXF } from "./fab";
+import { excellon, fabZip, gerberCopper, gerberOutline, toDXF } from "./fab";
 import { inPoly } from "./pcb";
 import { setup } from "./fdtd/setup";
 import { loopModel } from "./antennas/pcbloop";
@@ -11,7 +11,7 @@ import { ifaEeff } from "./antennas/ifa";
 import { parseOpenEMS, parseTouchstone } from "./importers";
 import { simulate, toS1P } from "./simulate";
 
-const PCB = ["pcbmonopole", "meander", "ifa", "printeddipole", "printedvdipole", "patch"];
+const PCB = ["pcbmonopole", "meander", "ifa", "printeddipole", "printedvdipole", "dualbanddipole", "sleevedipole", "pagoda", "patch"];
 
 describe("printed antennas", () => {
   it("every printed type has a board, copper inside the board and a port", () => {
@@ -24,7 +24,8 @@ describe("printed antennas", () => {
         expect(q.x0 >= p.board.x0 - 1e-9 && q.x1 <= p.board.x1 + 1e-9 && q.y0 >= p.board.y0 - 1e-9 && q.y1 <= p.board.y1 + 1e-9, `${id} ${q.label}`).toBe(true);
       }
       for (const q of p.polys ?? []) for (const [x, y] of q.pts) expect(x >= p.board.x0 && x <= p.board.x1 && y >= p.board.y0 && y <= p.board.y1, `${id} ${q.label}`).toBe(true);
-      expect(d.plates.length).toBe(p.rects.length + (p.polys?.length ?? 0) + 1);
+      const levels = p.levels ?? [];
+      expect(d.plates.length, id).toBe(1 + levels.length + p.rects.length + (p.polys?.length ?? 0) + levels.reduce((n, l) => n + l.rects.length + (l.polys?.length ?? 0), 0) + (p.pec?.length ?? 0));
     }
   });
   it("εeff fit reproduces the openEMS calibration points", () => {
@@ -69,7 +70,7 @@ describe("openEMS export", () => {
       const rows = py.slice(py.indexOf("copper = ["), py.indexOf("]", py.indexOf("copper = [") + 12)).split("\n").filter((l) => l.trim().startsWith("("));
       expect(rows.length, id).toBe(d.pcb!.rects.length);
       expect(py).toContain("AddLumpedPort(1, port_R");
-      expect(py).toContain("* 1e-3, h / 2 * 1e-3]");
+      expect(py).toContain("(z_lo + z_hi) / 2 * 1e-3]");
       expect(py).toContain("read_cached=False");
     }
   });
@@ -152,3 +153,50 @@ describe("polygon copper (printed V dipole)", () => {
     }
   });
 });
+
+describe("stacked boards (pagoda)", () => {
+  const def = ANTENNA_BY_ID.pagoda, d = def.build(def.defaults), p = d.pcb!;
+  it("fab zip: a Gerber, outline, drill and DXF set per board, round outlines and the coax holes", () => {
+    const names = unzipNames(fabZip(def, def.defaults, d, "pagoda", "t"));
+    for (const k of [1, 2, 3]) for (const ext of ["GTL", "GBL", "GKO", "DRL", "dxf"]) expect(names, `part${k}.${ext}`).toContain(`pagoda_part${k}.${ext}`);
+    const out = gerberOutline(p);
+    expect(out.match(/D01\*/g)!.length).toBe(p.outline!.length);
+    expect(excellon(p)).toContain("T1C1.020");
+    expect(excellon({ ...p, ...{ drills: p.levels![0].drills } })).toContain("T1C3.800");
+  });
+  it("openEMS script carries the extra boards, their copper and the shield column", () => {
+    const s = toOpenEMS(def, d);
+    const rows = (key: string) => s.slice(s.indexOf(`${key} = [`), s.indexOf("\n]", s.indexOf(`${key} = [`))).split("\n").filter((l) => l.trim().startsWith("("));
+    expect(rows("levels").length).toBe(2);
+    expect(rows("level_copper").length).toBe(p.levels!.reduce((n, l) => n + (l.polys?.length ?? 0), 0));
+    expect(rows("pec_boxes")[0]).toContain("None");
+    expect(s).toContain("AddLinPoly(");
+  });
+  it("FDTD: substrate in all three boards, copper on every plane, the shield column PEC, the port free", () => {
+    const s = setup(p, 4.8e9, 6.8e9), { x, y, z } = s.mesh, nx = x.length, ny = y.length;
+    const kOf = (v: number) => z.findIndex((t) => Math.abs(t - v) < 1e-9);
+    const i0 = x.findIndex((v) => Math.abs(v) < 1e-12), j0 = y.findIndex((v) => Math.abs(v) < 1e-12);
+    // εr inside each board's slab, 1 above the stack: the x-edge cb scales as 1/ε
+    const cbAt = (zz: number, i: number) => s.cb[0][(z.findIndex((t) => t > zz) * ny + j0) * nx + i];
+    const iArm = x.findIndex((v) => v > 4e-3);
+    for (const z0 of [0, ...p.levels!.map((l) => l.z0)]) expect(cbAt(z0 + p.h / 2, iArm - 1) / cbAt(p.h + 3e-3, iArm - 1), `slab at ${z0}`).toBeCloseTo(1 / p.er, 2);
+    // the shield column: z edges on the axis below board 1 are PEC
+    expect(s.cb[2][((kOf(-5e-3) >= 0 ? kOf(-5e-3) : z.findIndex((t) => t > -5e-3)) * ny + j0) * nx + i0]).toBe(0);
+    for (const e of s.port.edges) expect(s.cb[2][e.idx]).toBeGreaterThan(0);
+    expect(s.port.edges.length).toBeGreaterThan(0);
+    // copper on board 3's underside (the choke disc) is PEC at its plane
+    const k3 = kOf(p.levels![1].z0);
+    expect(s.cb[0][(k3 * ny + j0) * nx + x.findIndex((v) => v > 3e-3)]).toBe(0);
+  });
+});
+
+/** File names in a stored (uncompressed) zip: local headers "PK\x03\x04". */
+function unzipNames(z: Uint8Array): string[] {
+  const out: string[] = [], dv = new DataView(z.buffer, z.byteOffset, z.byteLength);
+  for (let o = 0; o + 30 <= z.length && dv.getUint32(o, true) === 0x04034b50;) {
+    const size = dv.getUint32(o + 18, true), nl = dv.getUint16(o + 26, true), xl = dv.getUint16(o + 28, true);
+    out.push(new TextDecoder().decode(z.subarray(o + 30, o + 30 + nl)));
+    o += 30 + nl + xl + size;
+  }
+  return out;
+}

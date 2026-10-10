@@ -1,7 +1,7 @@
 // FDTD problem setup shared by the CPU reference and the WebGPU engine.
 // Yee grid on mesh lines x[0..Nx-1] etc. Ex(i,j,k) is the edge (i→i+1, j, k); Hx(i,j,k) the face at x[i]
 // spanning j..j+1, k..k+1 (and cyclic). All arrays are Nx·Ny·Nz, index = (k·Ny + j)·Nx + i.
-import { inPoly, type Pcb } from "../pcb";
+import { copperPlanes, inPoly, slabs, type Pcb } from "../pcb";
 import { buildMesh, excitation, type FdtdMesh } from "./mesh";
 
 export const C0 = 299792458, MU0 = 4e-7 * Math.PI, EPS0 = 1 / (MU0 * C0 * C0), ETA0 = MU0 * C0;
@@ -37,11 +37,21 @@ export function setup(p: Pcb, fmin: number, fmax: number): Setup {
   // Cell materials: substrate where the cell centre is inside the board box and 0 < z < h.
   const { f0, fc } = excitation(fmin, fmax);
   const sigSub = 2 * Math.PI * f0 * EPS0 * p.er * p.tanD;
-  const b = p.board;
+  const subs = slabs(p).map((sl) => ({ ...sl, box: { x0: Math.min(...sl.pts.map((q) => q[0])), x1: Math.max(...sl.pts.map((q) => q[0])), y0: Math.min(...sl.pts.map((q) => q[1])), y1: Math.max(...sl.pts.map((q) => q[1])) }, rect: sl.pts.length === 4 && sl === slabs(p)[0] && !p.outline }));
+  // cell-centre substrate flags, precomputed (an outline polygon test per edge would be slow)
+  const cellSub = new Uint8Array(Math.max(1, (nx - 1) * (ny - 1) * (nz - 1)));
+  for (let k = 0; k < nz - 1; k++) {
+    const zc = (z[k] + z[k + 1]) / 2;
+    const here = subs.filter((sl) => zc > sl.z0 && zc < sl.z1);
+    if (!here.length) continue;
+    for (let j = 0; j < ny - 1; j++) for (let i = 0; i < nx - 1; i++) {
+      const xc = (x[i] + x[i + 1]) / 2, yc = (y[j] + y[j + 1]) / 2;
+      if (here.some((sl) => xc > sl.box.x0 && xc < sl.box.x1 && yc > sl.box.y0 && yc < sl.box.y1 && (sl.rect || inPoly(sl.pts, xc, yc)))) cellSub[(k * (ny - 1) + j) * (nx - 1) + i] = 1;
+    }
+  }
   const inSub = (i: number, j: number, k: number) => {
     if (i < 0 || j < 0 || k < 0 || i >= nx - 1 || j >= ny - 1 || k >= nz - 1) return false;
-    const xc = (x[i] + x[i + 1]) / 2, yc = (y[j] + y[j + 1]) / 2, zc = (z[k] + z[k + 1]) / 2;
-    return xc > b.x0 && xc < b.x1 && yc > b.y0 && yc < b.y1 && zc > 0 && zc < p.h;
+    return cellSub[(k * (ny - 1) + j) * (nx - 1) + i] === 1;
   };
   const ca: Setup["ca"] = [new Float32Array(N), new Float32Array(N), new Float32Array(N)];
   const cb: Setup["cb"] = [new Float32Array(N), new Float32Array(N), new Float32Array(N)];
@@ -66,27 +76,41 @@ export function setup(p: Pcb, fmin: number, fmax: number): Setup {
   }
   // PEC sheets: tangential edges in the copper plane whose midpoint lies inside the rectangle.
   const near = (v: number, t: number) => Math.abs(v - t) < 1e-9 + 1e-6 * Math.abs(t);
-  for (const q of p.rects) {
-    const zc = q.layer === "top" ? p.h : 0;
-    const k = z.findIndex((v) => near(v, zc));
+  for (const c of copperPlanes(p)) {
+    const k = z.findIndex((v) => near(v, c.z));
     if (k < 0) throw new Error("copper plane not on a mesh line");
-    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
-      const n = (k * ny + j) * nx + i;
-      if (i < nx - 1) { const xm = (x[i] + x[i + 1]) / 2; if (xm >= q.x0 && xm <= q.x1 && y[j] >= q.y0 - 1e-12 && y[j] <= q.y1 + 1e-12) { ca[0][n] = 0; cb[0][n] = 0; } }
-      if (j < ny - 1) { const ym = (y[j] + y[j + 1]) / 2; if (ym >= q.y0 && ym <= q.y1 && x[i] >= q.x0 - 1e-12 && x[i] <= q.x1 + 1e-12) { ca[1][n] = 0; cb[1][n] = 0; } }
+    for (const q of c.rects)
+      for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+        const n = (k * ny + j) * nx + i;
+        if (i < nx - 1) { const xm = (x[i] + x[i + 1]) / 2; if (xm >= q.x0 && xm <= q.x1 && y[j] >= q.y0 - 1e-12 && y[j] <= q.y1 + 1e-12) { ca[0][n] = 0; cb[0][n] = 0; } }
+        if (j < ny - 1) { const ym = (y[j] + y[j + 1]) / 2; if (ym >= q.y0 && ym <= q.y1 && x[i] >= q.x0 - 1e-12 && x[i] <= q.x1 + 1e-12) { ca[1][n] = 0; cb[1][n] = 0; } }
+      }
+    // Polygons: the same rule with the midpoint inside the polygon (a staircase of the diagonal edges).
+    for (const q of c.polys) {
+      const xs = q.pts.map((t) => t[0]), ys = q.pts.map((t) => t[1]);
+      const bx0 = Math.min(...xs), bx1 = Math.max(...xs), by0 = Math.min(...ys), by1 = Math.max(...ys);
+      for (let j = 0; j < ny; j++) {
+        if (y[j] < by0 - 1e-12 && (j === ny - 1 || y[j + 1] < by0)) continue;
+        if (y[j] > by1 + 1e-12) break;
+        for (let i = 0; i < nx; i++) {
+          if (x[i] > bx1 + 1e-12) break;
+          const n = (k * ny + j) * nx + i;
+          if (i < nx - 1 && x[i + 1] >= bx0 && inPoly(q.pts, (x[i] + x[i + 1]) / 2, y[j])) { ca[0][n] = 0; cb[0][n] = 0; }
+          if (j < ny - 1 && x[i] >= bx0 - 1e-12 && inPoly(q.pts, x[i], (y[j] + y[j + 1]) / 2)) { ca[1][n] = 0; cb[1][n] = 0; }
+        }
+      }
     }
   }
-  // Polygons: the same rule with the midpoint inside the polygon (a staircase of the diagonal edges).
-  for (const q of p.polys ?? []) {
-    const zc = q.layer === "top" ? p.h : 0;
-    const k = z.findIndex((v) => near(v, zc));
-    if (k < 0) throw new Error("copper plane not on a mesh line");
-    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+  // Solid conductors: every edge whose midpoint is inside (or on) the box.
+  const inB = (v: number, a: number, bb: number) => v >= a - 1e-12 && v <= bb + 1e-12;
+  for (const q of p.pec ?? [])
+    for (let k = 0; k < nz; k++) for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
       const n = (k * ny + j) * nx + i;
-      if (i < nx - 1 && inPoly(q.pts, (x[i] + x[i + 1]) / 2, y[j])) { ca[0][n] = 0; cb[0][n] = 0; }
-      if (j < ny - 1 && inPoly(q.pts, x[i], (y[j] + y[j + 1]) / 2)) { ca[1][n] = 0; cb[1][n] = 0; }
+      if (!inB(z[k], q.z0, q.z1) && !(k < nz - 1 && inB((z[k] + z[k + 1]) / 2, q.z0, q.z1))) continue;
+      if (i < nx - 1 && inB((x[i] + x[i + 1]) / 2, q.x0, q.x1) && inB(y[j], q.y0, q.y1) && inB(z[k], q.z0, q.z1)) { ca[0][n] = 0; cb[0][n] = 0; }
+      if (j < ny - 1 && inB(x[i], q.x0, q.x1) && inB((y[j] + y[j + 1]) / 2, q.y0, q.y1) && inB(z[k], q.z0, q.z1)) { ca[1][n] = 0; cb[1][n] = 0; }
+      if (k < nz - 1 && inB(x[i], q.x0, q.x1) && inB(y[j], q.y0, q.y1) && inB((z[k] + z[k + 1]) / 2, q.z0, q.z1)) { ca[2][n] = 0; cb[2][n] = 0; }
     }
-  }
   // Lumped port: edges of the port component inside the port box.
   const comp = ({ x: 0, y: 1, z: 2 } as const)[p.port.dir];
   const lo = p.port.start.map((v, i) => Math.min(v, p.port.stop[i])), hi = p.port.start.map((v, i) => Math.max(v, p.port.stop[i]));

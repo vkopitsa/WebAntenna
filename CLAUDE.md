@@ -34,13 +34,16 @@ src/lib/                 NO DOM, NO React, NO i18n. Runs in Node (tests) and in 
   mom.ts                 thin-wire MoM (MININEC): buildMesh, solve, gainFn, cpGainFn (RHCP/LHCP, checked on the helix)
   nearfield.ts           Radiation view: near field of the MoM currents on a plane (short-dipole sum, full near terms),
                          fieldScale (from pixels ≥ λ/2 from the wires) and per-frame shade() through a colour LUT
+  pcbwires.ts            Radiation view for printed antennas: thin-wire stand-in of the copper solved at f·1.1·√εeff
+  idealcurrents.ts       Radiation view for patch / collinear / pcbloop: assumed current distributions
   simulate.ts            sweep + far-field sampling (cuts, 3D grid, max/F-B/HPBW), patch & collinear analytic models, s11, toS1P
   export.ts              NEC-2 (λ/80, tapered GC next to a short feed gap, FR+RP per band), FreeCAD macro, CSV, JSON
   pcb.ts                 Pcb model: board, copper rectangles + optional polygons (diagonal traces), lumped port; pcbPlates();
                          copperBoxes() for extents/keep-outs (polygons by bounding box)
   openems.ts             toOpenEMS(): full FDTD script (mesh, run, S11/Zin/resonances, full-sphere NF2FF, plots, JSON)
   importers.ts           parseOpenEMS (the script's _results.json) and parseTouchstone (.s1p) for the Simulation tab
-  antennas/pcb*.ts ifa.ts meander.ts printeddipole.ts pcbloop.ts   printed antennas (openEMS-calibrated formulas)
+  antennas/pcb*.ts ifa.ts meander.ts printeddipole.ts printedvdipole.ts dualbanddipole.ts sleevedipole.ts pcbloop.ts
+                         printed antennas (openEMS / in-browser FDTD calibrated formulas)
   build.ts               build pack: pieces() chains wires into physical parts; BOM, cut list, tuning sensitivity
                          (rebuild at +1 % frequency), substrate notes, steps, advise() for measured .s1p
   fab.ts zip.ts          Gerber RS-274X X2 / Excellon / DXF R12 / README in a stored zip (Protel extensions)

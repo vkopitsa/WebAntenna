@@ -20,9 +20,9 @@ It is a static React + TypeScript site and runs entirely in the browser.
 
 *Design tab: parameters, 3D drawing and dimensions.*
 
-**Printed (PCB) antennas:** trace monopole, meander line monopole, inverted-F (IFA), printed dipole, printed V dipole, small loop with matching capacitors, and the rectangular microstrip patch. Each exports a ready-to-run **openEMS** script.
+**Printed (PCB) antennas:** trace monopole, meander line monopole, inverted-F (IFA), printed dipole, printed V dipole, dual-band (2.4 / 5 GHz) printed dipole, printed sleeve dipole, small loop with matching capacitors, and the rectangular microstrip patch. Each exports a ready-to-run **openEMS** script.
 
-**Antennas:** half-wave dipole / inverted V, fan (parallel) multi-band dipole, quarter-wave ground plane, J-pole, coaxial collinear (COCO),
+**Antennas:** half-wave dipole / inverted V, fan (parallel) multi-band dipole, quarter-wave ground plane, spring (normal-mode helix), J-pole, coaxial collinear (COCO),
 Yagi-Uda (DL6WU style, 3–40 elements), Moxon rectangle, 2-element cubical quad, biquad with reflector,
 axial-mode helix (RHCP/LHCP), FPV cloverleaf (3 or 4 leaves, RHCP/LHCP), rectangular microstrip patch (inset or probe feed), discone.
 

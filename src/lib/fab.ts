@@ -1,7 +1,7 @@
 // PCB fabrication outputs for printed antennas: Gerber RS-274X (X2 attributes), Excellon drill, DXF R12.
 // Origin at the board's lower-left corner, millimetres. Copper is the exact rectangle set the FDTD and
 // openEMS models use, so what you order is what was simulated.
-import { copperBoxes, isProbe, type Pcb, type PcbRect } from "./pcb";
+import { boardsOf, copperBoxes, isProbe, type Pcb, type PcbRect } from "./pcb";
 import type { AntennaDef, Design, Params } from "./types";
 import { buildPack, en } from "./build";
 import { zip } from "./zip";
@@ -39,13 +39,27 @@ export function gerberCopper(p: Pcb, layer: "top" | "bottom", gen = "1"): string
 
 export function gerberOutline(p: Pcb, gen = "1"): string {
   const w = p.board.x1 - p.board.x0, h = p.board.y1 - p.board.y0;
-  return [...header("Profile,NP", gen), "%ADD10C,0.100000*%", "D10*", `X0Y0D02*`, `X${g(w)}Y0D01*`, `X${g(w)}Y${g(h)}D01*`, `X0Y${g(h)}D01*`, `X0Y0D01*`, "M02*"].join("\n") + "\n";
+  const L = [...header("Profile,NP", gen), "%ADD10C,0.100000*%", "D10*"];
+  if (p.outline) {
+    const at = ([x, y]: [number, number], op: string) => `X${g(x - p.board.x0)}Y${g(y - p.board.y0)}${op}*`;
+    L.push(at(p.outline[0], "D02"), ...p.outline.slice(1).map((q) => at(q, "D01")), at(p.outline[0], "D01"));
+  } else L.push(`X0Y0D02*`, `X${g(w)}Y0D01*`, `X${g(w)}Y${g(h)}D01*`, `X0Y${g(h)}D01*`, `X0Y0D01*`);
+  return [...L, "M02*"].join("\n") + "\n";
 }
 
+/** Plated holes: the board's own list, or the probe-feed hole. */
+const holes = (p: Pcb) => p.drills ?? (isProbe(p) ? [{ x: p.port.start[0], y: p.port.start[1], d: PROBE_DRILL }] : []);
+
 export function excellon(p: Pcb): string | null {
-  if (!isProbe(p)) return null;
-  const x = (p.port.start[0] - p.board.x0) * 1e3, y = (p.port.start[1] - p.board.y0) * 1e3;
-  return ["M48", "; Antenna Generator: probe-feed hole", "; #@! TF.FileFunction,Plated,1,2,PTH", "FMAT,2", "METRIC,TZ", `T1C${(PROBE_DRILL * 1e3).toFixed(3)}`, "%", "G05", "T1", `X${x.toFixed(3)}Y${y.toFixed(3)}`, "T0", "M30", ""].join("\n");
+  const hs = holes(p);
+  if (!hs.length) return null;
+  const sizes = [...new Set(hs.map((q) => +(q.d * 1e3).toFixed(3)))];
+  const L = ["M48", isProbe(p) ? "; Antenna Generator: probe-feed hole" : "; Antenna Generator: plated holes", "; #@! TF.FileFunction,Plated,1,2,PTH", "FMAT,2", "METRIC,TZ", ...sizes.map((d, i) => `T${i + 1}C${d.toFixed(3)}`), "%", "G05"];
+  sizes.forEach((d, i) => {
+    L.push(`T${i + 1}`);
+    for (const q of hs.filter((h) => +(h.d * 1e3).toFixed(3) === d)) L.push(`X${((q.x - p.board.x0) * 1e3).toFixed(3)}Y${((q.y - p.board.y0) * 1e3).toFixed(3)}`);
+  });
+  return [...L, "T0", "M30", ""].join("\n");
 }
 
 /** DXF R12 (AutoCAD 12 ASCII), mm. Layers OUTLINE, TOP, BOTTOM, PORT, DRILL. */
@@ -61,7 +75,8 @@ export function toDXF(p: Pcb): string {
     out.push("0", "SEQEND", "8", layer);
   };
   const box = (x0: number, y0: number, x1: number, y1: number): [number, number][] => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
-  poly("OUTLINE", box(p.board.x0, p.board.y0, p.board.x1, p.board.y1));
+  poly("OUTLINE", p.outline ?? box(p.board.x0, p.board.y0, p.board.x1, p.board.y1));
+  for (const q of p.drills ?? []) out.push("0", "CIRCLE", "8", "DRILL", "10", mm(q.x - ox), "20", mm(q.y - oy), "30", "0.0", "40", (q.d * 500).toFixed(4));
   for (const q of p.rects) poly(q.layer === "top" ? "TOP" : "BOTTOM", box(q.x0, q.y0, q.x1, q.y1));
   for (const q of p.polys ?? []) poly(q.layer === "top" ? "TOP" : "BOTTOM", q.pts);
   const s = p.port.start, t = p.port.stop;
@@ -78,15 +93,18 @@ export function toDXF(p: Pcb): string {
 
 /** Gerber set + drill + DXF + README in one zip, with the Protel extensions every fab recognises (GTL/GBL/GKO/DRL). */
 export function fabZip(def: AntennaDef, p: Params, d: Design, base: string, gen: string): Uint8Array {
-  const pcb = d.pcb!;
-  const files: { name: string; data: string }[] = [
-    { name: `${base}.GTL`, data: gerberCopper(pcb, "top", gen) },
-  ];
-  if (copperBoxes(pcb).some((q) => q.layer === "bottom")) files.push({ name: `${base}.GBL`, data: gerberCopper(pcb, "bottom", gen) });
-  files.push({ name: `${base}.GKO`, data: gerberOutline(pcb, gen) });
-  const drl = excellon(pcb);
-  if (drl) files.push({ name: `${base}.DRL`, data: drl });
-  files.push({ name: `${base}.dxf`, data: toDXF(pcb) });
+  const boards = boardsOf(d.pcb!);
+  const files: { name: string; data: string }[] = [];
+  boards.forEach(({ pcb }, i) => {
+    // a stacked build gets one file set per board: base_part1, base_part2, …
+    const b = boards.length > 1 ? `${base}_part${i + 1}` : base;
+    files.push({ name: `${b}.GTL`, data: gerberCopper(pcb, "top", gen) });
+    if (copperBoxes(pcb).some((q) => q.layer === "bottom")) files.push({ name: `${b}.GBL`, data: gerberCopper(pcb, "bottom", gen) });
+    files.push({ name: `${b}.GKO`, data: gerberOutline(pcb, gen) });
+    const drl = excellon(pcb);
+    if (drl) files.push({ name: `${b}.DRL`, data: drl });
+    files.push({ name: `${b}.dxf`, data: toDXF(pcb) });
+  });
   files.push({ name: "README.txt", data: readme(def, p, d, files.map((f) => f.name)) });
   return zip(files);
 }
@@ -100,6 +118,10 @@ function readme(def: AntennaDef, p: Params, d: Design, names: string[]): string 
     "",
     `Design frequency: ${(d.f / 1e6).toFixed(3)} MHz`,
     `Board: ${mm(pcb.board.x1 - pcb.board.x0)} x ${mm(pcb.board.y1 - pcb.board.y0)}, ${mm(pcb.h)} thick, er ${pcb.er}, tan d ${pcb.tanD}, copper ${(pcb.t * 1e6).toFixed(0)} um`,
+    ...(pcb.levels?.length ? [
+      `Stack: ${pcb.levels.length + 1} boards of the same laminate (files _part1 = the top board, then downwards):`,
+      ...boardsOf(pcb).map(({ label, pcb: b }, i) => `  part${i + 1}: ${label}, ${mm(b.board.x1 - b.board.x0)} across, bottom face at z = ${mm(i === 0 ? 0 : pcb.levels![i - 1].z0)}`),
+    ] : []),
     `Layers: ${copperBoxes(pcb).some((q) => q.layer === "bottom") ? "2 (top + bottom)" : "1 (top only; bottom copper not used)"}`,
     "Units: millimetres. Origin: lower-left corner of the board.",
     "",
@@ -109,7 +131,9 @@ function readme(def: AntennaDef, p: Params, d: Design, names: string[]): string 
     `  README.txt`,
     "",
     "Feed:",
-    isProbe(pcb)
+    pcb.coaxFeed
+      ? `  Coax through the stack: core to the centre pad on top of part1, shield to the pads of the other boards (port ${port.R} ohm).`
+      : isProbe(pcb)
       ? `  Probe feed at X ${mm(port.start[0] - ox)} Y ${mm(port.start[1] - oy)}: ${(PROBE_DRILL * 1e3).toFixed(2)} mm plated hole, ${(PROBE_CLEAR * 1e3).toFixed(1)} mm clearance in the bottom ground (SMA panel jack from below).`
       : `  Port between X ${mm(Math.min(port.start[0], port.stop[0]) - ox)}..${mm(Math.max(port.start[0], port.stop[0]) - ox)}, Y ${mm(Math.min(port.start[1], port.stop[1]) - oy)}..${mm(Math.max(port.start[1], port.stop[1]) - oy)} (${port.R} ohm). Solder the connector across this gap.`,
     "",
