@@ -3,11 +3,25 @@ import { ANTENNA_BY_ID } from "./lib/antennas";
 import { simulate } from "./lib/simulate";
 import type { Params } from "./lib/types";
 import { synthesize, type SynthOptions } from "./lib/synth";
+import { solveField, type FieldPlane } from "./lib/nearfield";
 
-export interface SimRequest { id: number; type: string; params: Params; patternF?: number; synth?: undefined }
-export interface SynthRequest { id: number; synth: SynthOptions }
+export interface SimRequest { id: number; type: string; params: Params; patternF?: number; synth?: undefined; field?: undefined }
+export interface SynthRequest { id: number; synth: SynthOptions; field?: undefined }
+export interface FieldRequest { id: number; field: { type: string; params: Params; plane: FieldPlane }; synth?: undefined }
 
-self.onmessage = (e: MessageEvent<SimRequest | SynthRequest>) => {
+self.onmessage = (e: MessageEvent<SimRequest | SynthRequest | FieldRequest>) => {
+  if (e.data.field) {
+    const { id, field } = e.data;
+    try {
+      const d = ANTENNA_BY_ID[field.type].build(field.params);
+      const data = solveField(field.type, d, field.plane);
+      const transfer = data ? [data.grid.e.buffer, data.grid.r.buffer, data.segs.buffer, data.ir.buffer, data.ii.buffer] : [];
+      (self as unknown as Worker).postMessage({ id, field: data }, transfer);
+    } catch (err) {
+      postMessage({ id, error: String(err) });
+    }
+    return;
+  }
   if (e.data.synth) {
     const { id, synth } = e.data;
     try {
