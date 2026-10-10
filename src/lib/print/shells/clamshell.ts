@@ -27,7 +27,7 @@ export function clamshell(M: ManifoldToplevel, o: ClamOpts): [Manifold, Manifold
   let body = box(M, out.lo, out.hi);
   for (const c of earCentres(o.inner, o.wall)) {
     // the ear circle does not reach the box corner (3·√2 > 4), so a bridge block joins them; it starts 1 mm inside the wall
-    const sx = c[0] > 0 ? 1 : -1, sy = c[1] > 0 ? 1 : -1;
+    const sx = c[0] > out.lo[0] ? 1 : -1, sy = c[1] > out.lo[1] ? 1 : -1;   // which corner, relative to the box (not the origin)
     const ex = (sx > 0 ? out.hi[0] : out.lo[0]) - sx, ey = (sy > 0 ? out.hi[1] : out.lo[1]) - sy;
     body = body.add(M.Manifold.cylinder(z1 - z0, EAR_R, EAR_R, 24).translate([c[0], c[1], z0]));
     body = body.add(box(M, [Math.min(c[0], ex), Math.min(c[1], ey), z0], [Math.max(c[0], ex), Math.max(c[1], ey), z1]));

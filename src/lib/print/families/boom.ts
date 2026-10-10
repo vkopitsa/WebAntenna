@@ -1,7 +1,7 @@
 import type { Design, Params } from "../../types";
 import { msg, type PartSpec } from "../parts";
 import { CLEAR, INSULATE, M3_NUT_DEPTH, WALL, ZIP_T, ZIP_W, mm } from "../rules";
-import { box, m3, rod, zipSlot } from "../shapes";
+import { box, m3, rod, zipSlot, type V3 } from "../shapes";
 
 /** Yagi: element clips, driven-element block, or a drilling guide for through-boom elements. */
 export const BOOM_STRINGS = [
@@ -58,6 +58,15 @@ export function yagiStraps(d: Design): [number, number][] {
   return [[x, y], [x, -y], [-x, y], [-x, -y]];
 }
 
+/** The driven element block's outline (mm) in its own frame: the element along y at z = 0, the boom along x below. */
+export function yagiDrivenBox(d: Design): { lo: V3; hi: V3 } {
+  const { elemD, boomD, fs } = yagiGeometry(d);
+  const ch = elemD + CLEAR, bc = boomD + CLEAR;
+  const Y = bc / 2 + 2 * WALL + ZIP_T, zb = -(bc / 2 + INSULATE + ch / 2);
+  const L = Math.max(ch + 2 * ZIP_W + 4 * WALL, 24);
+  return { lo: [-L / 2, -Y, zb], hi: [L / 2, Y, (fs > 0 ? fs : 0) + ch / 2 + WALL + M3_NUT_DEPTH + 1] };
+}
+
 export function yagiParts(p: Params, d: Design): PartSpec[] {
   const { elemD, boomD, fs } = yagiGeometry(d);
   const ch = elemD + CLEAR, bc = boomD + CLEAR;
@@ -100,14 +109,14 @@ export function yagiParts(p: Params, d: Design): PartSpec[] {
   };
 
   const folded = fs > 0;
-  const top = (folded ? fs : 0) + ch / 2 + WALL + M3_NUT_DEPTH + 1;
+  const top = yagiDrivenBox(d).hi[2];
   const driven: PartSpec = {
     id: "yagi-driven", title: "Yagi driven element block", use: "holder", qty: 1,
     purpose: folded ? msg(BOOM_STRINGS[4], { len: fs / 1000 }, { len: INSULATE / 1000 }) : msg(BOOM_STRINGS[5], { len: INSULATE / 1000 }),
     howTo: (folded ? BOOM_HOWTO.folded : BOOM_HOWTO.split).map((s) => msg(s)),
     build: (M) => {
-      const L = Math.max(Lstrap, 24);
-      const body = box(M, [-L / 2, -Y, zb], [L / 2, Y, top]);
+      const { lo, hi } = yagiDrivenBox(d), L = hi[0] - lo[0];
+      const body = box(M, lo, hi);
       const cuts = M.Manifold.union([
         rod(M, [-L, 0, zb], [L, 0, zb], bc),
         rod(M, [0, -Y - 1, 0], [0, -1, 0], ch), rod(M, [0, 1, 0], [0, Y + 1, 0], ch),   // fed conductor, split by a 2 mm wall

@@ -4,8 +4,9 @@ import { ANTENNAS } from "../../antennas";
 import type { Params } from "../../types";
 import { loadManifold } from "../manifold";
 import { buildPart, partsFor } from "..";
-import { rod } from "../shapes";
-import { exits, STYLE, styleOf } from "./geometry";
+import { add, box, rod, scale } from "../shapes";
+import { gpMastAxis, PLATE } from "../families/hub";
+import { feedPoint, STYLE, styleOf } from "./geometry";
 import { shellPlan } from "./index";
 import { setup } from "../families/testkit";
 
@@ -41,26 +42,69 @@ describe("shells for wire antennas", () => {
       }
     }
   }, 120_000);
-  it("feed boxes: every exit ray passes clear through its hole", () => {
-    for (const id of ["dipole", "fandipole", "yagi", "moxon", "quad", "jpole", "collinear", "groundplane", "discone"]) {
-      const { p, d } = setup(id);
-      const plan = shellPlan(id, p, d, M, partsFor(id, p, d));   // with M the plan's cavity is the one that gets built
+  const bands5 = "3.5e6-3.8e6;7e6-7.2e6;10.1e6-10.15e6;14e6-14.35e6;18e6-18.2e6";
+  const hoodCases: [string, Params][] = [
+    ...wireIds.map((id): [string, Params] => [id, {}]),
+    ["dipole", { droop: 0 }], ["dipole", { droop: 60 }], ["groundplane", { droop: 0 }], ["groundplane", { droop: 60 }],
+    ["fandipole", { fan: 5, bands: bands5 }], ["fandipole", { fan: 45, bands: bands5 }], ["yagi", { boom: "through" }], ["yagi", { driven: "split" }],
+    ["discone", { rods: 6 }], ["discone", { rods: 32 }],
+  ];
+  const hoods = () => hoodCases.map(([id, extra]) => {
+    const { p, d } = setup(id, extra);
+    return { id, extra, p, d, plan: shellPlan(id, p, d), spec: partsFor(id, p, d).find((s) => s.id === "shell")! };
+  }).filter((h) => h.plan.kind === "feed");
+  it("feed hoods: one solid, every exit ray clear, every slot open straight down past the bottom", () => {
+    const hs = hoods();
+    expect(hs.map((h) => h.id)).toEqual(expect.arrayContaining(["dipole", "fandipole", "groundplane", "yagi", "discone"]));
+    for (const { id, extra, d, plan, spec } of hs) {
       if (plan.kind !== "feed") continue;
-      // in the box frame (a feed box may be turned about the vertical axis through the feed point)
-      const c = plan.gland;
-      const shell = M.Manifold.union(partsFor(id, p, d).find((s) => s.id === "shell")!.build(M).map((h) => h.translate([-c[0], -c[1], 0]).rotate([0, 0, -plan.turn]).translate([c[0], c[1], 0])));
-      for (const x of exits(plan.frame, plan.inner)) {
-        const probe = rod(M, x.at, [x.at[0] + x.dir[0] * 20, x.at[1] + x.dir[1] * 20, x.at[2] + x.dir[2] * 20], x.d);
-        expect(shell.intersect(probe).volume(), `${id} exit ${x.at}`).toBeLessThan(1e-2);
+      const tag = `${id} ${JSON.stringify(extra)}`;
+      const r = buildPart(M, spec, id);
+      expect(r.ok, tag).toBe(true);
+      const [h] = spec.build(M);
+      expect(h.decompose().length, tag).toBe(1);
+      const wall = STYLE[styleOf(d)].wall, z0 = plan.inner.lo[2];
+      for (const x of plan.exits) {
+        if (Math.abs(x.at[2] - z0) < 1e-6 && x.dir[2] < 0) continue;          // out through the open bottom
+        const out = rod(M, add(x.at, scale(x.dir, -1)), add(x.at, scale(x.dir, wall + 10)), x.d);
+        expect(h.intersect(out).volume(), `${tag} exit ${x.at}`).toBeLessThan(1e-2);
+        if (x.dir[2] <= 0.7) expect(h.intersect(rod(M, x.at, [x.at[0], x.at[1], z0 - 5], x.d)).volume(), `${tag} slot ${x.at}`).toBeLessThan(1e-2);
       }
     }
   }, 120_000);
-  it("every shell piece is one solid (exit holes never split a half), at defaults and for the full-shell cases", () => {
-    const cases: [string, Params][] = [...wireIds.map((id): [string, Params] => [id, {}]), ["dipole", { bands: "5725e6-5875e6", d: 1e-3 }], ["moxon", { bands: "2400e6-2483e6", d: 1e-3 }], ["helix", { bands: "5725e6-5875e6", d: 1e-3, turns: 5 }]];
-    for (const [id, extra] of cases) {
-      const { p, d } = setup(id, extra);
-      const segs = partsFor(id, p, d).find((s) => s.id === "shell")!.build(M);
-      segs.forEach((s, i) => expect(s.decompose().length, `${id} ${JSON.stringify(extra)} piece ${i}`).toBe(1));
+  it("feed hoods fit over their feed part, and the dipole hood stays small", () => {
+    const feedPart: Record<string, string> = { dipole: "dipole-centre", fandipole: "fan-centre", groundplane: "gp-hub", discone: "discone-hub", yagi: "yagi-driven" };
+    for (const { id, extra, d, plan, spec } of hoods()) {
+      const fid = feedPart[id], part = partsFor(id, setup(id, extra).p, d).find((s) => s.id === fid);
+      if (!part) continue;
+      const fp = feedPoint(d);
+      const placed = part.build(M)[0].translate(id === "yagi" ? fp : [0, 0, 0]);   // the yagi block is built in its own frame
+      expect(placed.intersect(spec.build(M)[0]).volume(), `${id} ${JSON.stringify(extra)}`).toBeLessThan(1e-2);
+      if (id === "dipole" && !Object.keys(extra).length) {
+        const b = spec.build(M)[0].boundingBox();
+        [0, 1, 2].forEach((i) => expect(b.max[i] - b.min[i]).toBeLessThanOrEqual(70));
+      }
+      expect(plan.kind).toBe("feed");
     }
   }, 120_000);
+  it("the GP mast runs outside the hood (its top, at the hub block, is not above the hood's bottom edge)", () => {
+    for (const droop of [0, 45, 60]) {
+      const { p, d } = setup("groundplane", { droop });
+      const h = partsFor("groundplane", p, d).find((s) => s.id === "shell")!.build(M)[0].boundingBox();
+      const m = gpMastAxis(d);
+      const outside = m[0] < h.min[0] || m[0] > h.max[0] || m[1] < h.min[1] || m[1] > h.max[1];
+      expect(outside || -PLATE <= h.min[2] + 1e-6, `${droop}`).toBe(true);
+    }
+  });
+  it("full boxes: the coax gland stays inside the floor, no breakout through a side wall", () => {
+    for (const [id, extra] of [["dipole", { bands: "5725e6-5875e6", d: 1e-3 }], ["biquad", {}]] as const) {
+      const { p, d } = setup(id, extra);
+      const plan = shellPlan(id, p, d);
+      expect(plan.kind, id).toBe("box");
+      const wall = STYLE[styleOf(d)].wall, i = plan.inner;
+      const shell = M.Manifold.union(partsFor(id, p, d).find((s) => s.id === "shell")!.build(M));
+      const band = box(M, [i.lo[0] - wall, i.lo[1] - wall, i.lo[2] - wall], [i.hi[0] + wall, i.hi[1] + wall, i.hi[2] + wall]).subtract(box(M, [i.lo[0], i.lo[1], i.lo[2] - wall - 1], [i.hi[0], i.hi[1], i.hi[2] + wall + 1]));
+      expect(shell.intersect(band).volume() / band.volume(), id).toBeGreaterThan(0.99);
+    }
+  });
 });

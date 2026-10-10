@@ -34,7 +34,7 @@ const FAMILIES: Record<string, (p: Params, d: Design) => PartSpec[]> = {
  *  Cheap: nothing is built here. */
 export const partsFor = (defId: string, p: Params, d: Design): PartSpec[] => {
   const family = FAMILIES[defId]?.(p, d) ?? [];
-  const shell = shellFor(defId, p, d, family, ANTENNA_BY_ID[defId]?.category ?? "");
+  const shell = shellFor(defId, p, d, ANTENNA_BY_ID[defId]?.category ?? "");
   return shell ? [...family, shell] : family;
 };
 

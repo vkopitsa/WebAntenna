@@ -1,22 +1,25 @@
-import type { Manifold, ManifoldToplevel } from "manifold-3d";
-import type { Design, Params, Vec3 } from "../../types";
-import { num } from "../../types";
+import type { ManifoldToplevel } from "manifold-3d";
+import type { Design, Params } from "../../types";
+import { num, str } from "../../types";
 import { msg, type PartSpec } from "../parts";
-import { CLEAR, mm } from "../rules";
+import { CLEAR, WALL, mm } from "../rules";
 import { add, pieceBottoms, rod, scale, type V3 } from "../shapes";
 import { helixGeometry } from "../families/former";
-import { disconeGeometry, gpMastAxis } from "../families/hub";
+import { centreHubBox, dipoleArms } from "../families/centre";
+import { yagiDrivenBox } from "../families/boom";
+import { D_IN, D_LUG, PLATE, disconeGeometry, hubGeometry } from "../families/hub";
 import { boxFits, domeFits, envelope, exits, feedPoint, grow, STYLE, styleOf, type Box3, type Exit, type Style } from "./geometry";
-import { clamshell, EAR_R, earCentres } from "./clamshell";
+import { clamshell } from "./clamshell";
 import { dome, domeHeight, domeOffset, type DomeOpts } from "./dome";
+import { hood, UP } from "./hood";
 
-/** Shells: dome radome, clamshell box or feedpoint weather box. */
+/** Shells: dome radome, clamshell box or feedpoint hood. */
 export const SHELL_STRINGS = [
   "Radome shell",
   "Enclosure",
   "Feedpoint weather box",
   "Covers the antenna with a {0} wall, keeping {1} of air round the radiator.",
-  "Seals the feedpoint and the connector: one hole per wire, a coax gland underneath and a drain hole.",
+  "Covers the feedpoint and the connector from above: slots let the wires out, the open bottom lets water drain.",
   "A plastic shell lowers the resonance by about 1–3 %: retune with Trim (printed antennas: check with the FDTD simulation).",
 ];
 
@@ -33,35 +36,20 @@ export const SHELL_HOWTO = {
     "Run a bead of silicone along the lip outdoors, close the top half and fit four M3 screws and nuts.",
   ],
   feed: [
-    "Print each half on its flat outer face.",
-    "Thread the wires through their holes before soldering the feedpoint; the coax goes in through the gland underneath.",
-    "Fill the wire holes with silicone, close the box on its lip and fit four M3 screws and nuts; keep the drain hole at the bottom.",
+    "Print it on its flat top.",
+    "Solder and test the feedpoint first, then lower the hood over it so the wires slide into their slots.",
+    "Seal the slots and the top hole with silicone.",
   ],
 };
 
 const GLAND = 8;
-/** The family part that sits at the feed point (sizes the feed box); `world` parts are built in world coordinates. */
-const FEED_PART: Record<string, { ids: string[]; world: boolean }> = {
-  dipole: { ids: ["dipole-centre"], world: true }, fandipole: { ids: ["fan-centre"], world: true },
-  groundplane: { ids: ["gp-hub"], world: true }, discone: { ids: ["discone-hub"], world: true }, helix: { ids: ["helix-tube"], world: true },
-  yagi: { ids: ["yagi-driven", "yagi-drill"], world: false }, biquad: { ids: ["biquad-standoff"], world: false },
-};
+const EYE_ROPE = 8;   // halyard hole above the dipole centre's hanging eye
+const JACK_H = 25;    // room above the GP hub plate for the panel jack and the solder joints
 
 export type ShellPlan =
   | { kind: "dome"; style: Style; inner: Box3; opts: DomeOpts; toWorld: V3; pieceZ: (i: number, n: number) => number }
-  | { kind: "box" | "feed"; style: Style; inner: Box3; splitZ: number; extra: Exit[]; gland: V3; turn: number; frame: Design; toWorld?: undefined; pieceZ?: undefined };
-
-/** Turn a point (mm) by `deg` about the vertical axis through `c`. */
-const turnPt = (p: V3, deg: number, c: V3): V3 => {
-  const a = (deg * Math.PI) / 180, x = p[0] - c[0], y = p[1] - c[1];
-  return [c[0] + Math.cos(a) * x - Math.sin(a) * y, c[1] + Math.sin(a) * x + Math.cos(a) * y, p[2]];
-};
-/** The design's wires turned by `deg` about the vertical axis through `c` (mm). */
-export function turnDesign(d: Design, deg: number, c: V3): Design {
-  if (!deg) return d;
-  const t = (p: Vec3): Vec3 => turnPt([p[0] * 1000, p[1] * 1000, p[2] * 1000], deg, c).map((v) => v / 1000) as Vec3;
-  return { ...d, wires: d.wires.map((w) => ({ ...w, a: t(w.a), b: t(w.b) })) };
-}
+  | { kind: "box"; style: Style; inner: Box3; splitZ: number; gland: V3; toWorld?: undefined; pieceZ?: undefined }
+  | { kind: "feed"; style: Style; inner: Box3; exits: Exit[]; toWorld?: undefined; pieceZ?: undefined };
 
 function domePlan(defId: string, p: Params, d: Design, s: Style): DomeOpts | null {
   const { wall, gap } = STYLE[s];
@@ -77,55 +65,56 @@ function domePlan(defId: string, p: Params, d: Design, s: Style): DomeOpts | nul
   return null;
 }
 
-/** Vertices (mm) of the family's feed part, built once; null when the antenna has none. */
-function feedPartPoints(M: ManifoldToplevel, defId: string, family: PartSpec[]): V3[] | null {
-  const fpart = FEED_PART[defId] && family.find((x) => FEED_PART[defId].ids.includes(x.id));
-  if (!fpart) return null;
-  const m = fpart.build(M)[0].getMesh(), v = m.vertProperties, k = m.numProp, out: V3[] = [];
-  for (let i = 0; i < v.length; i += k) out.push([v[i], v[i + 1], v[i + 2]]);
-  return out;
+/** Where a ray from p (inside b) along u leaves the box. */
+function leave(b: Box3, p: V3, u: V3): V3 {
+  let t = Infinity;
+  for (let i = 0; i < 3; i++) if (Math.abs(u[i]) > 1e-12) t = Math.min(t, ((u[i] > 0 ? b.hi[i] : b.lo[i]) - p[i]) / u[i]);
+  return add(p, scale(u, t));
 }
 
-/** Feed box cavity: a cube centred at the feed point, big enough for the family's feed part (`pts`, in the box frame).
- *  A world-frame part far off centre (the discone hub hangs ~100 mm below its feed point) can double that cube past the
- *  bed; then the cavity is the part's own bounding box joined with the 30 mm cube round the feed point (which keeps the
- *  split inside). */
-function feedInner(defId: string, fp: V3, pts: V3[] | null, gap: number, wall: number): Box3 {
-  const cube = (s: number): Box3 => grow({ lo: [fp[0] - s / 2, fp[1] - s / 2, fp[2] - s / 2], hi: [fp[0] + s / 2, fp[1] + s / 2, fp[2] + s / 2] }, gap);
-  if (!pts?.length) return cube(30);
-  const b = { min: [0, 1, 2].map((i) => Math.min(...pts.map((q) => q[i]))), max: [0, 1, 2].map((i) => Math.max(...pts.map((q) => q[i]))) };
-  if (!FEED_PART[defId].world) return cube(Math.max(30, Math.hypot(b.max[0] - b.min[0], b.max[1] - b.min[1], b.max[2] - b.min[2])));
-  const c = cube(Math.max(30, 2 * Math.max(...[0, 1, 2].flatMap((i) => [Math.abs(b.min[i] - fp[i]), Math.abs(b.max[i] - fp[i])]))));
-  if (boxFits(c, wall)) return c;
-  return grow({ lo: [0, 1, 2].map((i) => Math.min(b.min[i], fp[i] - 15)) as V3, hi: [0, 1, 2].map((i) => Math.max(b.max[i], fp[i] + 15)) as V3 }, gap);
+/** Diameter of the circle round a `bar()` lug of width w along u (a hull of axis-aligned cubes): the widest cube
+ *  corner across the axis; w·√2 for a lug along an axis, up to w·√3 when tilted. */
+function lugD(w: number, u: V3): number {
+  let m = Infinity;
+  for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) m = Math.min(m, (sx * u[0] + sy * u[1] + sz * u[2]) ** 2);
+  return w * Math.sqrt(3 - m);
 }
 
-/** Distance between two segments in the xy plane. */
-function segDist(p: V3, q: V3, a: V3, b: V3): number {
-  const ptSeg = (x: V3, u: V3, v: V3) => {
-    const dx = v[0] - u[0], dy = v[1] - u[1], L = dx * dx + dy * dy;
-    const t = L < 1e-12 ? 0 : Math.max(0, Math.min(1, ((x[0] - u[0]) * dx + (x[1] - u[1]) * dy) / L));
-    return Math.hypot(x[0] - u[0] - t * dx, x[1] - u[1] - t * dy);
-  };
-  const cr = (o: V3, u: V3, v: V3) => (u[0] - o[0]) * (v[1] - o[1]) - (u[1] - o[1]) * (v[0] - o[0]);
-  if (cr(p, q, a) * cr(p, q, b) < 0 && cr(a, b, p) * cr(a, b, q) < 0) return 0;
-  return Math.min(ptSeg(p, a, b), ptSeg(q, a, b), ptSeg(a, p, q), ptSeg(b, p, q));
-}
+const cubeAt = (c: V3, s: number): Box3 => ({ lo: [c[0] - s / 2, c[1] - s / 2, c[2] - s / 2], hi: [c[0] + s / 2, c[1] + s / 2, c[2] + s / 2] });
 
-/** Smallest clearance (mm) between any wire hole and a screw ear (ear circle and its bridge to the box corner). */
-function earClearance(xs: Exit[], inner: Box3, wall: number): number {
-  const out = grow(inner, wall);
-  let min = Infinity;
-  for (const c of earCentres(inner, wall)) {
-    const corner: V3 = [c[0] > out.lo[0] ? out.hi[0] : out.lo[0], c[1] > out.lo[1] ? out.hi[1] : out.lo[1], 0];
-    for (const x of xs) min = Math.min(min, segDist(x.at, add(x.at, scale(x.dir, wall + 8)), c, corner) - EAR_R - (x.d + CLEAR + 1) / 2);
+/** Feed hood: the cavity round the core of the family's feed part (plus the gap) and the exits through its walls. */
+function feedHood(defId: string, p: Params, d: Design, gap: number): { inner: Box3; exits: Exit[] } {
+  const fp = feedPoint(d);
+  if (defId === "dipole" || defId === "fandipole") {
+    // centre insulator hub; the arm lugs (square, w wide) leave through slots, the halyard through the roof
+    const { wireD, gap: g, arms } = dipoleArms(d, defId === "dipole" ? ["driven"] : ["driven", "parasitic"]);
+    const hb = centreHubBox(g, wireD), inner = grow({ lo: hb.lo, hi: hb.hi }, gap);
+    return { inner, exits: [...arms.map((a) => ({ at: leave(inner, a.start, a.dir), dir: a.dir, d: lugD(hb.w, a.dir) })), { at: [0, 0, inner.hi[2]], dir: [0, 0, 1], d: EYE_ROPE }] };
   }
-  return min;
+  if (defId === "groundplane") {
+    // hub plate and the jack above it; the hood ends at the plate's underside, so the mast block and the coax plug stay out
+    const g = hubGeometry(d), R = g.rLug + 2;
+    const inner = grow({ lo: [-R, -R, -PLATE], hi: [R, R, JACK_H] }, gap);
+    inner.lo[2] = -PLATE;
+    return { inner, exits: [...exits(d, inner).filter((x) => x.dir[2] > UP), ...g.paths.map((r) => ({ at: leave(inner, r.start, r.dir), dir: r.dir, d: lugD(g.w, r.dir) }))] };
+  }
+  if (defId === "discone") {
+    // the top disc ring; the cone, neck and mast stay below, out of the open bottom
+    const g = disconeGeometry(d), R = D_IN + D_LUG;
+    const inner = grow({ lo: [-R, -R, g.discZ - g.ch / 2 - WALL], hi: [R, R, g.top] }, gap);
+    return { inner, exits: exits(d, inner) };
+  }
+  if (defId === "yagi" && str(p, "boom", "insulated") !== "through") {
+    // the driven element block, at the driven element (its frame: element along y at z = 0, boom along x)
+    const b = yagiDrivenBox(d), inner = grow({ lo: add(b.lo, fp), hi: add(b.hi, fp) }, gap);
+    return { inner, exits: exits(d, inner) };
+  }
+  const inner = grow(cubeAt(fp, 30), gap);
+  return { inner, exits: exits(d, inner) };
 }
 
-/** Pure choice of the shell (no building): the feed box's inner size from the feed part is only known at build time,
- *  so without `M` the plan uses the 30 mm default there; `shellFor` refines it. */
-export function shellPlan(defId: string, p: Params, d: Design, M: ManifoldToplevel | null = null, family: PartSpec[] = []): ShellPlan {
+/** Pure choice of the shell (no building). */
+export function shellPlan(defId: string, p: Params, d: Design): ShellPlan {
   const style = styleOf(d), { wall, gap } = STYLE[style];
   const dp = domePlan(defId, p, d, style);
   if (dp && domeFits(dp.r, dp.z1 - dp.z0, wall)) {
@@ -133,46 +122,36 @@ export function shellPlan(defId: string, p: Params, d: Design, M: ManifoldToplev
     return { kind: "dome", style, inner: { lo: [-dp.r, -dp.r, dp.z0], hi: [dp.r, dp.r, dp.z1] }, opts: dp, toWorld: [0, 0, domeOffset(dp)], pieceZ: (i, n) => (n > 1 ? pieceBottoms(H)[i] : 0) };
   }
   const fp = feedPoint(d);
-  const full = grow(envelope(d), gap);
-  if (!dp && boxFits(full, wall)) return { kind: "box", style, inner: full, splitZ: fp[2], extra: [], gland: fp, turn: 0, frame: d };
-  // feed box: radial wires (discone rods) can run through a corner screw ear; then turn the box about the vertical axis
-  // through the feed point (1 degree steps) to the angle that keeps every wire hole furthest from the ears
-  const pts = M ? feedPartPoints(M, defId, family) : null;
-  const at = (turn: number) => {
-    const frame = turnDesign(d, -turn, fp), inner = feedInner(defId, fp, pts && turn ? pts.map((q) => turnPt(q, -turn, fp)) : pts, gap, wall);
-    const extra: Exit[] = [];
-    if (defId === "discone") { const m = turnPt([0, 0, 0], -turn, fp); extra.push({ at: [m[0], m[1], inner.lo[2]], dir: [0, 0, -1], d: mm(num(p, "mast", 25e-3)) }); }
-    if (defId === "groundplane") { const m = turnPt(gpMastAxis(d), -turn, fp); extra.push({ at: [m[0], m[1], inner.lo[2]], dir: [0, 0, -1], d: 30 }, { at: [m[0], m[1], inner.hi[2]], dir: [0, 0, 1], d: 30 }); }
-    return { turn, frame, inner, extra, clear: earClearance(exits(frame, inner), inner, wall) };
-  };
-  let best = at(0);
-  for (let t = 1; t < 90 && best.clear < 0.5; t++) { const c = at(t); if (c.clear > best.clear) best = c; }
-  return { kind: "feed", style, inner: best.inner, splitZ: fp[2], extra: best.extra, gland: fp, turn: best.turn, frame: best.frame };
+  if (!dp) {
+    // full box: the coax gland goes down through the floor, at least a wall clear of the side walls (the cavity grows
+    // in x or y if it is too narrow for that)
+    const full = grow(envelope(d), gap), need = GLAND + 2 * wall, gland: V3 = [...fp];
+    for (const i of [0, 1]) {
+      const short = need - (full.hi[i] - full.lo[i]);
+      if (short > 0) { full.lo[i] -= short / 2; full.hi[i] += short / 2; }
+      gland[i] = Math.min(Math.max(fp[i], full.lo[i] + need / 2), full.hi[i] - need / 2);
+    }
+    if (boxFits(full, wall)) return { kind: "box", style, inner: full, splitZ: fp[2], gland };
+  }
+  return { kind: "feed", style, ...feedHood(defId, p, d, gap) };
 }
 
-function holes(M: ManifoldToplevel, xs: Exit[], wall: number): Manifold[] {
-  return xs.map((x) => rod(M, add(x.at, scale(x.dir, -wall - 2)), add(x.at, scale(x.dir, wall + 8)), x.d + CLEAR + 1));
-}
-
-export function shellFor(defId: string, p: Params, d: Design, family: PartSpec[], category: string): PartSpec | null {
+export function shellFor(defId: string, p: Params, d: Design, category: string): PartSpec | null {
   if (category === "Printed") return null;                        // printed antennas: Task 5
   const style = styleOf(d), { wall, gap } = STYLE[style];
-  const first = shellPlan(defId, p, d);
+  const plan = shellPlan(defId, p, d);
   const L = (x: number) => ({ len: x / 1000 });
   const titles = { dome: SHELL_STRINGS[0], box: SHELL_STRINGS[1], feed: SHELL_STRINGS[2] };
   return {
-    id: "shell", title: titles[first.kind], use: "holder", qty: 1,
-    purpose: first.kind === "feed" ? msg(SHELL_STRINGS[4]) : msg(SHELL_STRINGS[3], L(wall), L(gap)),
-    warn: first.kind === "feed" ? undefined : msg(SHELL_STRINGS[5]),
-    howTo: SHELL_HOWTO[first.kind].map((s) => msg(s)),
-    build: (M) => {
-      const plan = first.kind === "feed" ? shellPlan(defId, p, d, M, family) : first;
+    id: "shell", title: titles[plan.kind], use: "holder", qty: 1,
+    purpose: plan.kind === "feed" ? msg(SHELL_STRINGS[4]) : msg(SHELL_STRINGS[3], L(wall), L(gap)),
+    warn: plan.kind === "feed" ? undefined : msg(SHELL_STRINGS[5]),
+    howTo: SHELL_HOWTO[plan.kind].map((s) => msg(s)),
+    build: (M: ManifoldToplevel) => {
       if (plan.kind === "dome") return dome(M, plan.opts);
-      const xs = [...exits(plan.frame, plan.inner), ...plan.extra];
-      const cuts = [...holes(M, xs, wall), rod(M, [plan.gland[0], plan.gland[1], plan.inner.lo[2] - wall - 2], [plan.gland[0], plan.gland[1], plan.inner.lo[2] + 1], GLAND)];
-      const halves = clamshell(M, { inner: plan.inner, wall, splitZ: plan.splitZ, cuts, drain: style === "outdoor" });
-      const g = plan.gland;   // back from the box frame to the world (the gland axis is the turn axis)
-      return plan.turn ? halves.map((h) => h.translate([-g[0], -g[1], 0]).rotate([0, 0, plan.turn]).translate([g[0], g[1], 0])) : halves;
+      if (plan.kind === "feed") return hood(M, { inner: plan.inner, wall, exits: plan.exits });   // buildPart reports "Too large"
+      const g = plan.gland, cuts = [rod(M, [g[0], g[1], plan.inner.lo[2] - wall - 2], [g[0], g[1], plan.inner.lo[2] + 1], GLAND)];
+      return clamshell(M, { inner: plan.inner, wall, splitZ: plan.splitZ, cuts, drain: style === "outdoor" });
     },
   };
 }

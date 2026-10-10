@@ -708,7 +708,6 @@ export const UK: Record<string, string> = {
   "Enclosure": "Корпус",
   "Feedpoint weather box": "Захисна коробка точки живлення",
   "Covers the antenna with a {0} wall, keeping {1} of air round the radiator.": "Закриває антену стінкою {0} і лишає {1} повітря навколо випромінювача.",
-  "Seals the feedpoint and the connector: one hole per wire, a coax gland underneath and a drain hole.": "Герметизує точку живлення і роз'єм: по отвору на кожен дріт, ввід коаксіалу знизу і дренажний отвір.",
   "A plastic shell lowers the resonance by about 1–3 %: retune with Trim (printed antennas: check with the FDTD simulation).": "Пластиковий корпус знижує резонанс приблизно на 1–3 %: підлаштуйте Trim (друковані антени: перевірте симуляцією FDTD).",
   "Print the pieces standing on their wide end; glue each skirt over the piece below.": "Друкуйте частини стоячи на широкому кінці; приклейте кожну спідницю поверх нижньої частини.",
   "Build and tune the antenna first, then lower the radome over it.": "Спершу зберіть і налаштуйте антену, потім опустіть на неї обтічник.",
@@ -716,6 +715,8 @@ export const UK: Record<string, string> = {
   "Print each half on its flat outer face.": "Друкуйте кожну половину на її пласкій зовнішній грані.",
   "Lay the antenna into the bottom half with the wires through their holes and the coax through the gland.": "Покладіть антену в нижню половину, дроти в їхні отвори, коаксіал крізь ввід.",
   "Run a bead of silicone along the lip outdoors, close the top half and fit four M3 screws and nuts.": "Для зовнішнього монтажу нанесіть валик силікону вздовж бортика, закрийте верхню половину і вставте чотири гвинти M3 з гайками.",
-  "Thread the wires through their holes before soldering the feedpoint; the coax goes in through the gland underneath.": "Протягніть дроти крізь отвори до припаювання точки живлення; коаксіал заходить крізь ввід знизу.",
-  "Fill the wire holes with silicone, close the box on its lip and fit four M3 screws and nuts; keep the drain hole at the bottom.": "Заповніть отвори для дротів силіконом, закрийте коробку по бортику і вставте чотири гвинти M3 з гайками; дренажний отвір має бути внизу.",
+  "Covers the feedpoint and the connector from above: slots let the wires out, the open bottom lets water drain.": "Накриває точку живлення і роз'єм зверху: дроти виходять крізь прорізи, вода стікає крізь відкрите дно.",
+  "Print it on its flat top.": "Друкуйте його на пласкому верху.",
+  "Solder and test the feedpoint first, then lower the hood over it so the wires slide into their slots.": "Спершу припаяйте і перевірте точку живлення, потім опустіть на неї ковпак так, щоб дроти ввійшли в прорізи.",
+  "Seal the slots and the top hole with silicone.": "Загерметизуйте прорізи і верхній отвір силіконом.",
 };

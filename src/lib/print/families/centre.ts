@@ -27,7 +27,7 @@ export const CENTRE_HOWTO = {
   ],
 };
 
-const LUG = 35;   // length of each arm socket
+export const LUG = 35;   // length of each arm socket
 
 const mmv = (p: Vec3): V3 => scale(p, 1000);
 
@@ -39,13 +39,20 @@ export function dipoleArms(d: Design, groups: string[] = ["driven"]): { wireD: n
   return { wireD: mm(2 * driven[0].r), gap: Math.hypot(...sub(mmv(feed.b), mmv(feed.a))), arms };
 }
 
+/** The centre insulator's hub block (mm, without the arm lugs): w is the lug and hub thickness, zEye the hanging eye. */
+export function centreHubBox(gap: number, wireD: number): { w: number; zEye: number; top: number; lo: V3; hi: V3 } {
+  const ch = wireD + CLEAR;
+  const w = Math.max(3 * ch + 4 * WALL, 12);                 // lug and hub thickness
+  const zEye = ch / 2 + 4 + WALL + 3, top = zEye + 3 + WALL;
+  return { w, zEye, top, lo: [-w / 2, -(gap / 2 + 6), -30], hi: [w / 2, gap / 2 + 6, top] };
+}
+
 /** Centre insulator body for arms leaving a feed gap along y: hub, one socket per arm, solder window, hanging eye, coax
  *  zip-tie slots, and (dipole only) a tie-off hole beside each arm. */
 export function centreBlock(M: ManifoldToplevel, arms: { start: V3; dir: V3 }[], gap: number, wireD: number, tieOff: boolean): Manifold {
   const ch = wireD + CLEAR;
-  const w = Math.max(3 * ch + 4 * WALL, 12);                 // lug and hub thickness
-  const zEye = ch / 2 + 4 + WALL + 3, top = zEye + 3 + WALL;
-  const hub = box(M, [-w / 2, -(gap / 2 + 6), -30], [w / 2, gap / 2 + 6, top]);
+  const { w, zEye, lo, hi } = centreHubBox(gap, wireD);
+  const hub = box(M, lo, hi);
   const lugs = arms.map((a) => bar(M, a.start, add(a.start, scale(a.dir, LUG)), w));
   const channels = arms.map((a) => channel(M, a.start, add(a.start, scale(a.dir, LUG + w / 2)), wireD));
   const cuts = [

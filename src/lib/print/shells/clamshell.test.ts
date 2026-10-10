@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import type { ManifoldToplevel } from "manifold-3d";
 import { loadManifold } from "../manifold";
 import { box } from "../shapes";
-import { clamshell, earCentres } from "./clamshell";
+import { clamshell, EAR_R, earCentres } from "./clamshell";
 
 let M: ManifoldToplevel;
 beforeAll(async () => { M = await loadManifold(); });
@@ -92,5 +92,16 @@ describe("clamshell", () => {
     const roofProbe = M.Manifold.cylinder(2, 1, 1, 16).translate([-26, -16, 15]);
     expect(top.intersect(roofProbe).volume()).toBeGreaterThan(0.99 * roofProbe.volume());
     expect(bot.add(top).volume()).toBeLessThan(clamshell(M, { inner, wall: 2, splitZ: 0 }).reduce((a, m) => a + m.volume(), 0));
+  });
+  it("ear bridges stay at their corner for a box far from the origin", () => {
+    const far = { lo: [300, 40, 10] as [number, number, number], hi: [360, 80, 40] as [number, number, number] }, wall = 2;
+    const out = { lo: far.lo.map((v) => v - wall) as [number, number, number], hi: far.hi.map((v) => v + wall) as [number, number, number] };
+    for (const half of clamshell(M, { inner: far, wall, splitZ: 25 })) {
+      const bb = half.boundingBox(), h = bb.max[2] - bb.min[2];
+      let rest = half.subtract(box(M, [out.lo[0], out.lo[1], bb.min[2] - 1], [out.hi[0], out.hi[1], bb.max[2] + 1]));
+      for (const c of earCentres(far, wall)) rest = rest.subtract(M.Manifold.cylinder(h + 2, EAR_R, EAR_R, 24).translate([c[0], c[1], bb.min[2] - 1]));
+      // a correct bridge only fills the corner between the ear circle and the box corner (16 − π·4²/4 ≈ 3.4 mm² each)
+      expect(rest.volume()).toBeLessThan(4 * 5 * h);
+    }
   });
 });
