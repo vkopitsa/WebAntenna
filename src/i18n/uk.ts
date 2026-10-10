@@ -719,4 +719,6 @@ export const UK: Record<string, string> = {
   "Print it on its flat top.": "Друкуйте його на пласкому верху.",
   "Solder and test the feedpoint first, then lower the hood over it so the wires slide into their slots.": "Спершу припаяйте і перевірте точку живлення, потім опустіть на неї ковпак так, щоб дроти ввійшли в прорізи.",
   "Seal the slots and the top hole with silicone.": "Загерметизуйте прорізи і верхній отвір силіконом.",
+  "The mast must end at the top of the hub's side block: the hood sits over the plate above it.": "Щогла має закінчуватися на верху бічного блока маточини: ковпак сідає на пластину над ним.",
+  "Pass the support rope through the hole in the top before tying it to the eye.": "Протягніть несучу мотузку крізь отвір угорі, перш ніж прив'язати її до вушка.",
 };

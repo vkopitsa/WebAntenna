@@ -4,10 +4,11 @@ import { ANTENNAS } from "../../antennas";
 import type { Params } from "../../types";
 import { loadManifold } from "../manifold";
 import { buildPart, partsFor } from "..";
-import { add, box, rod, scale } from "../shapes";
-import { gpMastAxis, PLATE } from "../families/hub";
+import { add, bar, box, rod, scale, type V3 } from "../shapes";
+import { gpMastAxis } from "../families/hub";
+import { centreHubBox, dipoleArms } from "../families/centre";
 import { feedPoint, STYLE, styleOf } from "./geometry";
-import { shellPlan } from "./index";
+import { GP_MAST_TOP, SHELL_HOWTO, shellPlan } from "./index";
 import { setup } from "../families/testkit";
 
 let M: ManifoldToplevel;
@@ -66,9 +67,10 @@ describe("shells for wire antennas", () => {
       const wall = STYLE[styleOf(d)].wall, z0 = plan.inner.lo[2];
       for (const x of plan.exits) {
         if (Math.abs(x.at[2] - z0) < 1e-6 && x.dir[2] < 0) continue;          // out through the open bottom
-        const out = rod(M, add(x.at, scale(x.dir, -1)), add(x.at, scale(x.dir, wall + 10)), x.d);
-        expect(h.intersect(out).volume(), `${tag} exit ${x.at}`).toBeLessThan(1e-2);
-        if (x.dir[2] <= 0.7) expect(h.intersect(rod(M, x.at, [x.at[0], x.at[1], z0 - 5], x.d)).volume(), `${tag} slot ${x.at}`).toBeLessThan(1e-2);
+        // probe with the exit's own shape: a lug (w) as its bar, a wire as a rod of its diameter
+        const probe = (a: V3, b: V3) => (x.w ? bar(M, a, b, x.w) : rod(M, a, b, x.d));
+        expect(h.intersect(probe(add(x.at, scale(x.dir, -1)), add(x.at, scale(x.dir, wall + 10)))).volume(), `${tag} exit ${x.at}`).toBeLessThan(1e-2);
+        if (Math.abs(x.at[2] - plan.inner.hi[2]) > 1e-6) expect(h.intersect(probe(x.at, [x.at[0], x.at[1], z0 - 5])).volume(), `${tag} slot ${x.at}`).toBeLessThan(1e-2);
       }
     }
   }, 120_000);
@@ -87,15 +89,40 @@ describe("shells for wire antennas", () => {
       expect(plan.kind).toBe("feed");
     }
   }, 120_000);
-  it("the GP mast runs outside the hood (its top, at the hub block, is not above the hood's bottom edge)", () => {
+  it("the GP mast ends at the hood's bottom edge: a Ø30 mast up to it is clear, 5 mm higher it hits the hood", () => {
     for (const droop of [0, 45, 60]) {
       const { p, d } = setup("groundplane", { droop });
-      const h = partsFor("groundplane", p, d).find((s) => s.id === "shell")!.build(M)[0].boundingBox();
+      const h = partsFor("groundplane", p, d).find((s) => s.id === "shell")!.build(M)[0];
       const m = gpMastAxis(d);
-      const outside = m[0] < h.min[0] || m[0] > h.max[0] || m[1] < h.min[1] || m[1] > h.max[1];
-      expect(outside || -PLATE <= h.min[2] + 1e-6, `${droop}`).toBe(true);
+      expect(h.boundingBox().min[2]).toBeCloseTo(GP_MAST_TOP, 6);
+      const mast = (top: number) => rod(M, [m[0], m[1], -200], [m[0], m[1], top], 30);
+      expect(h.intersect(mast(GP_MAST_TOP - 0.01)).volume(), `${droop}`).toBeLessThan(1e-2);
+      expect(h.intersect(mast(GP_MAST_TOP + 5)).volume(), `${droop}`).toBeGreaterThan(1);
     }
   });
+  it("hood how-to: the GP says where the mast ends, the dipole and fan pass the rope through the top", () => {
+    const steps = (id: string) => { const { p, d } = setup(id); return partsFor(id, p, d).find((s) => s.id === "shell")!.howTo.map((m) => m.s); };
+    expect(steps("groundplane")).toContain(SHELL_HOWTO.gpMast[0]);
+    for (const id of ["dipole", "fandipole"]) { expect(steps(id)).toContain(SHELL_HOWTO.halyard[0]); expect(steps(id)).not.toContain(SHELL_HOWTO.gpMast[0]); }
+    expect(steps("moxon")).not.toContain(SHELL_HOWTO.halyard[0]);
+  });
+  it("wide 5-band fans keep their hood roof: ≥ 70 % over the hub where the lugs allow it, else within 6 points of the ceiling", () => {
+    // Steep fan lugs rise through the roof plane over the hub ends, and the halyard needs its Ø8 hole: the roof that can
+    // stay ("ceiling") is 72 % at 30° and 52 % at 45°, so 70 % is asserted only where the ceiling leaves room for the
+    // 1.3 mm clearance; past that the hood may lose no more than the clearance beyond what the fan centre itself needs.
+    for (const fan of [20, 25, 30, 35, 45]) {
+      const { p, d } = setup("fandipole", { fan, bands: bands5 });
+      const plan = shellPlan("fandipole", p, d);
+      expect(plan.kind).toBe("feed");
+      const { wireD, gap: g } = dipoleArms(d, ["driven", "parasitic"]), hb = centreHubBox(g, wireD), z = plan.inner.hi[2], wall = STYLE[styleOf(d)].wall;
+      const roof = box(M, [hb.lo[0], hb.lo[1], z], [hb.hi[0], hb.hi[1], z + wall]), v = roof.volume();
+      const specs = partsFor("fandipole", p, d), h = specs.find((s) => s.id === "shell")!.build(M)[0];
+      const need = specs[0].build(M)[0].intersect(roof).volume() / v + roof.intersect(rod(M, [0, 0, z - 1], [0, 0, z + wall + 1], 8)).volume() / v;
+      const fill = h.intersect(roof).volume() / v;
+      if (1 - need >= 0.75) expect(fill, `${fan}`).toBeGreaterThanOrEqual(0.7);
+      else expect(fill, `${fan}`).toBeGreaterThanOrEqual(1 - need - 0.06);
+    }
+  }, 60_000);
   it("full boxes: the coax gland stays inside the floor, no breakout through a side wall", () => {
     for (const [id, extra] of [["dipole", { bands: "5725e6-5875e6", d: 1e-3 }], ["biquad", {}]] as const) {
       const { p, d } = setup(id, extra);

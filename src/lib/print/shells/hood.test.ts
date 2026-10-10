@@ -4,6 +4,7 @@ import { loadManifold } from "../manifold";
 import { box, rod, type V3 } from "../shapes";
 import type { Box3, Exit } from "./geometry";
 import { hood } from "./hood";
+import { PartError } from "../parts";
 
 let M: ManifoldToplevel;
 beforeAll(async () => { M = await loadManifold(); });
@@ -58,5 +59,16 @@ describe("hood", () => {
     const h = hood(M, { inner: hub, wall: 2, exits: fan })[0];
     expect(h.decompose().length).toBe(1);
     expect(h.volume()).toBeGreaterThan(5000);
+  });
+  it("hole or slot depends on the face: a steep exit through a side wall is still a slot", () => {
+    const steep: Exit = { at: [-20, 0, 2], dir: [-0.3, 0, Math.sqrt(1 - 0.09)], d: 3 };
+    const h = hood(M, { inner, wall: 2, exits: [steep] })[0];
+    expect(h.intersect(rod(M, steep.at, [steep.at[0], steep.at[1], inner.lo[2] - 5], steep.d)).volume()).toBeLessThan(1e-3);
+  });
+  it("a hood that loses more than 1 % to loose pieces is an error, not silently trimmed", () => {
+    // two fat roof holes across a narrow roof cut it in two halves
+    const narrow: Box3 = { lo: [-20, -6, -10], hi: [20, 6, 12] };
+    const cut: Exit[] = [{ at: [0, 0, 12], dir: [0, 0, 1], d: 17 }, { at: [0, 6, 0], dir: [0, 1, 0], d: 20 }, { at: [0, -6, 0], dir: [0, -1, 0], d: 20 }];
+    expect(() => hood(M, { inner: narrow, wall: 2, exits: cut })).toThrow(PartError);
   });
 });

@@ -11,7 +11,7 @@ import { D_IN, D_LUG, PLATE, disconeGeometry, hubGeometry } from "../families/hu
 import { boxFits, domeFits, envelope, exits, feedPoint, grow, STYLE, styleOf, type Box3, type Exit, type Style } from "./geometry";
 import { clamshell } from "./clamshell";
 import { dome, domeHeight, domeOffset, type DomeOpts } from "./dome";
-import { hood, UP } from "./hood";
+import { hood } from "./hood";
 
 /** Shells: dome radome, clamshell box or feedpoint hood. */
 export const SHELL_STRINGS = [
@@ -40,11 +40,18 @@ export const SHELL_HOWTO = {
     "Solder and test the feedpoint first, then lower the hood over it so the wires slide into their slots.",
     "Seal the slots and the top hole with silicone.",
   ],
+  /** Ground plane only, before the sealing step. */
+  gpMast: ["The mast must end at the top of the hub's side block: the hood sits over the plate above it."],
+  /** Dipole and fan dipole only, before the sealing step. */
+  halyard: ["Pass the support rope through the hole in the top before tying it to the eye."],
 };
 
 const GLAND = 8;
 const EYE_ROPE = 8;   // halyard hole above the dipole centre's hanging eye
-const JACK_H = 25;    // room above the GP hub plate for the panel jack and the solder joints
+const JACK_H = 25;
+/** GP mast clearance: the hood's open bottom edge is the hub plate's underside, and the mast strapped to the hub's side
+ *  block must end at or below it (its axis, gpMastAxis, runs under the hood's corner). */
+export const GP_MAST_TOP = -PLATE;    // room above the GP hub plate for the panel jack and the solder joints
 
 export type ShellPlan =
   | { kind: "dome"; style: Style; inner: Box3; opts: DomeOpts; toWorld: V3; pieceZ: (i: number, n: number) => number }
@@ -89,14 +96,14 @@ function feedHood(defId: string, p: Params, d: Design, gap: number): { inner: Bo
     // centre insulator hub; the arm lugs (square, w wide) leave through slots, the halyard through the roof
     const { wireD, gap: g, arms } = dipoleArms(d, defId === "dipole" ? ["driven"] : ["driven", "parasitic"]);
     const hb = centreHubBox(g, wireD), inner = grow({ lo: hb.lo, hi: hb.hi }, gap);
-    return { inner, exits: [...arms.map((a) => ({ at: leave(inner, a.start, a.dir), dir: a.dir, d: lugD(hb.w, a.dir) })), { at: [0, 0, inner.hi[2]], dir: [0, 0, 1], d: EYE_ROPE }] };
+    return { inner, exits: [...arms.map((a) => ({ at: leave(inner, a.start, a.dir), dir: a.dir, d: lugD(hb.w, a.dir), w: hb.w, from: a.start })), { at: [0, 0, inner.hi[2]], dir: [0, 0, 1], d: EYE_ROPE }] };
   }
   if (defId === "groundplane") {
     // hub plate and the jack above it; the hood ends at the plate's underside, so the mast block and the coax plug stay out
     const g = hubGeometry(d), R = g.rLug + 2;
     const inner = grow({ lo: [-R, -R, -PLATE], hi: [R, R, JACK_H] }, gap);
-    inner.lo[2] = -PLATE;
-    return { inner, exits: [...exits(d, inner).filter((x) => x.dir[2] > UP), ...g.paths.map((r) => ({ at: leave(inner, r.start, r.dir), dir: r.dir, d: lugD(g.w, r.dir) }))] };
+    inner.lo[2] = GP_MAST_TOP;
+    return { inner, exits: [...exits(d, inner).filter((x) => Math.abs(x.at[2] - inner.hi[2]) < 1e-6), ...g.paths.map((r) => ({ at: leave(inner, r.start, r.dir), dir: r.dir, d: lugD(g.w, r.dir), w: g.w, from: add(r.start, scale(r.dir, r.lugFrom)) }))] };
   }
   if (defId === "discone") {
     // the top disc ring; the cone, neck and mast stay below, out of the open bottom
@@ -136,6 +143,14 @@ export function shellPlan(defId: string, p: Params, d: Design): ShellPlan {
   return { kind: "feed", style, ...feedHood(defId, p, d, gap) };
 }
 
+/** How-to steps: the hood gets the GP mast note or the dipole halyard step before its sealing step. */
+function howTo(defId: string, kind: ShellPlan["kind"]): string[] {
+  const st = SHELL_HOWTO[kind];
+  if (kind !== "feed") return st;
+  const extra = defId === "groundplane" ? SHELL_HOWTO.gpMast : defId === "dipole" || defId === "fandipole" ? SHELL_HOWTO.halyard : [];
+  return [...st.slice(0, -1), ...extra, st[st.length - 1]];
+}
+
 export function shellFor(defId: string, p: Params, d: Design, category: string): PartSpec | null {
   if (category === "Printed") return null;                        // printed antennas: Task 5
   const style = styleOf(d), { wall, gap } = STYLE[style];
@@ -146,7 +161,7 @@ export function shellFor(defId: string, p: Params, d: Design, category: string):
     id: "shell", title: titles[plan.kind], use: "holder", qty: 1,
     purpose: plan.kind === "feed" ? msg(SHELL_STRINGS[4]) : msg(SHELL_STRINGS[3], L(wall), L(gap)),
     warn: plan.kind === "feed" ? undefined : msg(SHELL_STRINGS[5]),
-    howTo: SHELL_HOWTO[plan.kind].map((s) => msg(s)),
+    howTo: howTo(defId, plan.kind).map((s) => msg(s)),
     build: (M: ManifoldToplevel) => {
       if (plan.kind === "dome") return dome(M, plan.opts);
       if (plan.kind === "feed") return hood(M, { inner: plan.inner, wall, exits: plan.exits });   // buildPart reports "Too large"

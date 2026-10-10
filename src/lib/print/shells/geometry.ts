@@ -45,7 +45,10 @@ export function feedPoint(d: Design): V3 {
   return d.feed.at === "start" ? a : d.feed.at === "end" ? b : scale(add(a, b), 0.5);
 }
 
-export type Exit = { at: V3; dir: V3; d: number };
+/** A wire (or lug) leaving a box: `d` is the diameter of the circle round it; `w`, when set, says it is a `bar()` lug
+ *  of that width (a hull of axis-aligned cubes) and the hole may follow its shape; `from` is where such a lug starts (the
+ *  hole never reaches back past it). */
+export type Exit = { at: V3; dir: V3; d: number; w?: number; from?: V3 };
 
 /** Where wires (not NEC-only; drawn parts like booms included) cross the surface of a box: the crossing point, the
  *  direction out of the box and the wire diameter. A wire through the box gives two exits. */
