@@ -677,4 +677,10 @@ export const UK: Record<string, string> = {
   "Push the spreader rods into the sockets and glue them.": "Вставте стрижні розпірок у гнізда і вклейте їх.",
   "Fit a corner cap on each rod end and press the wire corners into the grooves.": "Встановіть кутовий наконечник на кінець кожного стрижня і втисніть кути дроту в канавки.",
   "The same cap fits both sides of the antenna: turn it over for the other side.": "Той самий наконечник підходить для обох боків антени: для іншого боку переверніть його.",
+  "Biquad feed standoff": "Стійка живлення біквадрата",
+  "Holds the element {0} above the reflector by the four wires next to the feed; the tips stay free of plastic, which would detune them. The base is the drilling template for the N or SO-239 panel jack.": "Тримає елемент на висоті {0} над рефлектором за чотири дроти біля точки живлення; кінці лишаються без пластику, який би їх розстроїв. Основа є шаблоном для свердління під панельне гніздо N або SO-239.",
+  "Drill the reflector through the base: the centre hole for the jack and the four M3 holes.": "Просвердліть рефлектор через основу: центральний отвір під гніздо і чотири отвори M3.",
+  "Bolt the panel jack behind the reflector and the standoff in front with the same M3 screws.": "Прикрутіть панельне гніздо позаду рефлектора і стійку спереду тими самими гвинтами M3.",
+  "Run the copper tube or the coax up the centre bore to the top.": "Проведіть мідну трубку або коаксіал по центральному отвору до верху.",
+  "Press the four wires next to the feed into the grooves on top and solder them to the feed.": "Втисніть чотири дроти біля точки живлення в канавки зверху і припаяйте їх до живлення.",
 };
