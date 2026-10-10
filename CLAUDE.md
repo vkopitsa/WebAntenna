@@ -44,6 +44,8 @@ src/lib/                 NO DOM, NO React, NO i18n. Runs in Node (tests) and in 
   print/                 3D-printable parts (manifold-3d CSG, mm): rules.ts fixed geometry rules, shapes.ts blocks,
                          parts.ts PartSpec/buildPart (watertight, ≤ 180 mm), families/*.ts per antenna, stl.ts writer
                          families/former.ts (helix tube/frame, twisted groove, keyed stacking), spreader.ts, standoff.ts, spacer.ts
+  print/shells/          one `shell` part per antenna: geometry.ts (envelope, style, exits), clamshell.ts, dome.ts, hood.ts (feedpoint hood), pcbbox.ts,
+                         index.ts (shellFor)
   drawing.ts template.ts page model in mm → PDF (own writer, Helvetica, A4) and SVG; PCB, boom strip, wire and helix templates
   synth.ts               synthesis: candidate types × bounded Nelder–Mead over each type's knobs, ranked by goal
   fdtd/mesh.ts           graded rectilinear mesh (thirds rule, smooth() with ratio 1.4, exact port/board lines)
@@ -130,5 +132,6 @@ docs/ANTENNAS.md         every formula, its source, and the NEC-2 / MoM verifica
 - openEMS export for wire antennas (thin wires) and for the PCB loop (needs lumped capacitors in parallel with the port).
 - Auto-tune loop inside the openEMS script (run → find resonance → rescale → rerun). (The in-browser FDTD has "Tune to band".)
 - FDTD: lumped capacitors (needed for the PCB loop), PML instead of Mur, multi-GPU-dispatch for > 4 M cells.
+- Shell detuning not simulated (FDTD shell material).
 - Ground (GN card / Sommerfeld) and conductor loss in MoM; matching-network calculator.
 - Fan dipole with ≥ 5 bands takes ≈ 2 s to tune on the main thread; move design building to the worker if it matters.

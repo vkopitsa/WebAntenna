@@ -1,6 +1,6 @@
 # Printed antenna shells (radomes, enclosures, feedpoint boxes): design
 
-Date: 2026-10-10. Status: approved in brainstorming, awaiting spec review.
+Date: 2026-10-10. Status: implemented (see "As built" at the end).
 Builds on the printed-parts stages 1–2 (`2026-10-10-print-parts-design.md`, `2026-10-10-print-parts-stage2-design.md`):
 same engine (manifold-3d), rules (`rules.ts`), worker, panel, `PartSpec`, `PartError`, `stack()`.
 
@@ -77,3 +77,12 @@ Notes:
 - Simulating the shell's dielectric effect (the FDTD could, later: a `shell` material layer).
 - Threaded or bayonet joints, gaskets, cable glands with nuts: lip joint + silicone and screws only.
 - Shells for the stage-2 parts themselves beyond the feed box.
+
+## As built (changes from this spec)
+
+- **Shell kinds.** Every antenna gets exactly one `shell` part. Full shell (helix dome with flange over the former's flange and M3 into the reflector; discone dome on the mast base; otherwise a two-half clamshell) when it fits the 180 mm bed. Otherwise a **feedpoint hood** replaces the two-part feed box: one piece, open at the bottom, lowered over the feed part after soldering. Wires leave through slots running to the open bottom edge; only roof exits (radiator, halyard eye rope) are round holes. It encloses only the feed core (dipole/fan hub block, GP plate + jack, discone top disc ring, Yagi driven block, else a 30 mm cube). On the ground plane the mast must end at the top of the hub's side block.
+- **Style by frequency.** FPV (>= 2 GHz): wall 1.2, gap 1.5, no lip (flat joint), screwed. Outdoor: wall 2, gap 3, lip and silicone, drain.
+- **Clamshell.** Lip height adapts to the cavity; 4 M3 screw ears. In full boxes the coax gland is O8 and stays inside the cavity footprint.
+- **PCB enclosures** (all printed antennas). The board is located by edge stops on all four sides, with 1 mm overhang clamps where the rim is free of non-ground copper, and sits on posts touching only ground copper or bare board. The O3.5 coax pigtail enters over the ground pour on the nearest edge; the roof is raised (>= 4 mm air) so the cable lies on the board, and the split is at cable height. A probe-fed patch gets an O6.5 SMA hole underneath. The PCB loop gets a plain box.
+- **RF warning.** Full shells warn that the plastic lowers the resonance by about 1-3 % (retune with Trim; check printed antennas with FDTD).
+- **Deferred.** Fan dipole hoods at 30-45 deg fan angles keep only about 47-67 % of the roof because the steep lugs exit through it; seal with silicone. Shells are not simulated.

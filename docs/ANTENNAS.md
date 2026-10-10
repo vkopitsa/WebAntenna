@@ -146,6 +146,8 @@ with a 5 mm plate, a 45° connector flange, a feed-gap slot, and leg grooves tha
 spreaders. Collinear: radome spacers, one per section (`rid` param). Print-only params `rod`, `bd`, `rid`, `mast` do not affect NEC or MoM.
 Fan spreaders use only wires within 60° of the leg, between Ymin = gap/2 + 50 mm and Ymax = min(⅔ of the longest arm, gap/2 + 150 mm / spread); midway and Ymax, or only Ymax when closer than 20 mm; none if Ymax < Ymin or fewer than 2 holes.
 
+Shells (`print/shells/`): every antenna gets one `shell` part. A full shell (dome for helix and discone, otherwise a two-half clamshell; PCB antennas get a board enclosure with edge stops, ground posts and a raised roof for the coax) is used when it fits the 180 mm bed, otherwise a one-piece feedpoint hood open at the bottom. Style follows frequency: at 2 GHz and above wall 1.2 mm, gap 1.5 mm, flat screwed joint; below, wall 2 mm, gap 3 mm, lip, silicone and a drain. Plastic near the antenna lowers the resonance by about 1-3 %: retune with Trim and check printed antennas with FDTD. Shells are not simulated.
+
 ## Built-in simulator (`src/lib/mom.ts`, `src/lib/simulate.ts`)
 
 The **Simulation** tab shows openEMS-style results:
