@@ -14,6 +14,10 @@ npm run lint         # oxlint src
 npm run build        # dist/ (base './', the solver ships as its own worker chunk)
 ```
 
+## Git
+- Use plain `git` for commits, branches and pushes (`git push origin <branch>`), not the `gh` CLI.
+- Remote: `git@github.com:vkopitsa/webantenna.git`.
+
 ## CI (`.github/workflows`, same as WebVNA)
 - `ci.yml`: on pull requests, Node 22: `npm ci`, test, typecheck, lint.
 - `deploy.yml`: on push to `main`: test, build, upload `dist/` and deploy with `actions/deploy-pages`.
