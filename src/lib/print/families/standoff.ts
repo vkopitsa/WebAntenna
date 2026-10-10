@@ -17,7 +17,7 @@ export const STANDOFF_HOWTO = [
   "Press the four wires next to the feed into the grooves on top and solder them to the feed.",
 ];
 
-const RP = 10, TUBE = 6.4, JACK = 16, PLATE_T = 3, SQ = 28;
+const RP = 10, TUBE = 6.4, PLATE_T = 5, SQ = 28;
 /** World (x up from the reflector) → local print frame (z up from the reflector). */
 const local = (p: Vec3): V3 => [mm(p[1]), mm(p[2]), mm(p[0])];
 const near = (a: V3, b: V3) => Math.hypot(...sub(a, b)) < 1e-3;
@@ -30,7 +30,7 @@ export function biquadGeometry(d: Design) {
     const a = local(w.a), b = local(w.b);
     return ends.flatMap((e) => (near(a, e) ? [{ at: e, dir: unit(sub(b, a)) }] : near(b, e) ? [{ at: e, dir: unit(sub(a, b)) }] : []));
   });
-  return { X: ends[0][2], wireD: mm(2 * feed.r), legs };
+  return { X: ends[0][2], wireD: mm(2 * feed.r), ends, gap: Math.hypot(...sub(ends[0], ends[1])), legs };
 }
 
 export function biquadParts(d: Design): PartSpec[] {
@@ -39,13 +39,15 @@ export function biquadParts(d: Design): PartSpec[] {
     id: "biquad-standoff", title: STANDOFF_STRINGS[0], use: "holder", qty: 1,
     purpose: msg(STANDOFF_STRINGS[1], { len: g.X / 1000 }), howTo: STANDOFF_HOWTO.map((s) => msg(s)),
     build: (M) => {
-      if (g.wireD + CLEAR > RP) throw new PartError(msg(FAIL.thick));
-      const body = M.Manifold.union([box(M, [-SQ / 2, -SQ / 2, 0], [SQ / 2, SQ / 2, PLATE_T]), M.Manifold.cylinder(g.X, RP, RP, 64)]);
+      const ch = g.wireD + CLEAR;
+      if (g.gap / 2 + ch / 2 > RP - 1) throw new PartError(msg(FAIL.thick));
+      const ys = g.ends.map((e) => e[1]), yLo = Math.min(...ys) - ch / 2, yHi = Math.max(...ys) + ch / 2;
+      const body = M.Manifold.union([box(M, [-SQ / 2, -SQ / 2, 0], [SQ / 2, SQ / 2, PLATE_T]).rotate([0, 0, 45]), M.Manifold.cylinder(g.X, RP, RP, 64)]);
       const cuts = M.Manifold.union([
-        flangeCut(M, 0, PLATE_T),
+        flangeCut(M, 0, PLATE_T).rotate([0, 0, 45]),   // screws on the axes, clear of the legs on the diagonals
         M.Manifold.cylinder(g.X + 2, TUBE / 2, TUBE / 2, 32).translate([0, 0, -1]),
-        M.Manifold.cylinder(5, JACK / 2, JACK / 2, 48).translate([0, 0, -1]),          // front of the jack through the reflector
-        ...g.legs.map((l) => { const c = channel(M, l.at, add(l.at, scale(l.dir, 1.5 * RP)), g.wireD); return M.Manifold.hull([c, c.translate([0, 0, 10])]); }),
+        box(M, [-ch / 2, yLo, g.X - ch / 2], [ch / 2, yHi, g.X + 20]),                 // feed gap, always free of plastic
+        ...g.legs.map((l) => { const c = channel(M, l.at, add(l.at, scale(l.dir, SQ / Math.SQRT2 + 3)), g.wireD); return M.Manifold.hull([c, c.translate([0, 0, 10])]); }),
       ]);
       return [body.subtract(cuts)];
     },
