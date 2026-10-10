@@ -10,4 +10,5 @@ export const ZIP_W = 5.2;          // zip-tie slot, fits ties up to 4.8 × 1.3 m
 export const ZIP_T = 2.2;
 export const FLANGE_PITCH = 18.3;  // screw spacing of SO-239 and N 4-hole panel jacks
 export const FLANGE_BODY = 16;     // hole for the jack body
+export const SEG_H = 170;          // tallest stacked piece; its spigot (≤ 8 mm) keeps it within MAX_SIZE
 export const mm = (m: number) => m * 1000;

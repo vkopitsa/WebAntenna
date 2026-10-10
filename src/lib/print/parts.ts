@@ -21,14 +21,23 @@ export type BuiltPart = { id: string; ok: true; segments: Segment[] } | { id: st
 
 export const msg = (s: string, ...a: Arg[]): Msg => ({ s, a });
 
+/** Failures a family reports itself (thrown from `build`): shown to the user like "Too large". */
+export const FAIL = { thick: "Wire too thick for this part", radome: "Radome too narrow for the coax" };
+
+/** Thrown from `PartSpec.build` when the design cannot be printed this way. */
+export class PartError extends Error {
+  m: Msg;
+  constructor(m: Msg) { super(m.s); this.m = m; }
+}
+
 export const USE_LABELS: Record<PartSpec["use"], string> = { jig: "Jig", holder: "Holder", former: "Former" };
 
-export const PART_STRINGS = ["Too large to print in one piece: {0}", "Could not build this part: {0}", "Wires closer than {0} apart: add sleeving.", ...Object.values(USE_LABELS)];
+export const PART_STRINGS = ["Too large to print in one piece: {0}", "Could not build this part: {0}", "Wires closer than {0} apart: add sleeving.", ...Object.values(FAIL), ...Object.values(USE_LABELS)];
 
 /** Build a part and check it: watertight, non-empty, every segment within MAX_SIZE. */
 export function buildPart(M: ManifoldToplevel, spec: PartSpec, name: string): BuiltPart {
   let segs: Manifold[];
-  try { segs = spec.build(M); } catch (e) { return { id: spec.id, ok: false, error: msg("Could not build this part: {0}", String(e)) }; }
+  try { segs = spec.build(M); } catch (e) { return { id: spec.id, ok: false, error: e instanceof PartError ? e.m : msg("Could not build this part: {0}", String(e)) }; }
   const out: Segment[] = [];
   for (const [k, s] of segs.entries()) {
     if (s.status() !== "NoError" || s.isEmpty()) return { id: spec.id, ok: false, error: msg("Could not build this part: {0}", s.status()) };

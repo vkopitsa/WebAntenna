@@ -1,5 +1,5 @@
-import type { Manifold, ManifoldToplevel } from "manifold-3d";
-import { CLEAR, FLANGE_BODY, FLANGE_PITCH, M3_HOLE, M3_NUT, M3_NUT_DEPTH, ZIP_T, ZIP_W } from "./rules";
+import type { CrossSection, Manifold, ManifoldToplevel } from "manifold-3d";
+import { CLEAR, FLANGE_BODY, FLANGE_PITCH, M3_HOLE, M3_NUT, M3_NUT_DEPTH, SEG_H, ZIP_T, ZIP_W } from "./rules";
 
 /** Building blocks for printed parts. Everything is in mm. */
 export type V3 = [number, number, number];
@@ -52,4 +52,50 @@ export function flangeCut(M: M, z0: number, z1: number): Manifold {
     M.Manifold.cylinder(z1 - z0 + 2, FLANGE_BODY / 2, FLANGE_BODY / 2, undefined, false).translate([0, 0, z0 - 1]),
     ...[[h, h], [-h, h], [-h, -h], [h, -h]].map(([x, y]) => m3(M, x, y, z0, z1, false)),
   ]);
+}
+
+/** Helical groove for a wire of diameter d whose centre runs at radius R, starting at angle 0 at z0 and rising S per
+ *  turn; hand +1 turns counter-clockwise seen from +z (y = +R sin t), −1 clockwise. The 2D section is the horizontal
+ *  slice of a tube of diameter d + CLEAR round the helix: at a shallow pitch it is a long curved bean, the union of the
+ *  discs cut from balls along the helix. Twist-extruding that section reproduces the tube exactly. */
+export function twistGroove(M: M, R: number, d: number, z0: number, z1: number, S: number, hand: 1 | -1): Manifold {
+  const rc = (d + CLEAR) / 2, steps = 16;
+  const discs = Array.from({ length: 2 * steps + 1 }, (_, i) => {
+    const dz = (rc * (i - steps)) / steps, phi = (hand * 2 * Math.PI * dz) / S, r = Math.sqrt(Math.max(rc * rc - dz * dz, 1e-6));
+    return M.CrossSection.circle(r, 24).translate([R * Math.cos(phi), R * Math.sin(phi)]);
+  });
+  const bean = M.CrossSection.union(discs.slice(1).map((c, i) => M.CrossSection.hull([discs[i], c])));
+  const turns = (z1 - z0) / S;
+  const perTurn = Math.max(24, Math.ceil((2 * Math.PI) / Math.sqrt(0.4 / R)));   // chord sag R·θ²/8 < 0.05 mm
+  // manifold twists the top counter-clockwise for positive degrees (checked by shapes.test.ts)
+  return M.Manifold.extrude(bean, z1 - z0, Math.ceil(perTurn * turns), hand * 360 * turns).translate([0, 0, z0]);
+}
+
+/** D-shaped section: a circle of radius r cut flat at x = flat. Keys a spigot so stacked pieces fit one way only. */
+export const dShape = (M: M, r: number, flat: number): CrossSection =>
+  M.CrossSection.circle(r, 64).intersect(M.CrossSection.square([flat + r + 1, 2 * r + 2]).translate([-r - 1, -r - 1]));
+
+/** Bottoms of the stacked pieces of a body of height H: equal pieces no taller than SEG_H. */
+export const pieceBottoms = (H: number): number[] => { const k = Math.ceil(H / SEG_H); return Array.from({ length: k }, (_, i) => (i * H) / k); };
+
+export type Joint = { below: Manifold; aboveAdd?: Manifold; aboveCut?: Manifold };
+
+/** Cut a body standing on z = 0 into the pieces of `pieceBottoms(H)`, each moved down to stand on z = 0. At each cut zc,
+ *  `joint(zc)` gives the spigot the piece below gains and what the piece above gains or loses (all in body coordinates). */
+export function stack(body: Manifold, H: number, joint: (zc: number) => Joint): Manifold[] {
+  const zs = pieceBottoms(H);
+  if (zs.length === 1) return [body];
+  return zs.map((z0, i) => {
+    const z1 = i + 1 < zs.length ? zs[i + 1] : Infinity;
+    let p = body.trimByPlane([0, 0, 1], z0);
+    if (z1 !== Infinity) p = p.trimByPlane([0, 0, -1], -z1).add(joint(z1).below);
+    if (i > 0) { const j = joint(z0); if (j.aboveAdd) p = p.add(j.aboveAdd); if (j.aboveCut) p = p.subtract(j.aboveCut); }
+    return p.translate([0, 0, -z0]);
+  });
+}
+
+/** Move `at` to the origin and turn `dir` to +z (for printing a part along its axis). */
+export function toZ(part: Manifold, at: V3, dir: V3): Manifold {
+  const u = unit(dir), th = (Math.acos(u[2]) * 180) / Math.PI, ph = (Math.atan2(u[1], u[0]) * 180) / Math.PI;
+  return part.translate(scale(at, -1)).rotate([0, 0, -ph]).rotate([0, -th, 0]);
 }

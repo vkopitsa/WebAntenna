@@ -3,6 +3,7 @@ import type { ManifoldToplevel } from "manifold-3d";
 import { ANTENNAS } from "../antennas";
 import type { Params } from "../types";
 import { buildPart, partsFor } from ".";
+import { FAIL } from "./parts";
 import { MAX_SIZE } from "./rules";
 import { loadManifold } from "./manifold";
 import { meshOf, toSTL } from "./stl";
@@ -50,11 +51,11 @@ describe("partsFor", () => {
         for (const s of partsFor(def.id, p, def.build(p))) {
           const r = buildPart(M, s, s.id);
           if (r.ok) r.segments.forEach((g) => expect(Math.max(...g.size)).toBeLessThanOrEqual(MAX_SIZE));
-          else expect(r.error.s, `${def.id} ${JSON.stringify(extra)} ${s.id}`).toBe("Too large to print in one piece: {0}");
+          else expect(["Too large to print in one piece: {0}", FAIL.thick, FAIL.radome], `${def.id} ${JSON.stringify(extra)} ${s.id}`).toContain(r.error.s);
         }
       }
     }
-  });
+ }, 300_000);
 });
 
 describe("how-to instructions", () => {

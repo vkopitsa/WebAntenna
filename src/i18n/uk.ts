@@ -581,6 +581,8 @@ export const UK: Record<string, string> = {
   // 3D-printed parts
   "Too large to print in one piece: {0}": "Завелика, щоб надрукувати цілою: {0}",
   "Could not build this part: {0}": "Не вдалося побудувати деталь: {0}",
+  "Wire too thick for this part": "Дріт надто товстий для цієї деталі",
+  "Radome too narrow for the coax": "Обтічник завузький для коаксіалу",
   "Jig": "Кондуктор",
   "Holder": "Тримач",
   "Former": "Оправка",
