@@ -58,7 +58,7 @@ describe("partsFor", () => {
         }
       }
     }
- }, 300_000);
+  }, 300_000);
 });
 
 describe("how-to instructions", () => {

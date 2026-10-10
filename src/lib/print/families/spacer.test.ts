@@ -33,12 +33,15 @@ describe("j-pole", () => {
     expect(b.max[2] - b.min[2]).toBeCloseTo(g.tap - g.tubeD / 2, 3);
   });
   it("tap gauge mouths are narrower than the tube but open", () => {
-    const g = jpoleGeometry(setup("jpole").d);
-    const t = part("jpole", "jpole-tap").build(M)[0];
-    const slab = (x: number, w: number, y0: number, y1: number) => M.Manifold.cube([w, y1 - y0, 50]).translate([x - w / 2, y0, -10]);
-    for (const x of [0, g.s]) {
-      expect(inside(t, slab(x, 0.7 * g.tubeD, -g.tubeD, -g.tubeD / 2 - 0.5))).toBeLessThan(1e-3);   // mouth is open
-      expect(inside(t, slab(x, 1.0 * g.tubeD, -g.tubeD, -g.tubeD / 2 - 0.5))).toBeGreaterThan(1);   // narrower than the tube
+    for (const dd of [6e-3, 22e-3]) {
+      const g = jpoleGeometry(setup("jpole", { d: dd, sp: 2 * dd + 20e-3 }).d);
+      const t = part("jpole", "jpole-tap", { d: dd, sp: 2 * dd + 20e-3 }).build(M)[0];
+      const slab = (x: number, w: number, y0: number, y1: number) => M.Manifold.cube([w, y1 - y0, 50]).translate([x - w / 2, y0, -10]);
+      const mouth = g.tubeD - Math.min(0.2 * g.tubeD, 1);
+      for (const x of [0, g.s]) {
+        expect(inside(t, slab(x, mouth - 0.2, -g.tubeD, -g.tubeD / 2 - 0.5))).toBeLessThan(1e-3);   // mouth is open
+        expect(inside(t, slab(x, g.tubeD, -g.tubeD, -g.tubeD / 2 - 0.5))).toBeGreaterThan(1e-3);   // narrower than the tube
+      }
     }
   });
   it("tube spacing smaller than the tube is reported", () => {
@@ -68,6 +71,16 @@ describe("collinear", () => {
     expect(inside(s, slab(0.7 * 5))).toBeLessThan(1e-3);
     expect(inside(s, slab(1.1 * 5))).toBeGreaterThan(1);
     expect(inside(s, M.Manifold.cylinder(20, 2.5, 2.5, 32).translate([0, 0, -5]))).toBeLessThan(1e-3);
+  });
+  it("vents are notches in the rim, clear of the bore, and the part is one piece", () => {
+    const s = part("collinear", "collinear-spacer").build(M)[0];
+    const ro = (20 - CLEAR) / 2;
+    for (const a of [45, 135, 225, 315]) {
+      const r = ro - 0.3, c = M.Manifold.cylinder(20, 0.1, 0.1, 8).translate([r * Math.cos((a * Math.PI) / 180), r * Math.sin((a * Math.PI) / 180), -5]);
+      expect(inside(s, c)).toBeLessThan(1e-6);
+    }
+    expect(s.volume()).toBeGreaterThan(0);
+    expect(s.decompose().length).toBe(1);
   });
   it("too narrow a radome is reported", () => {
     const { p, d } = setup("collinear", { rid: 8e-3, od: 6e-3 });

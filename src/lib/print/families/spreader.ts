@@ -100,7 +100,6 @@ export function moxonCapArgs(corner: V3, front: boolean): { at: V3; dir: V3; leg
   return { at: corner, dir: unit(corner), legs: [[front ? -1 : 1, 0, 0], [0, -Math.sign(corner[1]), 0]] };
 }
 
-/** Rod socket hub at the origin: a core and one socket per direction, each with an M3 lock screw from +z. */
 /** Core radius so that neighbouring sockets (width rod + 2 walls) do not overlap, at least `base`. */
 export function hubCore(dirs: V3[], rodD: number, base: number): number {
   let phi = Math.PI;
@@ -121,6 +120,7 @@ export function quadHubLayout(rodD: number, bd: number) {
   return { dirs: QUAD_DIRS, core: hubCore(QUAD_DIRS, rodD, (bd + CLEAR) / 2 + WALL + 1) };
 }
 
+/** Rod socket hub at the origin: a core and one socket per direction, each with an M3 lock screw from +z. */
 function socketHub(M: ManifoldToplevel, dirs: V3[], rodD: number, core: number): { body: Manifold; cuts: Manifold[] } {
   const rb = rodD + CLEAR, w = Math.max(rb + 2 * WALL, 12);
   const body = M.Manifold.union(dirs.map((u) => bar(M, scale(u, core - 2), scale(u, core + SOCK), w)));

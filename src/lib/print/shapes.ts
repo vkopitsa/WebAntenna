@@ -96,6 +96,6 @@ export function stack(body: Manifold, H: number, joint: (zc: number) => Joint): 
 
 /** Move `at` to the origin and turn `dir` to +z (for printing a part along its axis). */
 export function toZ(part: Manifold, at: V3, dir: V3): Manifold {
-  const u = unit(dir), th = (Math.acos(u[2]) * 180) / Math.PI, ph = (Math.atan2(u[1], u[0]) * 180) / Math.PI;
+  const u = unit(dir), th = (Math.acos(Math.max(-1, Math.min(1, u[2]))) * 180) / Math.PI, ph = (Math.atan2(u[1], u[0]) * 180) / Math.PI;
   return part.translate(scale(at, -1)).rotate([0, 0, -ph]).rotate([0, -th, 0]);
 }

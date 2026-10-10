@@ -42,9 +42,11 @@ Afterwards a test enforces that **every wire antenna returns at least one part**
     the helix (at a 10–16° pitch that slice is a long curved bean, not a circle: the union of the discs cut
     from balls along the helix), extruded from z0 to z1 with `twistDegrees = ±360·(z1−z0)/S` (manifold
     `extrude`; divisions chosen so the chord sag stays < 0.05 mm). Exact helix path, cheap to build.
+  - `toZ(part, at, dir)`: rotate a part built along +z so it points along `dir` at `at`.
+- **spreader.ts**
   - `cornerCap(M, rodD, wireD, corner, legA, legB, spreader)`: a sleeve on the spreader rod end and a
     head with a V channel through the wire corner, open outward so the wire is pressed in.
-  - `segments(M, body, zMax, joint)`: cut a tall body into equal stacked pieces ≤ 170 mm (room for the
+  - `stack(body, H, joint)` / `pieceBottoms(H)`: cut a tall body into equal stacked pieces ≤ 170 mm (room for the
     spigot) with a keyed spigot/socket at each cut, so grooves line up across joints. The key is a
     D-shaped spigot (`dShape`: a circle cut flat on one side).
 - **New failure message** (thrown from `build`, shown like "Too large"): "Wire too thick for this
@@ -59,7 +61,7 @@ From the design wires: radius R, wire diameter d, turn spacing S, turns n, first
 - **Tube:** annulus, outer radius R, bore radius R − (d+CLEAR)/2 − WALL (solid when that is < 2.5 mm).
   The wire sits half-buried in the groove and is supported along its whole length. `warn`: plastic
   touching the wire lowers resonance a few %; use the Trim knob, or use the tube only as a winding tool.
-- **Frame:** a hub (radius 6 mm) and 4 arms (6 when C > 160 mm, so no free span exceeds ~40 mm), arm
+- **Frame:** a hub (radius min(15, max(4.5, 0.3·R)) mm) and 4 arms (6 when C > 160 mm, so no free span exceeds ~40 mm), arm
   width max(4, d + 2) mm, reaching radius R. The groove becomes a notch in every arm. Least plastic at
   the wire; best at 5.8 GHz.
 
@@ -69,7 +71,7 @@ From the design wires: radius R, wire diameter d, turn spacing S, turns n, first
   Ø4.2 mm centre hole through the base for an SMA panel jack pin under the reflector.
 - Base flange at z = 0..2 mm, radius R + d/2 + 8, three M3 holes: it screws to the reflector and is the
   drilling template for it.
-- Height above 170 mm → `segments()`. Diameter above 180 mm → "Too large". R too small for the groove
+- Height above 170 mm → `stack()`. Diameter above 180 mm → "Too large". R too small for the groove
   and a wall → "Wire too thick for this part".
 
 Prints upright with no supports (a 10–16° groove is a shallow overhang). The paper wrap template stays.
@@ -81,12 +83,12 @@ Prints upright with no supports (a 10–16° groove is a shallow overhang). The 
 - Cone rods: bores from near the apex at the cone half-angle; inner ends exit into an annular groove where
   a bare copper ring or hose clamp joins them to the braid.
 - ≥ 2 mm plastic between the disc and cone levels (they must not touch); coax up the centre from below;
-  mast box with zip slots like the GP hub. Rod count and angles from the wires (`group` driven/ground).
+  axial mast socket (`mast` param) with an M3 lock screw. Rod count and angles from the wires (`group` driven/ground).
 
 ## Moxon and quad (`families/spreader.ts`)
 
 - **Moxon hub:** a disc at the rectangle centre with 4 horizontal rod sockets (rod + CLEAR, 40 mm deep,
-  M3 grub-screw hole) pointing at the 4 corners, angles from the wires (atan2(A/2, E/2)), plus a mast box
+  M3 lock screw with a nut pocket on top) pointing at the 4 corners, angles from the wires (atan2(A/2, E/2)), plus a mast box
   with zip slots below.
 - **Moxon corner caps:** `cornerCap` at each corner; front and rear corners differ; left and right
   are the same part turned over (qty 2 each).
@@ -116,7 +118,7 @@ Base: `flangeCut` (N/SO-239), also the reflector drilling template.
   Ymax = min(⅔ of the longest arm reach in y, gap/2 + 150/spread), the spread measured from the feed ends.
   Positions are midway and Ymax, or only Ymax when they are within 20 mm of each other. None when
   Ymax < Ymin or fewer than 2 holes. Hole length follows the wire angle so holes always go through.
-- **Collinear radome spacers:** a disc of diameter rid − CLEAR with a bore od + CLEAR and four Ø≤4 mm vent holes at 45°/135°/225°/315° midway between bore and rim,
+- **Collinear radome spacers:** a disc of diameter rid − CLEAR with a bore od + CLEAR and four vent notches (radius ≤ 2 mm) in the rim at 45°/135°/225°/315°,
   slid to the middle of each section; qty n. rid < od + 2·WALL → its own message "Radome too narrow for
   the coax" (also accepted by the extremes test).
 

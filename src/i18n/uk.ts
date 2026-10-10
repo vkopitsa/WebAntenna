@@ -691,7 +691,7 @@ export const UK: Record<string, string> = {
   "Keeps the radiator and the stub {0} apart (centre to centre), which sets the matching section's impedance.": "Тримає випромінювач і шлейф на відстані {0} (між центрами), що задає імпеданс узгоджувальної секції.",
   "Stands on the shorting bar and clips onto both legs; its top edge is the feed tap height, {0} above the bar.": "Стоїть на перемичці і защіпається на обидві трубки; її верхній край на висоті точки живлення, {0} над перемичкою.",
   "Centres the coax in a {0} radome; vents let condensation out.": "Центрує коаксіал в обтічнику {0}; вентиляційні вирізи випускають конденсат.",
-  "Slide the spacers onto both tubes before soldering the shorting bar, and spread them evenly along the stub.": "Насуньте розпірки на обидві трубки до припаювання перемички і розставте їх рівномірно вздовж шлейфа.",
+  "Slide the spacers onto both tubes before soldering the shorting bar, and spread them evenly along the stub above the feed tap.": "Насуньте розпірки на обидві трубки до припаювання перемички і розставте їх рівномірно вздовж шлейфа вище точки живлення.",
   "Fix each with a drop of glue once the antenna is tuned.": "Закріпіть кожну краплею клею після налаштування антени.",
   "Clip the gauge onto both legs and push it down onto the shorting bar.": "Защепніть шаблон на обидві трубки і опустіть його на перемичку.",
   "Attach the coax to both legs at the gauge's top edge, then remove the gauge.": "Приєднайте коаксіал до обох трубок на рівні верхнього краю шаблону, потім зніміть шаблон.",

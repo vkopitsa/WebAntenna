@@ -1,7 +1,7 @@
 import type { Manifold, ManifoldToplevel } from "manifold-3d";
 import type { Design, Vec3 } from "../../types";
 import { FAIL, msg, PartError, type PartSpec } from "../parts";
-import { CLEAR, M3_HOLE, WALL, mm } from "../rules";
+import { CLEAR, M3_HOLE, MAX_SIZE, WALL, mm } from "../rules";
 import { box, dShape, stack, twistGroove, type V3 } from "../shapes";
 
 /** Axial-mode helix: a grooved tube or a rib frame that holds the wire at the designed diameter, pitch and hand. */
@@ -49,13 +49,14 @@ export const ribs = (g: HelixGeometry) => (2 * Math.PI * g.R > 160 ? 6 : 4);
 
 export function formerBody(M: ManifoldToplevel, style: "tube" | "frame", g: HelixGeometry): Manifold[] {
   const CS = M.CrossSection, c = g.wireD + CLEAR, inner = g.R - c / 2;     // groove bottom radius
+  const fr = g.R + g.wireD / 2 + 8, hr = g.R + g.wireD / 2 + 4.5;
+  if (2 * fr > MAX_SIZE) throw new PartError(msg("Too large to print in one piece: {0}", { len: 2 * fr / 1000 }));
   const bore = inner - WALL, hubR = Math.min(15, Math.max(4.5, 0.3 * g.R));
   if (style === "tube" ? bore < 2.5 : inner < hubR + 1) throw new PartError(msg(FAIL.thick));
   const n = ribs(g), aw = Math.max(4, g.wireD + 2);
   const prof = style === "tube"
     ? CS.circle(g.R, sides(g.R)).subtract(CS.circle(bore, sides(bore)))
     : CS.union([CS.circle(hubR, 48), ...Array.from({ length: n }, (_, k) => CS.square([g.R, aw]).translate([0, -aw / 2]).rotate((360 * k) / n))]);
-  const fr = g.R + g.wireD / 2 + 8, hr = g.R + g.wireD / 2 + 4.5;
   const body = M.Manifold.union([M.Manifold.extrude(prof, g.H), M.Manifold.cylinder(FLANGE_T, fr, fr, sides(fr))]);
   const cuts = M.Manifold.union([
     // start one wire diameter low so the lower half of the wire at the first turn is in the groove, then turn it

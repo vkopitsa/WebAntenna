@@ -17,7 +17,7 @@ export const SPACER_STRINGS = [
 /** How-to steps, in order. */
 export const SPACER_HOWTO = {
   spacer: [
-    "Slide the spacers onto both tubes before soldering the shorting bar, and spread them evenly along the stub.",
+    "Slide the spacers onto both tubes before soldering the shorting bar, and spread them evenly along the stub above the feed tap.",
     "Fix each with a drop of glue once the antenna is tuned.",
   ],
   tap: [
@@ -57,7 +57,7 @@ export function jpoleParts(d: Design): PartSpec[] {
     id: "jpole-tap", title: SPACER_STRINGS[1], use: "jig", qty: 1,
     purpose: msg(SPACER_STRINGS[4], { len: h / 1000 }), howTo: SPACER_HOWTO.tap.map((s) => msg(s)),
     build: (M) => {
-      const CS = M.CrossSection, m = 0.4 * g.tubeD, big = g.tubeD + 2 * WALL + 2;
+      const CS = M.CrossSection, m = (g.tubeD - Math.min(0.2 * g.tubeD, 1)) / 2, big = g.tubeD + 2 * WALL + 2;
       const mouths = CS.union([0, g.s].map((x) => CS.square([2 * m, big]).translate([x - m, -big])));   // open towards −y: clips on
       return [pair(M, g.s, g.tubeD).subtract(mouths).extrude(h)];
     },
@@ -74,11 +74,11 @@ export function collinearParts(p: Params, d: Design): PartSpec[] {
     build: (M) => {
       const CS = M.CrossSection, ro = (rid - CLEAR) / 2, rb = (od + CLEAR) / 2;
       if (ro - rb < WALL + 1) throw new PartError(msg(FAIL.radome));
-      const vent = Math.min(2, (ro - rb) / 4), rv = (ro + rb) / 2;
+      const vent = Math.min(2, (ro - rb) / 4);   // rim notches, centred on the outer edge
       const cuts = CS.union([
         CS.circle(rb, 48),
         CS.square([0.8 * od, ro + 1]).translate([-0.4 * od, 0]),                                     // clip-on slot
-        ...[45, 135, 225, 315].map((a) => CS.circle(vent, 16).translate([rv * Math.cos((a * Math.PI) / 180), rv * Math.sin((a * Math.PI) / 180)])),
+        ...[45, 135, 225, 315].map((a) => CS.circle(vent, 16).translate([ro * Math.cos((a * Math.PI) / 180), ro * Math.sin((a * Math.PI) / 180)])),
       ]);
       return [CS.circle(ro, 96).subtract(cuts).extrude(6)];
     },

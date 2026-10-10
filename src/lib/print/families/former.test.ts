@@ -67,6 +67,13 @@ describe("helix former", () => {
       r.segments.forEach((s) => expect(Math.max(...s.size)).toBeLessThanOrEqual(180));
     }
   });
+  it("an oversize helix is reported as too large before building", () => {
+    for (const s of partsFor("helix", ...(() => { const { p, d } = setup("helix", { bands: "430e6-440e6", turns: 40 }); return [p, d] as const; })())) {
+      const t0 = Date.now(), r = buildPart(M, s, s.id);
+      expect(r.ok ? "" : r.error.s).toBe("Too large to print in one piece: {0}");
+      expect(Date.now() - t0).toBeLessThan(1000);
+    }
+  });
   it("a tiny 5.8 GHz helix builds or says the wire is too thick", () => {
     for (const extra of [{ ...FPV, cl: 0.75 }, { ...FPV, cl: 0.75, d: 3e-3 }]) {
       const { p, d } = setup("helix", extra);
