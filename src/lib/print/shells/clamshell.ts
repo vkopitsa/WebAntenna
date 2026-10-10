@@ -1,14 +1,14 @@
 import type { Manifold, ManifoldToplevel } from "manifold-3d";
-import { CLEAR, M3_HOLE, M3_NUT, M3_NUT_DEPTH } from "../rules";
-import { box, rod, type V3 } from "../shapes";
-import { grow, type Box3 } from "./geometry";
+import { CLEAR } from "../rules";
+import { box, m3, rod, type V3 } from "../shapes";
+import { EAR, grow, type Box3 } from "./geometry";
 
 /** Two-half box round an inner cavity: a lip on the bottom half seats in a recess of the top half (seal it with
  *  silicone outdoors), four M3 screw ears at the vertical corners, and the caller's cuts (wire, coax, connector holes). */
 export type ClamOpts = { inner: Box3; wall: number; splitZ: number; cuts?: Manifold[]; drain?: boolean; adds?: { bottom?: Manifold[]; top?: Manifold[] } };
 
 export const EAR_R = 4;
-const EAR_OFF = EAR_R - 1;   // centre offset past the outer corner: ears reach EAR_R + EAR_OFF = 7 mm past the wall (geometry.ts EAR)
+const EAR_OFF = EAR - EAR_R;   // centre offset past the outer corner: ears reach EAR (7 mm, geometry.ts) past the wall
 const LIP_H = 3;
 
 /** Ear (screw) centres: just outside the outer corners, so the screw never enters the cavity. */
@@ -18,7 +18,11 @@ export function earCentres(inner: Box3, wall: number): V3[] {
 }
 
 export function clamshell(M: ManifoldToplevel, o: ClamOpts): [Manifold, Manifold] {
+  if (!(o.splitZ > o.inner.lo[2] && o.splitZ < o.inner.hi[2])) throw new Error("clamshell: splitZ must lie strictly inside the cavity");
   const out = grow(o.inner, o.wall), lipOut = grow(o.inner, o.wall / 2);
+  // lip height: it must not reach into the roof; too short a lip or too thin a wall beside the recess gives a flat joint
+  const lipH = Math.min(LIP_H, o.inner.hi[2] - o.splitZ - CLEAR);
+  const lipped = lipH >= 1 && o.wall - (o.wall / 2 + CLEAR / 2) >= 0.6;
   const z0 = out.lo[2], z1 = out.hi[2];
   let body = box(M, out.lo, out.hi);
   for (const c of earCentres(o.inner, o.wall)) {
@@ -30,16 +34,17 @@ export function clamshell(M: ManifoldToplevel, o: ClamOpts): [Manifold, Manifold
   }
   body = body.subtract(box(M, o.inner.lo, o.inner.hi));
   const cuts: Manifold[] = [...(o.cuts ?? [])];
-  for (const c of earCentres(o.inner, o.wall)) {
-    cuts.push(M.Manifold.cylinder(z1 - z0 + 2, M3_HOLE / 2, M3_HOLE / 2, 16).translate([c[0], c[1], z0 - 1]));
-    cuts.push(M.Manifold.cylinder(M3_NUT_DEPTH + 1, M3_NUT / 2, M3_NUT / 2, 6).translate([c[0], c[1], z0 - 1]));
+  for (const c of earCentres(o.inner, o.wall)) cuts.push(m3(M, c[0], c[1], z0, z1, false));
+  if (o.drain) {
+    const off = Math.min(4, Math.min(o.inner.hi[0] - o.inner.lo[0], o.inner.hi[1] - o.inner.lo[1]) / 2 - 1.5);
+    cuts.push(rod(M, [o.inner.lo[0] + off, o.inner.lo[1] + off, z0 - 1], [o.inner.lo[0] + off, o.inner.lo[1] + off, o.inner.lo[2] + 1], 3));
   }
-  if (o.drain) cuts.push(rod(M, [o.inner.lo[0] + 4, o.inner.lo[1] + 4, z0 - 1], [o.inner.lo[0] + 4, o.inner.lo[1] + 4, o.inner.lo[2] + 1], 3));
   // the lip: a band half a wall thick round the cavity, LIP_H above the split, on the bottom half
-  const lip = box(M, [lipOut.lo[0], lipOut.lo[1], o.splitZ - 0.01], [lipOut.hi[0], lipOut.hi[1], o.splitZ + LIP_H]).subtract(box(M, [o.inner.lo[0], o.inner.lo[1], o.splitZ - 1], [o.inner.hi[0], o.inner.hi[1], o.splitZ + LIP_H + 1]));
-  const recess = box(M, [lipOut.lo[0] - CLEAR / 2, lipOut.lo[1] - CLEAR / 2, o.splitZ - 1], [lipOut.hi[0] + CLEAR / 2, lipOut.hi[1] + CLEAR / 2, o.splitZ + LIP_H + CLEAR]);
-  let bottom = body.trimByPlane([0, 0, -1], -o.splitZ).add(lip);
-  let top = body.trimByPlane([0, 0, 1], o.splitZ).subtract(recess);
+  const lip = box(M, [lipOut.lo[0], lipOut.lo[1], o.splitZ - 0.01], [lipOut.hi[0], lipOut.hi[1], o.splitZ + lipH]).subtract(box(M, [o.inner.lo[0], o.inner.lo[1], o.splitZ - 1], [o.inner.hi[0], o.inner.hi[1], o.splitZ + lipH + 1]));
+  const recess = box(M, [lipOut.lo[0] - CLEAR / 2, lipOut.lo[1] - CLEAR / 2, o.splitZ - 1], [lipOut.hi[0] + CLEAR / 2, lipOut.hi[1] + CLEAR / 2, o.splitZ + lipH + CLEAR]);
+  let bottom = body.trimByPlane([0, 0, -1], -o.splitZ);
+  let top = body.trimByPlane([0, 0, 1], o.splitZ);
+  if (lipped) { bottom = bottom.add(lip); top = top.subtract(recess); }
   for (const a of o.adds?.bottom ?? []) bottom = bottom.add(a);
   for (const a of o.adds?.top ?? []) top = top.add(a);
   for (const c of cuts) { bottom = bottom.subtract(c); top = top.subtract(c); }    // one at a time (manifold batch-union defect)

@@ -43,4 +43,54 @@ describe("clamshell", () => {
     expect(bb.max[0]).toBeCloseTo(30 + 2 + 7, 3);
     expect(bb.min[1]).toBeCloseTo(-20 - 2 - 7, 3);
   });
+
+  const thin = { lo: [-20, -15, -2.3] as [number, number, number], hi: [20, 15, 2.3] as [number, number, number] };
+  const cases: [string, typeof inner, number][] = [["default", inner, 2], ["thin FPV-like", thin, 1.2]];
+  const frac = (m: ReturnType<typeof box>, region: ReturnType<typeof box>) => m.intersect(region).volume() / region.volume();
+  for (const [name, inn, wall] of cases) {
+    it(`${name}: each half is one solid, roof and floor intact`, () => {
+      const [bot, top] = clamshell(M, { inner: inn, wall, splitZ: 0 });
+      expect(bot.decompose().length).toBe(1);
+      expect(top.decompose().length).toBe(1);
+      const roof = box(M, [inn.lo[0], inn.lo[1], inn.hi[2]], [inn.hi[0], inn.hi[1], inn.hi[2] + wall]);
+      const floor = box(M, [inn.lo[0], inn.lo[1], inn.lo[2] - wall], [inn.hi[0], inn.hi[1], inn.lo[2]]);
+      const rf = frac(top, roof), ff = frac(bot, floor);
+      console.log(name, "roof fill", rf.toFixed(4), "floor fill", ff.toFixed(4));
+      expect(rf).toBeGreaterThanOrEqual(0.99);
+      expect(ff).toBeGreaterThanOrEqual(0.99);
+    });
+  }
+  it("outdoor: the outer wall beside the recess is at least 0.6 mm", () => {
+    const [bot, top] = clamshell(M, { inner, wall: 2, splitZ: 0 });
+    const band = box(M, [31.4, -15, 0], [32, 15, 3.3]);
+    const f = frac(top, band);
+    console.log("outdoor wall band fill", f.toFixed(4));
+    expect(f).toBeGreaterThanOrEqual(0.99);
+    expect(bot.boundingBox().max[2]).toBeGreaterThan(0);
+  });
+  it("thin FPV-like case gets a flat joint (no lip)", () => {
+    const [bot, top] = clamshell(M, { inner: thin, wall: 1.2, splitZ: 0 });
+    expect(bot.boundingBox().max[2]).toBeCloseTo(0, 3);
+    expect(top.boundingBox().min[2]).toBeCloseTo(0, 3);
+  });
+  it("splitZ outside the cavity throws", () => {
+    expect(() => clamshell(M, { inner, wall: 2, splitZ: 15 })).toThrow();
+    expect(() => clamshell(M, { inner, wall: 2, splitZ: -10 })).toThrow();
+  });
+  it("nut pocket is at the bottom only: the top face of the top half is solid round the hole", () => {
+    const [bot, top] = clamshell(M, { inner, wall: 2, splitZ: 0 });
+    const c = earCentres(inner, 2)[0];
+    const hex = M.Manifold.cylinder(2.8, 3.3, 3.3, 6).subtract(M.Manifold.cylinder(2.8, 2, 2, 16)).translate([c[0], c[1], 17 - 2.8]);
+    expect(top.intersect(hex).volume()).toBeGreaterThan(0.9 * hex.volume());
+    const pocket = M.Manifold.cylinder(2.8, 3.3, 3.3, 6).subtract(M.Manifold.cylinder(2.8, 2, 2, 16)).translate([c[0], c[1], -12]);
+    expect(bot.intersect(pocket).volume()).toBeLessThan(1e-3);
+  });
+  it("the drain goes through the floor only", () => {
+    const [bot, top] = clamshell(M, { inner, wall: 2, splitZ: 0, drain: true });
+    const probe = M.Manifold.cylinder(60, 1, 1, 16).translate([-26, -16, -20]);
+    expect(bot.intersect(probe).volume()).toBeLessThan(1e-3);        // open through the floor (z -12..-10 and below)
+    const roofProbe = M.Manifold.cylinder(2, 1, 1, 16).translate([-26, -16, 15]);
+    expect(top.intersect(roofProbe).volume()).toBeGreaterThan(0.99 * roofProbe.volume());
+    expect(bot.add(top).volume()).toBeLessThan(clamshell(M, { inner, wall: 2, splitZ: 0 }).reduce((a, m) => a + m.volume(), 0));
+  });
 });

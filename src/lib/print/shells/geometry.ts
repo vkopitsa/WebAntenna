@@ -8,7 +8,7 @@ export type Style = "fpv" | "outdoor";
 export const STYLE: Record<Style, { wall: number; gap: number }> = { fpv: { wall: 1.2, gap: 1.5 }, outdoor: { wall: 2, gap: 3 } };
 export const FPV_HZ = 2e9;
 const FOOT = 170;                          // largest dome diameter
-const EAR = 7;                             // screw ears stick out this far past the wall (each side)
+export const EAR = 7;                            // screw ears stick out this far past the wall (each side)
 
 const mmv = (p: Vec3): V3 => [mm(p[0]), mm(p[1]), mm(p[2])];
 export const grow = (b: Box3, k: number): Box3 => ({ lo: [b.lo[0] - k, b.lo[1] - k, b.lo[2] - k], hi: [b.hi[0] + k, b.hi[1] + k, b.hi[2] + k] });
