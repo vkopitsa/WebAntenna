@@ -5,9 +5,10 @@ import type { Params } from "../../types";
 import { loadManifold } from "../manifold";
 import { buildPart, partsFor } from "..";
 import { rod, type V3 } from "../shapes";
-import { CLEAR, INSULATE } from "../rules";
+import { CLEAR, FLANGE_PITCH, INSULATE, M3_NUT, ZIP_T, ZIP_W } from "../rules";
 import { dipoleArms } from "./centre";
-import { radialDirs } from "./hub";
+import { hubGeometry, radialDirs, PLATE } from "./hub";
+import { yagiStraps } from "./boom";
 
 let M: ManifoldToplevel;
 beforeAll(async () => { M = await loadManifold(); });
@@ -38,19 +39,41 @@ describe("dipole", () => {
 });
 
 describe("ground plane", () => {
-  it("hub: bores follow the radials (within 0.5°) and are surrounded by plastic", () => {
-    for (const droop of [0, 30, 45, 60]) {
-      const { d } = setup("groundplane", { droop });
-      const dirs = radialDirs(d);
-      dirs.forEach((u) => expect(Math.abs((Math.asin(-u[2]) * 180) / Math.PI - droop)).toBeLessThan(0.5));
-      const hub = part("groundplane", "gp-hub", { droop }).build(M)[0];
-      const wireD = 2000 * d.wires[1].r;
-      for (const u of dirs) {
-        expect(inside(hub, along([0, 0, 0], u, 20, 45, wireD))).toBeLessThan(1e-3);
-        expect(inside(hub, along([0, 0, 0], u, 20, 45, wireD + CLEAR + 2))).toBeGreaterThan(1);
+  const CASES = [0, 15, 30, 45, 60].flatMap((droop) => [2, 3, 4, 6, 8].map((radials) => ({ droop, radials })));
+  it("hub: bores follow the radials (within 0.5°) and are surrounded by plastic along the lugs", () => {
+    for (const c of CASES) {
+      const { d } = setup("groundplane", c);
+      radialDirs(d).forEach((u) => expect(Math.abs((Math.asin(-u[2]) * 180) / Math.PI - c.droop)).toBeLessThan(0.5));
+      const g = hubGeometry(d);
+      const hub = part("groundplane", "gp-hub", c).build(M)[0];
+      for (const r of g.paths) {
+        expect(inside(hub, along(r.start, r.dir, 2, r.lugFrom + 30, g.wireD)), JSON.stringify(c)).toBeLessThan(1e-3);
+        expect(inside(hub, along(r.start, r.dir, r.lugFrom + 5, r.lugFrom + 30, g.wireD + CLEAR + 2))).toBeGreaterThan(1);
       }
     }
-  });
+  }, 60_000);
+  it("hub: the jack flange seats flat on top, the nut pockets open downwards and the coax plug has room", () => {
+    const h = FLANGE_PITCH / 2;
+    for (const c of CASES) {
+      const hub = part("groundplane", "gp-hub", c).build(M)[0];
+      const msg = JSON.stringify(c);
+      expect(inside(hub, M.Manifold.cube([25.4, 25.4, 10], true).translate([0, 0, 5.01])), msg).toBeLessThan(1e-3);
+      for (const [x, y] of [[h, h], [-h, h], [-h, -h], [h, -h]])
+        expect(inside(hub, M.Manifold.cylinder(40, M3_NUT * 0.4, M3_NUT * 0.4, 6).translate([x, y, -40 - PLATE + 0.5])), msg).toBeLessThan(1e-3);
+      expect(inside(hub, M.Manifold.cylinder(35, 10.5, 10.5).translate([0, 0, -35 - PLATE - 0.01])), msg).toBeLessThan(1e-3);
+    }
+  }, 60_000);
+  it("hub: each radial end lies in a groove that is open from above, for soldering", () => {
+    for (const c of CASES) {
+      const { d } = setup("groundplane", c);
+      const g = hubGeometry(d);
+      const hub = part("groundplane", "gp-hub", c).build(M)[0];
+      for (const r of g.paths) {
+        const top = M.Manifold.cylinder(10, g.wireD / 2, g.wireD / 2).translate([r.start[0] + r.dir[0] * 1.5, r.start[1] + r.dir[1] * 1.5, r.start[2]]);
+        expect(inside(hub, top), JSON.stringify(c)).toBeLessThan(1e-3);
+      }
+    }
+  }, 60_000);
 });
 
 describe("yagi", () => {
@@ -79,5 +102,34 @@ describe("yagi", () => {
   });
   it("a boom too wide for the printer is reported, not exported", () => {
     expect(buildPart(M, part("yagi", "yagi-clip", { bd: 0.2 }), "x").ok).toBe(false);
+  });
+});
+
+describe("yagi zip ties", () => {
+  it("the strap slots are open top to bottom and never cross an element channel", () => {
+    for (const extra of [{}, { driven: "split" }, { d: 3e-3 }, { d: 25e-3, bd: 50e-3 }] as Params[]) {
+      const { d } = setup("yagi", extra);
+      const elemD = 2000 * d.wires.find((w) => !w.drawOnly)!.r;
+      for (const id of ["yagi-clip", "yagi-driven"]) {
+        const solid = part("yagi", id, extra).build(M)[0];
+        const b = solid.boundingBox();
+        const straps = yagiStraps(d);
+        expect(straps.length).toBeGreaterThanOrEqual(2);
+        for (const [x, y] of straps) {
+          const slot = M.Manifold.cube([ZIP_W * 0.9, ZIP_T * 0.8, b.max[2] - b.min[2] + 2], true).translate([x, y, (b.max[2] + b.min[2]) / 2]);
+          expect(inside(solid, slot), `${id} ${JSON.stringify(extra)}`).toBeLessThan(1e-3);
+          const element = M.Manifold.cylinder(400, (elemD + CLEAR) / 2, (elemD + CLEAR) / 2, undefined, true).rotate([90, 0, 0]);
+          expect(slot.intersect(element).volume(), `${id} ${JSON.stringify(extra)} strap crosses the element`).toBeLessThan(1e-3);
+        }
+      }
+    }
+  });
+});
+
+describe("dipole close-wire warning", () => {
+  it("warns when the arms are closer than the insulating wall, not otherwise", () => {
+    expect(part("dipole", "dipole-centre").warn).toBeUndefined();
+    const w = part("dipole", "dipole-centre", { bands: "2400e6-2483e6", d: 0.3e-3 }).warn;
+    expect(w?.s).toBe("Wires closer than {0} apart: add sleeving.");
   });
 });

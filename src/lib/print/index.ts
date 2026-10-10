@@ -1,6 +1,8 @@
+import type { ManifoldToplevel } from "manifold-3d";
+import { cleanup } from "manifold-3d/lib/garbage-collector.js";
 import type { Design, Params } from "../types";
-import type { PartSpec } from "./parts";
-import { PART_STRINGS } from "./parts";
+import type { BuiltPart, PartSpec } from "./parts";
+import { buildPart, PART_STRINGS } from "./parts";
 import { CENTRE_HOWTO, CENTRE_STRINGS, dipoleParts } from "./families/centre";
 import { HUB_HOWTO, HUB_STRINGS, groundPlaneParts } from "./families/hub";
 import { BOOM_HOWTO, BOOM_STRINGS, yagiParts } from "./families/boom";
@@ -17,6 +19,11 @@ const FAMILIES: Record<string, (p: Params, d: Design) => PartSpec[]> = {
 /** Printable parts for an antenna design; empty when the type has none (yet). Cheap: nothing is built here. */
 export const partsFor = (defId: string, p: Params, d: Design): PartSpec[] => FAMILIES[defId]?.(p, d) ?? [];
 
+/** Build and check every part of a design, then free all WASM geometry (the results are plain arrays). */
+export function buildParts(M: ManifoldToplevel, defId: string, p: Params, d: Design): BuiltPart[] {
+  try { return partsFor(defId, p, d).map((s) => buildPart(M, s, `${defId}-${s.id}`)); } finally { cleanup(); }
+}
+
 /** Every English string the print parts can show, for the i18n coverage test. */
 export const PRINT_STRINGS = [
   ...PART_STRINGS, ...CENTRE_STRINGS, ...HUB_STRINGS, ...BOOM_STRINGS,
@@ -27,7 +34,7 @@ export const PRINT_STRINGS = [
 export function partsReadme(title: string, specs: PartSpec[]): string {
   const out = [`3D-printed parts: ${title}`, "", "STL files are in millimetres. Use PETG or ASA for parts that stay outdoors; PLA is fine for jigs.", ""];
   for (const s of specs) {
-    out.push(`${s.title} (${s.qty} pc)`, en(s.purpose), "How to use:", ...s.howTo.map((h, i) => `  ${i + 1}. ${en(h)}`), "");
+    out.push(`${s.title} (${s.qty} pc)`, en(s.purpose), ...(s.warn ? [`Warning: ${en(s.warn)}`] : []), "How to use:", ...s.howTo.map((h, i) => `  ${i + 1}. ${en(h)}`), "");
   }
   return out.join("\n");
 }

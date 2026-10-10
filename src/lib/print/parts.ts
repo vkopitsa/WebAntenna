@@ -12,6 +12,7 @@ export interface PartSpec {
   qty: number;
   purpose: Msg;
   howTo: Msg[];                        // numbered instructions: how to use the part
+  warn?: Msg;                          // built anyway, but the user must know (e.g. wires closer than the insulating wall)
   build(M: ManifoldToplevel): Manifold[];
 }
 
@@ -22,7 +23,7 @@ export const msg = (s: string, ...a: Arg[]): Msg => ({ s, a });
 
 export const USE_LABELS: Record<PartSpec["use"], string> = { jig: "Jig", holder: "Holder", former: "Former" };
 
-export const PART_STRINGS = ["Too large to print in one piece: {0}", "Could not build this part: {0}", ...Object.values(USE_LABELS)];
+export const PART_STRINGS = ["Too large to print in one piece: {0}", "Could not build this part: {0}", "Wires closer than {0} apart: add sleeving.", ...Object.values(USE_LABELS)];
 
 /** Build a part and check it: watertight, non-empty, every segment within MAX_SIZE. */
 export function buildPart(M: ManifoldToplevel, spec: PartSpec, name: string): BuiltPart {

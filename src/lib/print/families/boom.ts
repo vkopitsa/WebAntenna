@@ -1,6 +1,6 @@
 import type { Design, Params } from "../../types";
 import { msg, type PartSpec } from "../parts";
-import { CLEAR, INSULATE, M3_NUT_DEPTH, WALL, ZIP_T, mm } from "../rules";
+import { CLEAR, INSULATE, M3_NUT_DEPTH, WALL, ZIP_T, ZIP_W, mm } from "../rules";
 import { box, m3, rod, zipSlot } from "../shapes";
 
 /** Yagi: element clips, driven-element block, or a drilling guide for through-boom elements. */
@@ -50,14 +50,24 @@ export function yagiGeometry(d: Design): { elemD: number; boomD: number; fs: num
   return { elemD: mm(2 * elems[0].r), boomD: mm(2 * boom.r), fs: mm(fs) };
 }
 
+/** Zip-tie slot centres (x along the boom, y across) for the clip and driven block: two straps round the boom,
+ *  one each side of the element channel, so no strap crosses an element. */
+export function yagiStraps(d: Design): [number, number][] {
+  const { elemD, boomD } = yagiGeometry(d);
+  const x = (elemD + CLEAR) / 2 + WALL + ZIP_W / 2, y = (boomD + CLEAR) / 2 + WALL + ZIP_T / 2;
+  return [[x, y], [x, -y], [-x, y], [-x, -y]];
+}
+
 export function yagiParts(p: Params, d: Design): PartSpec[] {
   const { elemD, boomD, fs } = yagiGeometry(d);
   const ch = elemD + CLEAR, bc = boomD + CLEAR;
   const Y = bc / 2 + 2 * WALL + ZIP_T;                       // half width across the boom, room for the zip-tie slots
   const zb = -(bc / 2 + INSULATE + ch / 2);                  // boom axis; the element axis is z = 0, along y
   const n = Number(p.n);
-  const slots = (M: Parameters<PartSpec["build"]>[0], z0: number, z1: number) =>
-    [-1, 1].map((s) => zipSlot(M, [0, s * (bc / 2 + WALL + ZIP_T / 2), (z0 + z1) / 2], 2, 0, z1 - z0 + 2));
+  type M = Parameters<PartSpec["build"]>[0];
+  const slot = (M: M, x: number, y: number, z0: number, z1: number) => zipSlot(M, [x, y, (z0 + z1) / 2], 2, 0, z1 - z0 + 2);
+  const straps = (M: M, z0: number, z1: number) => yagiStraps(d).map(([x, y]) => slot(M, x, y, z0, z1));
+  const Lstrap = ch + 2 * ZIP_W + 4 * WALL;                  // room along the boom for a strap each side of the element
 
   if (p.boom === "through") {
     const top = bc / 2 + 12;
@@ -66,7 +76,7 @@ export function yagiParts(p: Params, d: Design): PartSpec[] {
       howTo: BOOM_HOWTO.drill.map((s) => msg(s, { len: elemD / 1000 })),
       build: (M) => {
         const body = box(M, [-12, -Y, 0], [12, Y, top]);
-        const cuts = M.Manifold.union([rod(M, [-20, 0, 0], [20, 0, 0], bc), rod(M, [0, 0, -1], [0, 0, top + 1], ch), ...slots(M, 0, top)]);
+        const cuts = M.Manifold.union([rod(M, [-20, 0, 0], [20, 0, 0], bc), rod(M, [0, 0, -1], [0, 0, top + 1], ch), ...[-1, 1].map((s) => slot(M, 0, s * (bc / 2 + WALL + ZIP_T / 2), 0, top))]);
         return [body.subtract(cuts)];
       },
     }];
@@ -77,13 +87,13 @@ export function yagiParts(p: Params, d: Design): PartSpec[] {
     id: "yagi-clip", title: "Yagi element clip", use: "holder", qty: n - 1, purpose: msg(BOOM_STRINGS[3], { len: INSULATE / 1000 }),
     howTo: BOOM_HOWTO.clip.map((s) => msg(s)),
     build: (M) => {
-      const L = Math.max(ch + 2 * WALL, 16);
+      const L = Math.max(Lstrap, 16);
       const body = box(M, [-L / 2, -Y, zb], [L / 2, Y, clipTop]);
       const cuts = M.Manifold.union([
         rod(M, [-L, 0, zb], [L, 0, zb], bc),                          // boom saddle
         rod(M, [0, -Y - 1, 0], [0, Y + 1, 0], ch),                    // element
         m3(M, 0, 0, 0, clipTop, true),                                // set screw
-        ...slots(M, zb, clipTop),
+        ...straps(M, zb, clipTop),
       ]);
       return [body.subtract(cuts)];
     },
@@ -96,7 +106,7 @@ export function yagiParts(p: Params, d: Design): PartSpec[] {
     purpose: folded ? msg(BOOM_STRINGS[4], { len: fs / 1000 }, { len: INSULATE / 1000 }) : msg(BOOM_STRINGS[5], { len: INSULATE / 1000 }),
     howTo: (folded ? BOOM_HOWTO.folded : BOOM_HOWTO.split).map((s) => msg(s)),
     build: (M) => {
-      const L = Math.max(ch + 2 * WALL, 24);
+      const L = Math.max(Lstrap, 24);
       const body = box(M, [-L / 2, -Y, zb], [L / 2, Y, top]);
       const cuts = M.Manifold.union([
         rod(M, [-L, 0, zb], [L, 0, zb], bc),
@@ -104,7 +114,7 @@ export function yagiParts(p: Params, d: Design): PartSpec[] {
         ...(folded ? [rod(M, [0, -Y - 1, fs], [0, Y + 1, fs], ch)] : []),
         box(M, [0, -8, -ch / 2 - 1], [L / 2 + 1, 8, ch / 2 + 2]),                        // feed window, front half
         m3(M, 0, Y - 6, folded ? fs : 0, top, true),                                     // locks the top conductor
-        ...slots(M, zb, top),
+        ...straps(M, zb, top),
       ]);
       return [body.subtract(cuts)];
     },

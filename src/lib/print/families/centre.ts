@@ -1,6 +1,6 @@
 import type { Design, Vec3, Wire } from "../../types";
 import { msg, type PartSpec } from "../parts";
-import { CLEAR, WALL, mm } from "../rules";
+import { CLEAR, INSULATE, WALL, mm } from "../rules";
 import { add, bar, box, channel, rod, scale, sub, unit, zipSlot, type V3 } from "../shapes";
 
 /** Dipole / inverted V: centre insulator and end insulators. */
@@ -48,6 +48,7 @@ export function dipoleParts(d: Design): PartSpec[] {
     id: "dipole-centre", title: "Dipole centre insulator", use: "holder", qty: 1,
     purpose: msg(CENTRE_STRINGS[2], Math.round(droop), { len: gap / 1000 }),
     howTo: CENTRE_HOWTO.centre.map((s) => msg(s)),
+    warn: gap - ch < INSULATE ? msg("Wires closer than {0} apart: add sleeving.", { len: INSULATE / 1000 }) : undefined,
     build: (M) => {
       const hub = box(M, [-w / 2, -(gap / 2 + 6), -30], [w / 2, gap / 2 + 6, top]);
       const lugs = arms.map((a) => bar(M, a.start, add(a.start, scale(a.dir, LUG)), w));

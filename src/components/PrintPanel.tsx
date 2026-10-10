@@ -17,6 +17,7 @@ export function PrintPanel({ def, params, design, base }: { def: AntennaDef; par
   const specs = useMemo(() => partsFor(def.id, params, design), [def.id, params, design]);
   const st = usePrintParts(def.id, params, design, specs.length > 0);
   const [sel, setSel] = useState(0);
+  const current = st.status === "done";   // parts match the current parameters
   const built = (id: string): BuiltPart | undefined => st.parts?.find((p) => p.id === id);
   const files = (id: string) => { const b = built(id); return b?.ok ? b.segments.map((g, k) => ({ name: `${base}-${id}${b.segments.length > 1 ? `-${k + 1}` : ""}.stl`, data: g.stl })) : []; };
   const save = (fs: { name: string; data: Uint8Array }[], zipName: string) => fs.length === 1 ? download(fs[0].name, fs[0].data, "model/stl") : download(zipName, zip(fs), "application/zip");
@@ -43,8 +44,8 @@ export function PrintPanel({ def, params, design, base }: { def: AntennaDef; par
                   return (
                     <tr key={s.id} className={i === sel ? "on" : undefined} onClick={() => setSel(i)}>
                       <td>{t(s.title)}</td><td>{t(USE_LABELS[s.use])}</td><td className="num">{s.qty}</td>
-                      <td>{size}</td><td>{fmtMsg(t, unit, s.purpose)}</td>
-                      <td><button className="small" disabled={!b?.ok} onClick={() => save(files(s.id), `${base}-${s.id}.zip`)}>STL</button></td>
+                      <td>{size}</td><td>{fmtMsg(t, unit, s.purpose)}{s.warn && <div className="err-text">{fmtMsg(t, unit, s.warn)}</div>}</td>
+                      <td><button className="small" disabled={!current || !b?.ok} onClick={() => save(files(s.id), `${base}-${s.id}.zip`)}>STL</button></td>
                     </tr>
                   );
                 })}

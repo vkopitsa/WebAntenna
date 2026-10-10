@@ -8,7 +8,7 @@ export function meshOf(m: Manifold): TriMesh {
   const n = g.vertProperties.length / g.numProp;
   const pos = new Float32Array(3 * n);
   for (let i = 0; i < n; i++) for (let k = 0; k < 3; k++) pos[3 * i + k] = g.vertProperties[i * g.numProp + k];
-  return { pos, tri: g.triVerts };
+  return { pos, tri: new Uint32Array(g.triVerts) };   // copies: the WASM objects are freed after each build
 }
 
 /** Triangles as a flat array of 9 floats each (three xyz corners), for the preview. */
