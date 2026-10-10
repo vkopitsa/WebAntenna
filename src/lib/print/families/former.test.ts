@@ -1,0 +1,63 @@
+import { beforeAll, describe, expect, it } from "vitest";
+import type { Manifold, ManifoldToplevel } from "manifold-3d";
+import type { Params } from "../../types";
+import { loadManifold } from "../manifold";
+import { buildPart, partsFor } from "..";
+import { FAIL } from "../parts";
+import { pieceBottoms } from "../shapes";
+import { helixGeometry } from "./former";
+import { ball, inside, setup } from "./testkit";
+
+let M: ManifoldToplevel;
+beforeAll(async () => { M = await loadManifold(); });
+
+const FPV = { bands: "5725e6-5875e6", d: 1e-3, turns: 5 };
+const CASES: Params[] = [{}, { hand: "lhcp" }, FPV, { ...FPV, hand: "lhcp" }];
+/** Put the stacked pieces back where they were cut from. */
+const restack = (segs: Manifold[], H: number) => { const zs = pieceBottoms(H); return M.Manifold.union(segs.map((s, i) => s.translate([0, 0, segs.length > 1 ? zs[i] : 0]))); };
+
+describe("helix former", () => {
+  it("reads the design: diameter, pitch, turns, hand", () => {
+    const { d } = setup("helix");
+    const g = helixGeometry(d), dims = Object.fromEntries(d.dims.filter((x) => x.key).map((x) => [x.key, x.value * 1000]));
+    expect(2 * g.R).toBeCloseTo(dims.D, 3);
+    expect(g.S).toBeCloseTo(dims.S, 3);
+    expect(g.n).toBeCloseTo(8, 6);
+    expect(g.hand).toBe(1);
+    expect(helixGeometry(setup("helix", { hand: "lhcp" }).d).hand).toBe(-1);
+  });
+  for (const id of ["helix-tube", "helix-frame"]) {
+    it(`${id}: every design wire point is clear and held, both hands, GPS and 5.8 GHz`, () => {
+      for (const c of CASES) {
+        const { p, d } = setup("helix", c);
+        const g = helixGeometry(d);
+        const spec = partsFor("helix", p, d).find((s) => s.id === id)!;
+        const whole = restack(spec.build(M), g.H);
+        // stride 5 (not 3): 16 points per turn, so the angles walk through every 22.5° step instead of aliasing onto the ribs
+        const probes = g.pts.filter((_, i) => i % 5 === 2);
+        for (const q of probes) expect(inside(whole, ball(M, q, g.wireD)), `${JSON.stringify(c)} ${q}`).toBeLessThan(1e-3);
+        const held = probes.filter((q) => inside(whole, ball(M, q, g.wireD + 2)) > 0.01).length / probes.length;
+        expect(held, JSON.stringify(c)).toBeGreaterThan(id === "helix-tube" ? 0.99 : 0.15);
+        // feed stub: the L of wire from the axis to the first turn is clear
+        expect(inside(whole, ball(M, [g.R / 2, 0, g.h0], g.wireD))).toBeLessThan(1e-3);
+      }
+    }, 120_000);
+  }
+  it("tall formers are stacked: piece heights add up, each fits the bed", () => {
+    const { p, d } = setup("helix");
+    const g = helixGeometry(d);
+    const r = buildPart(M, partsFor("helix", p, d)[0], "t");
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.segments.length).toBe(pieceBottoms(g.H).length);
+      expect(r.segments.length).toBeGreaterThan(1);
+      r.segments.forEach((s) => expect(Math.max(...s.size)).toBeLessThanOrEqual(180));
+    }
+  });
+  it("a tiny 5.8 GHz helix builds or says the wire is too thick", () => {
+    for (const extra of [{ ...FPV, cl: 0.75 }, { ...FPV, cl: 0.75, d: 3e-3 }]) {
+      const { p, d } = setup("helix", extra);
+      for (const s of partsFor("helix", p, d)) { const r = buildPart(M, s, s.id); if (!r.ok) expect(r.error.s).toBe(FAIL.thick); }
+    }
+  });
+});
