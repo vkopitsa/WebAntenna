@@ -5,7 +5,7 @@ import { loadManifold } from "../manifold";
 import { buildPart, partsFor } from "..";
 import { box, rod, type V3 } from "../shapes";
 import { setup } from "../families/testkit";
-import { edgeStops, holders, pcbCavity, pcbEntry, postSpots, supports } from "./pcbbox";
+import { cablePath, edgeStops, holders, pcbCavity, pcbEntry, postSpots, supports } from "./pcbbox";
 import { drainAt } from "./clamshell";
 import { STYLE, styleOf } from "./geometry";
 
@@ -122,6 +122,27 @@ describe("PCB enclosures", () => {
         if (Math.hypot(x - c[0], y - c[1]) < 2) continue;
         for (const r of d.pcb!.rects.filter((x) => x.layer === "top" && !isGround(x.label)))
           expect(x > r.x0 * 1000 && x < r.x1 * 1000 && y > r.y0 * 1000 && y < r.y1 * 1000, `${name(id, extra)} ${r.label} at ${x.toFixed(2)},${y.toFixed(2)}`).toBe(false);
+      }
+    }
+  });
+  it("the cable lies on the board in a channel of the top half, under a roof at least a wall thick", () => {
+    for (const [id, extra] of BOARDS) {
+      const { p, d } = setup(id, extra), path = cablePath(d);
+      if (!path) { expect(pcbEntry(d).probe, id).toBe(true); continue; }
+      const { wall } = STYLE[styleOf(d)], h = d.pcb!.h * 1000, [, top] = partsFor(id, p, d)[0].build(M);
+      expect(top.decompose().length, name(id, extra)).toBe(1);
+      const at = (u: V3, z: number): V3 => [u[0], u[1], z];
+      for (const [a, b] of [[path[0], path[1]], [path[1], path[2]]]) {
+        const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (L < 1e-6) continue;
+        expect(M.Manifold.union(partsFor(id, p, d)[0].build(M)).intersect(rod(M, at(a, h + 1.75), at(b, h + 1.75), 3.5)).volume(), `${name(id, extra)} cable`).toBeLessThan(1e-2);
+        // the roof over the channel: a thin band from the channel's top up one wall thickness is solid plastic
+        const zt = h + 1.75 + (3.5 + 0.3) / 2;
+        for (let k = 0; k <= 10; k++) {
+          const x = a[0] + ((b[0] - a[0]) * k) / 10, y = a[1] + ((b[1] - a[1]) * k) / 10;
+          const probe = box(M, [x - 0.25, y - 0.25, zt + 0.05], [x + 0.25, y + 0.25, zt + wall - 0.05]);
+          expect(top.intersect(probe).volume() / probe.volume(), `${name(id, extra)} roof at ${x.toFixed(1)},${y.toFixed(1)}`).toBeGreaterThan(0.999);
+        }
       }
     }
   });

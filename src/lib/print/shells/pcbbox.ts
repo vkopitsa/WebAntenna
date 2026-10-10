@@ -12,6 +12,7 @@ import { envelope, grow, STYLE, styleOf, type Box3 } from "./geometry";
  *  coax enters on the board edge nearest the port, over the ground pour when there is one; a probe feed gets an SMA
  *  hole underneath. */
 const POST = 3, STOP = 3, RIM = 1, PIGTAIL = 3.5, SMA = 6.5, PROBE_KEEP = 7;
+const CHANNEL = PIGTAIL + CLEAR;
 
 type Layer = "top" | "bottom";
 type Rect = { x0: number; y0: number; x1: number; y1: number };
@@ -91,7 +92,7 @@ export function postSpots(d: Design, layer: Layer): V3[] {
     const s: V3 = [x, y, 0];
     if (!touchOk(d, sq(x, y, POST / 2), layer)) continue;
     // the coax pigtail lies on the top face, straight from the entry to the port: no post on that path
-    if (!e.probe && layer === "top" && segDist(s, e.at, c) < POST / 2 + PIGTAIL / 2) continue;
+    if (!e.probe && layer === "top" && segDist(s, e.at, c) < POST / 2 + CHANNEL / 2 + 0.2) continue;
     ok.push(s);
   }
   const out: V3[] = [];
@@ -205,5 +206,30 @@ export function pcbShell(M: ManifoldToplevel, d: Design): Manifold[] {
     const i = e.dir[0] !== 0 ? 0 : 1, sg = e.dir[i], L = (sg > 0 ? inner.hi[i] - e.at[i] : e.at[i] - inner.lo[i]) + wall + 3;
     entry = rod(M, e.at, [e.at[0] + e.dir[0] * L, e.at[1] + e.dir[1] * L, e.at[2]], PIGTAIL);
   }
-  return clamshell(M, { inner, wall, splitZ: h / 2, cuts: [entry], adds: holders(M, d), drain: s === "outdoor" });
+  const adds = holders(M, d), cuts = [entry];
+  const path = cablePath(d);
+  if (path) {
+    // the cable lies on the board: a channel in the top half from the side wall's inner face to the port
+    for (const [a, b] of [[path[0], path[1]], [path[1], path[2]]]) if (Math.hypot(b[0] - a[0], b[1] - a[1]) > 1e-6) cuts.push(rod(M, a, b, CHANNEL));
+    const chTop = path[1][2] + CHANNEL / 2, roof = inner.hi[2] + wall;
+    if (chTop + wall > roof) {
+      // the channel thins or opens the roof: a raised rib over it keeps a wall of plastic, within the box outline
+      const W = PIGTAIL + 2 * wall, out = grow(inner, wall), z0 = inner.hi[2] + wall / 2, z1 = chTop + wall;
+      const sqAt = (p: V3) => box(M, [p[0] - W / 2, p[1] - W / 2, z0], [p[0] + W / 2, p[1] + W / 2, z1]);
+      const rib = M.Manifold.hull([sqAt(path[0]), sqAt(path[1]), sqAt(path[2])]).intersect(box(M, [out.lo[0], out.lo[1], z0 - 1], [out.hi[0], out.hi[1], z1 + 1]));
+      adds.top.push(rib);
+    }
+  }
+  return clamshell(M, { inner, wall, splitZ: h / 2, cuts, adds, drain: s === "outdoor" });
+}
+
+/** The cable's path over the board at z = h + PIGTAIL/2: from the side wall's inner face at the entry, to the board
+ *  edge, to the port. Null for a probe feed (the SMA jack is underneath). */
+export function cablePath(d: Design): [V3, V3, V3] | null {
+  const e = pcbEntry(d);
+  if (e.probe) return null;
+  const inner = pcbCavity(d), z = mm(d.pcb!.h) + PIGTAIL / 2, c = portCentre(d), i = e.dir[0] !== 0 ? 0 : 1;
+  const a: V3 = [e.at[0], e.at[1], z];
+  a[i] = e.dir[i] > 0 ? inner.hi[i] : inner.lo[i];
+  return [a, [e.at[0], e.at[1], z], [c[0], c[1], z]];
 }
