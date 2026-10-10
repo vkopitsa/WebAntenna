@@ -1,5 +1,9 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import type { ManifoldToplevel } from "manifold-3d";
+import { ANTENNAS } from "../antennas";
+import type { Params } from "../types";
+import { buildPart, partsFor } from ".";
+import { MAX_SIZE } from "./rules";
 import { loadManifold } from "./manifold";
 import { meshOf, toSTL } from "./stl";
 
@@ -24,5 +28,47 @@ describe("STL writer", () => {
     expect(new TextDecoder().decode(stl.slice(0, 5))).not.toBe("solid");
     const xs = tris.flatMap((t) => [t[0], t[3], t[6]]);
     expect(Math.max(...xs) - Math.min(...xs)).toBeCloseTo(10, 5);
+  });
+});
+
+describe("partsFor", () => {
+  it("printed (PCB) antennas have no printed parts", () => {
+    for (const def of ANTENNAS) { const d = def.build(def.defaults); if (d.pcb) expect(partsFor(def.id, def.defaults, d)).toEqual([]); }
+  });
+  it("every part of every antenna builds at defaults", () => {
+    for (const def of ANTENNAS) for (const s of partsFor(def.id, def.defaults, def.build(def.defaults))) expect(buildPart(M, s, s.id).ok, `${def.id} ${s.id}`).toBe(true);
+  });
+  it("at parameter extremes every part builds or is reported too large, never broken", () => {
+    for (const def of ANTENNAS) {
+      const cases: Params[] = [];
+      for (const q of def.params) {
+        if ((q.kind === "int" || q.kind === "length" || q.kind === "angle") && q.min != null && q.max != null) cases.push({ [q.key]: q.min }, { [q.key]: q.max });
+        if (q.kind === "select") for (const [v] of q.options!) cases.push({ [q.key]: v });
+      }
+      for (const extra of cases) {
+        const p = { ...def.defaults, ...extra };
+        for (const s of partsFor(def.id, p, def.build(p))) {
+          const r = buildPart(M, s, s.id);
+          if (r.ok) r.segments.forEach((g) => expect(Math.max(...g.size)).toBeLessThanOrEqual(MAX_SIZE));
+          else expect(r.error.s, `${def.id} ${JSON.stringify(extra)} ${s.id}`).toBe("Too large to print in one piece: {0}");
+        }
+      }
+    }
+  });
+});
+
+describe("how-to instructions", () => {
+  it("every part has numbered steps, and the zip README lists them", async () => {
+    const { partsReadme } = await import(".");
+    for (const def of ANTENNAS) {
+      const specs = partsFor(def.id, def.defaults, def.build(def.defaults));
+      specs.forEach((s) => expect(s.howTo.length, s.id).toBeGreaterThan(0));
+      if (specs.length) {
+        const txt = partsReadme(def.name, specs);
+        for (const s of specs) expect(txt).toContain(s.title);
+        expect(txt).toContain("1. ");
+        expect(txt).not.toMatch(/\{\d\}/);
+      }
+    }
   });
 });

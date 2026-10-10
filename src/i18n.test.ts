@@ -7,6 +7,7 @@ import { UK } from "./i18n/uk";
 import { BAND_PRESETS } from "./lib/bands";
 import { SIM_STRINGS } from "./lib/simulate";
 import { BUILD_STRINGS } from "./lib/build";
+import { PRINT_STRINGS } from "./lib/print";
 
 /** Variants that reach conditional labels and notes. */
 const VARIANTS: Record<string, Params[]> = {
@@ -32,6 +33,7 @@ export function libStrings(): Set<string> {
     BAND_PRESETS.forEach(([n]) => add(n));
     SIM_STRINGS.forEach(add);
     BUILD_STRINGS.forEach(add);
+    PRINT_STRINGS.forEach(add);
     add("Formula design (openEMS-calibrated); not simulated in the browser yet");
     for (const p of a.params) { add(p.label); add(p.hint); p.options?.forEach(([, l]) => add(l)); }
     for (const extra of [{}, ...(VARIANTS[a.id] ?? [])]) {

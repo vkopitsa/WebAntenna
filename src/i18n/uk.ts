@@ -578,4 +578,10 @@ export const UK: Record<string, string> = {
   "No clear match dip (SWR below 3) within ±20 % of the design frequency.": "Немає чіткого мінімуму узгодження (КСХ нижче 3) у межах ±20 % від розрахункової частоти.",
   "Rescale the design for the next build (trim {0} %)": "Перемасштабувати проєкт для наступного збирання (корекція {0} %)",
   "Scales every dimension so the next build lands on the target, based on this measurement.": "Масштабує всі розміри так, щоб наступна антена потрапила в ціль, на основі цього вимірювання.",
+  // 3D-printed parts
+  "Too large to print in one piece: {0}": "Завелика, щоб надрукувати цілою: {0}",
+  "Could not build this part: {0}": "Не вдалося побудувати деталь: {0}",
+  "Jig": "Кондуктор",
+  "Holder": "Тримач",
+  "Former": "Оправка",
 };
