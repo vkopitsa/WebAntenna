@@ -38,7 +38,7 @@ describe("partsFor", () => {
   });
   it("every part of every antenna builds at defaults", () => {
     for (const def of ANTENNAS) for (const s of partsFor(def.id, def.defaults, def.build(def.defaults))) expect(buildPart(M, s, s.id).ok, `${def.id} ${s.id}`).toBe(true);
-  });
+  }, 60_000);
   it("at parameter extremes every part builds or is reported too large, never broken", () => {
     for (const def of ANTENNAS) {
       const cases: Params[] = [];

@@ -27,6 +27,7 @@ describe("fan dipole", () => {
     const { p, d } = setup("fandipole");
     const sp = fanSpreaders(d);
     const wireD = dipoleArms(d).wireD;
+    expect(sp.length).toBeGreaterThanOrEqual(1);
     sp.forEach((s, i) => {
       expect(s.holes.length).toBeGreaterThanOrEqual(2);
       const part = partsFor("fandipole", p, d)[i + 1].build(M)[0];
@@ -36,6 +37,28 @@ describe("fan dipole", () => {
       }
     });
   });
+  it("spreaders: clear of the centre block, through holes, steep wires skipped", () => {
+    const bands5 = "3.5e6-3.8e6;7e6-7.2e6;10.1e6-10.15e6;14e6-14.35e6;18e6-18.2e6";
+    for (const fan of [5, 20, 30, 35, 45]) for (const bands of ["7e6-7.2e6;14e6-14.35e6;28e6-29.7e6", bands5]) {
+      const { p, d } = setup("fandipole", { fan, bands });
+      const { wireD, gap } = dipoleArms(d);
+      const specs = partsFor("fandipole", p, d);
+      const sp = fanSpreaders(d);
+      expect(specs.map((s) => s.id), `${fan}`).toEqual(["fan-centre", ...sp.map((_, i) => `fan-spreader-${i + 1}`)]);
+      sp.forEach((s, i) => {
+        const tag = `fan ${fan} ${bands.split(";").length} bands spreader ${i + 1}`;
+        expect(s.Y, tag).toBeGreaterThanOrEqual(gap / 2 + 35 + 15 - 1e-9);
+        expect(buildPart(M, specs[i + 1], tag).ok, tag).toBe(true);
+        const part = specs[i + 1].build(M)[0];
+        for (const h of s.holes) {
+          expect(h.u[1], tag).toBeGreaterThanOrEqual(0.5);
+          const k = 3 / h.u[1];
+          expect(inside(part, along(M, h.p, h.u, -k, k, wireD)), tag).toBeLessThan(1e-3);
+          expect(inside(part, along(M, h.p, h.u, -1.5, 1.5, wireD + CLEAR + 2)), tag).toBeGreaterThan(0.1);
+        }
+      });
+    }
+  }, 120000);
   it("a single band has no spreaders", () => {
     const { p, d } = setup("fandipole", { bands: "14e6-14.35e6" });
     expect(partsFor("fandipole", p, d).map((s) => s.id)).toEqual(["fan-centre"]);

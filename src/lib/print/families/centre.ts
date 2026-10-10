@@ -59,9 +59,11 @@ export function centreBlock(M: ManifoldToplevel, arms: { start: V3; dir: V3 }[],
     rod(M, [-w, 0, zEye], [w, 0, zEye], 6),                                          // hanging eye
     ...[-14, -24].flatMap((z) => [-7, 7].map((y) => zipSlot(M, [0, y, z], 0, 2, w + 2))),   // coax zip ties
   ];
-  // Two subtractions: one union of many near-parallel channels with the other cuts drops part of a channel in manifold
-  // (fan 20°, 5 bands left 1.9 mm³ of plastic inside a wire channel).
-  return M.Manifold.union([hub, ...lugs]).subtract(M.Manifold.union(channels)).subtract(M.Manifold.union(cuts));
+  // Subtract one cut at a time: manifold's batch union dropped volume (a wire channel was partly refilled) when a
+  // disjoint solid was included in it (fan 20°, 5 bands: 1.9 mm³ of plastic inside a channel).
+  let body = M.Manifold.union([hub, ...lugs]);
+  for (const c of [...channels, ...cuts]) body = body.subtract(c);
+  return body;
 }
 
 export function dipoleParts(d: Design): PartSpec[] {
@@ -109,16 +111,22 @@ export const FAN_HOWTO = {
   ],
 };
 
-/** Spreader positions along the +y leg: Y in mm, and where each wire that reaches past Y crosses the plane y = Y. Placed
- *  where the wire spread still fits the bed: Ymax = min(⅔ of the longest arm, spread 150 mm); at Ymax/2 and Ymax. */
+/** Spreader positions along the +y leg: Y in mm, and where each wire that reaches past Y crosses the plane y = Y.
+ *  Only wires running mostly along y (|u_y| >= 0.5) are held; the spread is measured from the feed ends. Positions lie
+ *  between Ymin (clear of the centre block) and Ymax = min(2/3 of the longest reach, where the spread reaches 150 mm). */
 export function fanSpreaders(d: Design): { Y: number; holes: { p: V3; u: V3 }[] }[] {
   const wires = d.wires.filter((w) => (w.group === "driven" || w.group === "parasitic") && !w.drawOnly && !w.necOnly && w.b[1] > 0)
-    .map((w) => ({ a: mmv(w.a), b: mmv(w.b) }));
+    .map((w) => ({ a: mmv(w.a), b: mmv(w.b) })).filter((w) => unit(sub(w.b, w.a))[1] >= 0.5);
+  if (wires.length < 2) return [];
+  const half = Math.min(...wires.map((w) => w.a[1]));
   const tans = wires.map((w) => (w.b[2] - w.a[2]) / (w.b[1] - w.a[1]));
   const spread = Math.max(...tans) - Math.min(...tans);
   if (spread < 1e-9) return [];
-  const Ymax = Math.min((2 / 3) * Math.max(...wires.map((w) => w.b[1])), 150 / spread);
-  return [Ymax / 2, Ymax].map((Y) => ({
+  const Ymin = half + LUG + 15;
+  const Ymax = Math.min((2 / 3) * Math.max(...wires.map((w) => w.b[1])), half + 150 / spread);
+  if (Ymax < Ymin) return [];
+  const ys = Ymax - (Ymin + Ymax) / 2 < 20 ? [Ymax] : [(Ymin + Ymax) / 2, Ymax];
+  return ys.map((Y) => ({
     Y,
     holes: wires.filter((w) => w.b[1] > Y + 10).map((w) => {
       const t = (Y - w.a[1]) / (w.b[1] - w.a[1]);
@@ -129,7 +137,7 @@ export function fanSpreaders(d: Design): { Y: number; holes: { p: V3; u: V3 }[] 
 
 export function fanParts(d: Design): PartSpec[] {
   const { wireD, gap, arms } = dipoleArms(d, ["driven", "parasitic"]);
-  const ch = wireD + CLEAR, m = ch / 2 + WALL + 2;
+  const r = (wireD + CLEAR) / 2, m0 = r + WALL + 2;
   const centre: PartSpec = {
     id: "fan-centre", title: FAN_STRINGS[0], use: "holder", qty: 1,
     purpose: msg(FAN_STRINGS[2], arms.length / 2, { len: gap / 1000 }), howTo: FAN_HOWTO.centre.map((s) => msg(s)),
@@ -140,8 +148,17 @@ export function fanParts(d: Design): PartSpec[] {
     purpose: msg(FAN_STRINGS[3], { len: s.Y / 1000 }), howTo: FAN_HOWTO.spreader.map((x) => msg(x)),
     build: (M) => {
       const zs = s.holes.map((h) => h.p[2]);
-      const plate = box(M, [-m, s.Y - 2, Math.min(...zs) - m], [m, s.Y + 2, Math.max(...zs) + m]);
-      return [plate.subtract(M.Manifold.union(s.holes.map((h) => channel(M, sub(h.p, scale(h.u, 6)), add(h.p, scale(h.u, 6)), wireD))))];
+      // z extent of a hole inside the 4 mm slab: ellipse semi-axis r/|u_y| plus the drift of the axis over ±2 mm
+      const ext = Math.max(...s.holes.map((h) => (r + 2 * Math.abs(h.u[2])) / h.u[1]));
+      const m = Math.max(m0, ext + WALL);
+      const plate = box(M, [-m0, s.Y - 2, Math.min(...zs) - m], [m0, s.Y + 2, Math.max(...zs) + m]);
+      const cuts = s.holes.map((h) => {
+        const hl = (2 + r * Math.abs(h.u[2])) / h.u[1] + 1;
+        return channel(M, sub(h.p, scale(h.u, hl)), add(h.p, scale(h.u, hl)), wireD);
+      });
+      let part = plate;
+      for (const c of cuts) part = part.subtract(c);
+      return [part];
     },
   }))];
 }
