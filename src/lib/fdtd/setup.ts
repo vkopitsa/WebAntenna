@@ -1,7 +1,7 @@
 // FDTD problem setup shared by the CPU reference and the WebGPU engine.
 // Yee grid on mesh lines x[0..Nx-1] etc. Ex(i,j,k) is the edge (i→i+1, j, k); Hx(i,j,k) the face at x[i]
 // spanning j..j+1, k..k+1 (and cyclic). All arrays are Nx·Ny·Nz, index = (k·Ny + j)·Nx + i.
-import type { Pcb } from "../pcb";
+import { inPoly, type Pcb } from "../pcb";
 import { buildMesh, excitation, type FdtdMesh } from "./mesh";
 
 export const C0 = 299792458, MU0 = 4e-7 * Math.PI, EPS0 = 1 / (MU0 * C0 * C0), ETA0 = MU0 * C0;
@@ -74,6 +74,17 @@ export function setup(p: Pcb, fmin: number, fmax: number): Setup {
       const n = (k * ny + j) * nx + i;
       if (i < nx - 1) { const xm = (x[i] + x[i + 1]) / 2; if (xm >= q.x0 && xm <= q.x1 && y[j] >= q.y0 - 1e-12 && y[j] <= q.y1 + 1e-12) { ca[0][n] = 0; cb[0][n] = 0; } }
       if (j < ny - 1) { const ym = (y[j] + y[j + 1]) / 2; if (ym >= q.y0 && ym <= q.y1 && x[i] >= q.x0 - 1e-12 && x[i] <= q.x1 + 1e-12) { ca[1][n] = 0; cb[1][n] = 0; } }
+    }
+  }
+  // Polygons: the same rule with the midpoint inside the polygon (a staircase of the diagonal edges).
+  for (const q of p.polys ?? []) {
+    const zc = q.layer === "top" ? p.h : 0;
+    const k = z.findIndex((v) => near(v, zc));
+    if (k < 0) throw new Error("copper plane not on a mesh line");
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+      const n = (k * ny + j) * nx + i;
+      if (i < nx - 1 && inPoly(q.pts, (x[i] + x[i + 1]) / 2, y[j])) { ca[0][n] = 0; cb[0][n] = 0; }
+      if (j < ny - 1 && inPoly(q.pts, x[i], (y[j] + y[j + 1]) / 2)) { ca[1][n] = 0; cb[1][n] = 0; }
     }
   }
   // Lumped port: edges of the port component inside the port box.

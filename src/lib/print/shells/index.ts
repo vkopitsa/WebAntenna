@@ -57,6 +57,8 @@ export const SHELL_HOWTO = {
   ],
   /** Ground plane only, before the sealing step. */
   gpMast: ["The mast must end at the top of the hub's side block: the hood sits over the plate above it."],
+  /** Cloverleaf radome, before the last step. */
+  clover: ["Cloverleaf: push the connector down through the hole in the bottom piece before gluing the pieces above, and fix it there with a drop of glue."],
   /** Dipole and fan dipole only, before the sealing step. */
   halyard: ["Pass the support rope through the hole in the top before tying it to the eye."],
 };
@@ -69,6 +71,8 @@ const JACK_H = 25;
 export const GP_MAST_TOP = -PLATE;    // the hub plate's underside: the hood's bottom edge and the highest the mast may reach
 /** Coax hole in the floor of the helix connector cover. */
 export const JACK_HOLE = 8;
+/** Hole in the cloverleaf radome's bottom plate: an SMA plug's coupling nut (8 mm hex) passes through. */
+const CLOVER_JACK = 9.5;
 const JACK = 30;                      // the cover's cavity: a 30 mm cube under the reflector (plus the gap)
 /** Families whose feed part is built in the antenna's own frame, at the feed: a full box would cut through it, so they
  *  always get the feed hood. */
@@ -89,6 +93,11 @@ function domePlan(defId: string, p: Params, d: Design, s: Style): DomeOpts | nul
   if (defId === "helix") {
     const g = helixGeometry(d), fr = g.R + g.wireD / 2 + 8;
     return { r: g.R + g.wireD / 2 + gap, z0: 0, z1: Math.max(g.H, g.top + g.wireD / 2) + gap, wall, base: { kind: "flange", pocketR: fr + CLEAR, pocketH: 2 + CLEAR, ringR: fr + 10, holeR: fr + 5 }, drain: s === "outdoor" };
+  }
+  if (defId === "cloverleaf") {
+    // the "mushroom": a round radome over the leaves, the connector through the bottom plate
+    const e = envelope(d), r = Math.max(...[e.lo[0], e.lo[1], e.hi[0], e.hi[1]].map(Math.abs)) + gap;
+    return { r, z0: e.lo[2] - gap, z1: e.hi[2] + gap, wall, base: { kind: "mast", mastD: CLOVER_JACK }, drain: s === "outdoor" };
   }
   if (defId === "discone") {
     const g = disconeGeometry(d), e = envelope(d);
@@ -197,6 +206,7 @@ export function hubHood(M: ManifoldToplevel, defId: string, p: Params, d: Design
 /** How-to steps: the hood gets the GP mast note or the dipole halyard step before its sealing step. */
 function howTo(defId: string, kind: Exclude<ShellPlan["kind"], "jack">): string[] {
   const st = SHELL_HOWTO[kind];
+  if (kind === "dome" && defId === "cloverleaf") return [...st.slice(0, -1), ...SHELL_HOWTO.clover, st[st.length - 1]];
   if (kind !== "feed") return st;
   const extra = defId === "groundplane" ? SHELL_HOWTO.gpMast : defId === "dipole" || defId === "fandipole" ? SHELL_HOWTO.halyard : [];
   return [...st.slice(0, -1), ...extra, st[st.length - 1]];

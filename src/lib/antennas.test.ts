@@ -3,6 +3,7 @@ import { ANTENNAS, ANTENNA_BY_ID } from "./antennas";
 import { moxonLambda } from "./antennas/moxon";
 import { patchDesign } from "./antennas/patch";
 import { helixEstimates } from "./antennas/helix";
+import { leafK } from "./antennas/cloverleaf";
 import { yagiGainDbi } from "./antennas/yagi";
 import { endEffect, microstripWidth, microstripZ0, wavelength } from "./rf";
 import { dist } from "./geom";
@@ -131,7 +132,7 @@ describe("helix (Kraus)", () => {
 
 describe("connectivity", () => {
   it("every NEC wire touches another wire at one end at least (no floating driven parts)", () => {
-    for (const id of ["dipole", "fandipole", "groundplane", "jpole", "moxon", "quad", "biquad", "helix", "discone"]) {
+    for (const id of ["dipole", "fandipole", "groundplane", "jpole", "moxon", "quad", "biquad", "helix", "cloverleaf", "discone"]) {
       const d = ANTENNA_BY_ID[id].build(ANTENNA_BY_ID[id].defaults);
       const ws = d.wires.filter((w) => !w.drawOnly);
       const ends = ws.flatMap((w) => [w.a, w.b]);
@@ -187,5 +188,53 @@ describe("bands", () => {
     const h = ANTENNA_BY_ID.helix;
     expect(h.build(h.defaults).notes.some((n) => n.startsWith("Warning"))).toBe(false);
     expect(h.build({ ...h.defaults, bands: "1575e6-1576e6;2400e6-2480e6" }).notes.some((n) => n.startsWith("Warning"))).toBe(true);
+  });
+});
+
+describe("cloverleaf", () => {
+  it("leaves of wire length K·λ, legs L/4, every leaf from the pin (top) to the shield (bottom)", () => {
+    const def = ANTENNA_BY_ID.cloverleaf;
+    for (const leaves of ["3", "4"]) {
+      const d = def.build({ ...def.defaults, leaves });
+      const L = d.dims.find((x) => x.key === "L")!.value, lam = wavelength(5.8e9);
+      expect(L / lam).toBeGreaterThan(1.05); expect(L / lam).toBeLessThan(1.2);
+      // the cut length is the wire actually modelled: every driven wire, per leaf
+      const total = d.wires.filter((w) => w.group === "driven").reduce((s, w) => s + dist(w.a, w.b), 0);
+      expect(total / +leaves).toBeCloseTo(L, 9);
+      const feed = d.wires[0];
+      const atPin = d.wires.filter((w) => w.group === "driven" && dist(w.a, feed.b) < 1e-12).length;
+      const atShield = d.wires.filter((w) => w.group === "driven" && dist(w.b, feed.a) < 1e-12).length;
+      expect([atPin, atShield]).toEqual([+leaves, +leaves]);
+    }
+  });
+  it("leafK interpolates the fitted table and clamps outside it", () => {
+    expect(leafK(3, 45, 0.02)).toBeCloseTo(1.138, 6);
+    expect(leafK(4, 30, 0.005)).toBeCloseTo(1.006, 6);
+    expect(leafK(3, 42.5, 0.02)).toBeCloseTo((1.116 + 1.138) / 2, 6);
+    expect(leafK(3, 10, 1)).toBeCloseTo(1.052, 6);
+  });
+  it("LHCP is the mirror image of RHCP", () => {
+    const def = ANTENNA_BY_ID.cloverleaf;
+    const r = def.build(def.defaults), l = def.build({ ...def.defaults, hand: "lhcp" });
+    r.wires.forEach((w, i) => {
+      for (const k of ["a", "b"] as const) { expect(l.wires[i][k][0]).toBe(w[k][0]); expect(l.wires[i][k][1]).toBeCloseTo(-w[k][1], 12); expect(l.wires[i][k][2]).toBe(w[k][2]); }
+    });
+  });
+});
+
+describe("printed V dipole", () => {
+  it("length along the arms follows the FDTD resonances, and the V folds the tips together", () => {
+    const def = ANTENNA_BY_ID.printedvdipole;
+    const straight = def.build({ ...def.defaults, vang: 180 }), v90 = def.build({ ...def.defaults, vang: 90 });
+    const L = (d: typeof v90) => d.dims.find((x) => x.key === "L")!.value;
+    // FDTD with equal lengths: 180° resonated at 1.237 GHz, 90° at 1.212 GHz
+    expect(L(v90) / L(straight)).toBeCloseTo(1237 / 1212, 9);
+    expect(L(straight)).toBeCloseTo(ANTENNA_BY_ID.printeddipole.build({ ...ANTENNA_BY_ID.printeddipole.defaults, bands: "1.15e9-1.3e9", w: 3e-3 }).dims.find((x) => x.key === "L")!.value * 1225 / 1237, 9);
+    const span = (d: typeof v90) => d.dims.find((x) => x.label === "Span between the tips")!.value;
+    expect(span(v90)).toBeLessThan(span(straight) * 0.8);
+    // the arms really are at the requested angle
+    const [a, b] = v90.pcb!.polys!;
+    const dir = (q: typeof a) => { const [p0, p1] = q.pts; return Math.atan2(p1[1] - p0[1], p1[0] - p0[0]); };
+    expect(Math.abs(dir(a) - dir(b)) * 180 / Math.PI).toBeCloseTo(90, 6);
   });
 });

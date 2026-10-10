@@ -31,12 +31,13 @@ src/lib/                 NO DOM, NO React, NO i18n. Runs in Node (tests) and in 
   rf.ts geom.ts units.ts end-effect K, microstrip, Bessel, Simpson; 3D helpers; SI formatting
   antennas/*.ts          one builder per antenna; index.ts registry + withBands() (band table, single-band note)
   antennas/common.ts     BANDS / DIAM params, band(p) → { bands, f1, f2, f, sweeps }
-  mom.ts                 thin-wire MoM (MININEC): buildMesh, solve, gainFn
+  mom.ts                 thin-wire MoM (MININEC): buildMesh, solve, gainFn, cpGainFn (RHCP/LHCP, checked on the helix)
   nearfield.ts           Radiation view: near field of the MoM currents on a plane (short-dipole sum, full near terms),
                          fieldScale (from pixels ≥ λ/2 from the wires) and per-frame shade() through a colour LUT
   simulate.ts            sweep + far-field sampling (cuts, 3D grid, max/F-B/HPBW), patch & collinear analytic models, s11, toS1P
   export.ts              NEC-2 (λ/80, tapered GC next to a short feed gap, FR+RP per band), FreeCAD macro, CSV, JSON
-  pcb.ts                 Pcb model: board, copper rectangles (top/bottom), lumped port; pcbPlates() for drawing/CAD
+  pcb.ts                 Pcb model: board, copper rectangles + optional polygons (diagonal traces), lumped port; pcbPlates();
+                         copperBoxes() for extents/keep-outs (polygons by bounding box)
   openems.ts             toOpenEMS(): full FDTD script (mesh, run, S11/Zin/resonances, full-sphere NF2FF, plots, JSON)
   importers.ts           parseOpenEMS (the script's _results.json) and parseTouchstone (.s1p) for the Simulation tab
   antennas/pcb*.ts ifa.ts meander.ts printeddipole.ts pcbloop.ts   printed antennas (openEMS-calibrated formulas)

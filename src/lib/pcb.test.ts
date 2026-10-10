@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { ANTENNA_BY_ID } from "./antennas";
 import { toOpenEMS } from "./openems";
+import { gerberCopper, toDXF } from "./fab";
+import { inPoly } from "./pcb";
+import { setup } from "./fdtd/setup";
 import { loopModel } from "./antennas/pcbloop";
 import { meanderRects } from "./antennas/meander";
 import { printedEeff } from "./antennas/pcbmonopole";
@@ -8,7 +11,7 @@ import { ifaEeff } from "./antennas/ifa";
 import { parseOpenEMS, parseTouchstone } from "./importers";
 import { simulate, toS1P } from "./simulate";
 
-const PCB = ["pcbmonopole", "meander", "ifa", "printeddipole", "patch"];
+const PCB = ["pcbmonopole", "meander", "ifa", "printeddipole", "printedvdipole", "patch"];
 
 describe("printed antennas", () => {
   it("every printed type has a board, copper inside the board and a port", () => {
@@ -20,7 +23,8 @@ describe("printed antennas", () => {
       for (const q of p.rects) {
         expect(q.x0 >= p.board.x0 - 1e-9 && q.x1 <= p.board.x1 + 1e-9 && q.y0 >= p.board.y0 - 1e-9 && q.y1 <= p.board.y1 + 1e-9, `${id} ${q.label}`).toBe(true);
       }
-      expect(d.plates.length).toBe(p.rects.length + 1);
+      for (const q of p.polys ?? []) for (const [x, y] of q.pts) expect(x >= p.board.x0 && x <= p.board.x1 && y >= p.board.y0 && y <= p.board.y1, `${id} ${q.label}`).toBe(true);
+      expect(d.plates.length).toBe(p.rects.length + (p.polys?.length ?? 0) + 1);
     }
   });
   it("εeff fit reproduces the openEMS calibration points", () => {
@@ -93,5 +97,58 @@ describe("importers", () => {
     expect(r.z[1]).toEqual({ f: 2, r: 60, x: 5 });
     expect(r.pattern!.cuts.map((c) => c.dbi[10])).toEqual([3, 1, 2]);
     expect(r.pattern!.max.dbi).toBe(3.1);
+  });
+});
+
+describe("polygon copper (printed V dipole)", () => {
+  const def = ANTENNA_BY_ID.printedvdipole, d = def.build(def.defaults), p = d.pcb!;
+  it("Gerber gets one region per rectangle and polygon, DXF one polyline each", () => {
+    const top = gerberCopper(p, "top");
+    expect(top.match(/G36\*/g)!.length).toBe(p.rects.length + p.polys!.length);
+    const dxf = toDXF(p);
+    expect(dxf.split("\nTOP\n").length - 1).toBeGreaterThanOrEqual(p.rects.length + p.polys!.length);
+  });
+  it("openEMS script lists the polygons and adds them as metal", () => {
+    const s = toOpenEMS(def, d);
+    expect(s).toContain("copper_polys = [");
+    expect(s).toContain("AddPolygon(");
+    expect(s.match(/# Arm [+−]/g)!.length).toBe(4);
+  });
+  it("FDTD staircases the polygon: PEC edges follow the diagonal arm", () => {
+    const s = setup(p, 1e9, 1.5e9), { x, y, z } = s.mesh, nx = x.length, ny = y.length;
+    const k = z.findIndex((v) => Math.abs(v - p.h) < 1e-9);
+    const pec = (i: number, j: number) => s.cb[0][(k * ny + j) * nx + i] === 0;
+    let inside = 0, wrong = 0;
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx - 1; i++) {
+      const xm = (x[i] + x[i + 1]) / 2, want = p.polys!.some((q) => inPoly(q.pts, xm, y[j])) || p.rects.some((q) => xm >= q.x0 && xm <= q.x1 && y[j] >= q.y0 - 1e-12 && y[j] <= q.y1 + 1e-12);
+      if (want) inside++;
+      if (want !== pec(i, j)) wrong++;
+    }
+    expect(inside).toBeGreaterThan(50);
+    expect(wrong).toBe(0);
+    // a point on the arm's centre line, far from the stub, is copper; its mirror across the y axis is not
+    const [a] = p.polys!, c: [number, number] = [(a.pts[1][0] + a.pts[2][0]) / 2 * 0.8, (a.pts[1][1] + a.pts[2][1]) / 2 * 0.8];
+    expect(inPoly(a.pts, c[0], c[1])).toBe(true);
+    expect(inPoly(a.pts, -c[0], c[1])).toBe(false);
+  });
+  it("the staircased arm is one connected conductor from the feed stub to the tip", () => {
+    const s = setup(p, 0.7 * d.f, 1.3 * d.f), { x, y, z } = s.mesh, nx = x.length, ny = y.length;
+    const k = z.findIndex((v) => Math.abs(v - p.h) < 1e-9), id = (i: number, j: number) => (k * ny + j) * nx + i;
+    const near = (arr: Float64Array, v: number) => arr.reduce((b, t, i) => (Math.abs(t - v) < Math.abs(arr[b] - v) ? i : b), 0);
+    for (const q of p.polys!) {
+      const sgn = q.label === "Arm +" ? 1 : -1, stub = p.rects.find((r) => r.label === q.label)!;
+      const start = [near(x, 0), near(y, sgn > 0 ? stub.y1 : stub.y0)];
+      const tip = [(q.pts[1][0] + q.pts[2][0]) / 2, (q.pts[1][1] + q.pts[2][1]) / 2];
+      const seen = new Set([start[0] + start[1] * nx]), todo = [start];
+      while (todo.length) {
+        const [i, j] = todo.pop()!;
+        const go = (a: number, b: number, ok: boolean) => { if (ok && !seen.has(a + b * nx)) { seen.add(a + b * nx); todo.push([a, b]); } };
+        go(i + 1, j, i < nx - 1 && s.cb[0][id(i, j)] === 0); go(i - 1, j, i > 0 && s.cb[0][id(i - 1, j)] === 0);
+        go(i, j + 1, j < ny - 1 && s.cb[1][id(i, j)] === 0); go(i, j - 1, j > 0 && s.cb[1][id(i, j - 1)] === 0);
+      }
+      // the farthest reached node is within a cell of the arm's tip
+      const far = Math.min(...[...seen].map((n) => Math.hypot(x[n % nx] - tip[0], y[Math.floor(n / nx)] - tip[1])));
+      expect(far, q.label).toBeLessThan(3e-3);
+    }
   });
 });

@@ -52,6 +52,7 @@ function knobs(id: string, o: SynthOptions): Knob[] {
     case "biquad": return [trim, { key: "sp", lo: 0.08, hi: 0.2 }];
     case "yagi": return [trim];
     case "helix": return [trim, { key: "pitch", lo: 11, hi: 15 }];
+    case "cloverleaf": return [trim, { key: "tilt", lo: 35, hi: 55 }];
     case "discone": return [trim, { key: "half", lo: 25, hi: 40 }];
     case "fandipole": return [{ key: "fan", lo: 10, hi: 45 }];
     case "patch": return [{ key: "h", lo: 0.4e-3, hi: Math.min(3.2e-3, 0.06 * wavelength(centre(o.bands[0])) / Math.sqrt(o.er)) }];

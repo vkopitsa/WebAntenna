@@ -6,7 +6,7 @@
 import type { AntennaDef, Design, Params, Vec3 } from "./types";
 import { A4, type Page, type Prim, toPDF, toSVG, wrap } from "./drawing";
 import { buildPack, en, pieces, type Msg } from "./build";
-import { isProbe, type Pcb } from "./pcb";
+import { copperBoxes, isProbe, type Pcb } from "./pcb";
 import { PROBE_CLEAR, PROBE_DRILL } from "./fab";
 
 /** A drawing in mm, origin at its own top-left. */
@@ -26,6 +26,7 @@ function pcbDrawing(p: Pcb, layer: "top" | "bottom", mirror: boolean, name: stri
     const x0 = Math.min(X(q.x0), X(q.x1)), x1 = Math.max(X(q.x0), X(q.x1));
     prims.push({ k: "rect", x: x0, y: Y(q.y1), w: x1 - x0, h: (q.y1 - q.y0) * 1e3, fill: true });
   }
+  for (const q of (p.polys ?? []).filter((r) => r.layer === layer)) prims.push({ k: "poly", pts: q.pts.map(([x, y]) => [X(x), Y(y)]), fill: true, closed: true });
   // crop marks at the board corners
   for (const [cx, cy, sx, sy] of [[P, P, -1, -1], [P + W, P, 1, -1], [P, P + H, -1, 1], [P + W, P + H, 1, 1]]) {
     prims.push({ k: "line", x1: cx + sx * 1.5, y1: cy, x2: cx + sx * 6, y2: cy, w: 0.15 }, { k: "line", x1: cx, y1: cy + sy * 1.5, x2: cx, y2: cy + sy * 6, w: 0.15 });
@@ -261,7 +262,7 @@ export function templatePages(def: AntennaDef, d: Design, mirror: boolean): Page
   const name = def.name;
   if (d.pcb) {
     const ds = [pcbDrawing(d.pcb, "top", mirror, name)];
-    if (d.pcb.rects.some((q) => q.layer === "bottom")) ds.push(pcbDrawing(d.pcb, "bottom", mirror, name));
+    if (copperBoxes(d.pcb).some((q) => q.layer === "bottom")) ds.push(pcbDrawing(d.pcb, "bottom", mirror, name));
     return layout(ds, `${name}: 1:1 PCB template`, "Black = copper. For toner transfer or photo etching use the mirrored option. Check the scale bar before you etch.");
   }
   const bm = boomMarks(d);
@@ -277,7 +278,7 @@ export function templateSVG(def: AntennaDef, d: Design, mirror: boolean): string
   const ds: Drawing[] = [];
   if (d.pcb) {
     ds.push(pcbDrawing(d.pcb, "top", mirror, def.name));
-    if (d.pcb.rects.some((q) => q.layer === "bottom")) ds.push(pcbDrawing(d.pcb, "bottom", mirror, def.name));
+    if (copperBoxes(d.pcb).some((q) => q.layer === "bottom")) ds.push(pcbDrawing(d.pcb, "bottom", mirror, def.name));
   } else {
     const bm = boomMarks(d);
     if (bm) {

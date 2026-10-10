@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ANTENNA_BY_ID } from "./antennas";
-import { buildMesh, gainFn, solve } from "./mom";
+import { buildMesh, cpGainFn, gainFn, solve } from "./mom";
 import { s11, simulate, toS1P } from "./simulate";
 import { wavelength } from "./rf";
 
@@ -66,4 +66,33 @@ describe("simulate()", () => {
     expect(Number(t[2].split(" ")[1])).toBeCloseTo(0, 9);
     expect(Number(t[3].split(" ")[1])).toBeCloseTo(1 / 3, 6);
   });
+});
+
+describe("circular polarisation (cpGainFn)", () => {
+  it("a right-hand helix radiates RHCP along its axis, the left-hand one LHCP; RHCP + LHCP = total", () => {
+    const helix = (hand: string) => { const def = ANTENNA_BY_ID.helix, d = def.build({ ...def.defaults, hand }); return { s: solve(buildMesh(d, wavelength(d.f), 30, 1500)!, d.f)! }; };
+    const r = helix("rhcp"), l = helix("lhcp");
+    const cr = cpGainFn(r.s)(0.01, 0), cl = cpGainFn(l.s)(0.01, 0);
+    expect(cr.rhcp - cr.lhcp).toBeGreaterThan(20);
+    expect(cl.lhcp - cl.rhcp).toBeGreaterThan(20);
+    const tot = gainFn(r.s)(0.01, 0);
+    expect(10 * Math.log10(10 ** (cr.rhcp / 10) + 10 ** (cr.lhcp / 10))).toBeCloseTo(tot, 6);
+  }, 60_000);
+  it("cloverleaf: matched to 50 Ω across the FPV band, omni RHCP with the cross-polar well down (MoM ≈ NEC-2)", () => {
+    const def = ANTENNA_BY_ID.cloverleaf;
+    for (const [leaves, hand] of [["3", "rhcp"], ["4", "lhcp"]]) {
+      const d = def.build({ ...def.defaults, leaves, hand });
+      const m = buildMesh(d, wavelength(d.f), 40, 1500)!;
+      for (const f of [5.65e9, 5.8e9, 5.95e9]) {
+        const z = solve(m, f)!.z, g = Math.hypot(z[0] - 50, z[1]) / Math.hypot(z[0] + 50, z[1]);
+        expect((1 + g) / (1 - g), `${leaves} ${f}`).toBeLessThan(1.5);
+      }
+      const cp = cpGainFn(solve(m, d.f)!);
+      for (const phi of [0, 1, 2, 3, 4, 5]) {
+        const q = cp((65 * Math.PI) / 180, phi), co = hand === "rhcp" ? q.rhcp : q.lhcp, x = hand === "rhcp" ? q.lhcp : q.rhcp;
+        expect(co, `${leaves} φ=${phi}`).toBeGreaterThan(-1.5);
+        expect(co - x, `${leaves} φ=${phi}`).toBeGreaterThan(5);
+      }
+    }
+  }, 60_000);
 });

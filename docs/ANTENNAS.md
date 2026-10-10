@@ -22,6 +22,7 @@ band plans. A band table is added to every design.
 - **Fan (parallel) dipole:** one element per band.
 - **Discone:** broadband. The cone is sized for the lowest band ÷ 1.25, and the app warns if the top band is above 8 × the cut-off.
 - **Helix:** checks that every band stays in the axial mode, 0.75 < C/λ < 1.33.
+- **Cloverleaf:** single band; the leaves are broadband enough for the 4.9–6.2 GHz FPV range (MoM: SWR 2.2 at 4.9 GHz, 1.26 at the 5.55 GHz centre, 1.8 at 6.2 GHz; the 3.1–3.5 GHz version with Ø1.5 mm wire 1.64 / 1.24 / 1.5).
 - **Patch:** warns when the band is wider than the Jackson bandwidth.
 
 ## Per antenna
@@ -39,6 +40,8 @@ band plans. A band table is added to every design.
 | **Quad (2 el)** | driven perimeter 1.022 λ (1005/f ft), reflector 1.047 λ (1030/f ft) | ARRL. NEC-2: 52 − j6 Ω, 7.8 dBi at 0.15 λ |
 | **Biquad** | side λ/4, spacing ≈ 0.122 λ, reflector ≈ 1 λ | Common 2.4 GHz builds. NEC-2: 62 Ω, 10.3 dBi |
 | **Helix (axial mode)** | C = Cλ·λ, S = C tan α; D = 15 Cλ² N Sλ, HPBW = 52 / (Cλ √(N Sλ)), Z = 140 Cλ, AR = (2N+1)/2N | Kraus, *Antennas*. NEC-2: 143 Ω, 10.9 dBi for 8 turns (Kraus D says 14.4, hence the note) |
+| **Circular polarisation (MoM)** | `cpGainFn`: RHCP = (Eθ + jEφ)/√2, LHCP = (Eθ − jEφ)/√2 (e^{jωt}, IEEE sense) | The right-hand helix gives RHCP 11.4 dBic on its axis, LHCP −14 dBic; the left-hand one the reverse |
+| **Cloverleaf (FPV)** | 3 or 4 leaves on a coax end, all in parallel from the pin (z = +g/2) to the shield (z = −g/2), g = max(1.5 d, 0.02 λ). Each leaf: two legs of L/4 at ±45° from its radial line, then an L/2 arc through the leg tips, in a plane tilted by α about the radial line (a propeller blade; mirror image for LHCP). L = K(leaves, α, d/λ)·λ from a table fitted for the lowest SWR at 50 Ω | Build guides: 3 loops at 120°, tilted 45°, wire 307022/f[MHz] mm ≈ 1.025 λ bent λ/4 from each end. The low-Q loop pair at the hub never reaches X = 0 for thick wire, so K is fitted on \|Γ\|, not X. Built-in MoM (40/λ, converged 20–80/λ) vs NEC-2 (necpp) on the same wires at 5.8 GHz, K = 1: 47 − j32 vs 52 − j31 Ω (3 leaves), 53 − j28 vs 56 − j24 Ω (4 leaves). Default (3 leaves, 45°, Ø1 mm, 5.65–5.95 GHz): K = 1.13, 61 − j8 Ω, SWR 1.26 at the centre and 1.37 at the band edges, RHCP 0.9 dBic peak 25° off the horizon, cross-polar −8 dB (4 leaves −12 dB) |
 | **Patch** | W = c/2f √(2/(εr+1)); εeff; ΔL (Hammerstad); L = c/(2f√εeff) − 2ΔL; Rin = 1/2(G1+G12) by numeric integration; inset y0 = L/π · acos √(Z0/Rin); BW = 3.77 (εr−1)/εr² · W/L · h/λ | Balanis, *Antenna Theory* ch. 14 (example 14.1 reproduced in tests); bandwidth: Jackson & Alexopoulos |
 | **Discone** | cone slant λ/4 at f_low / 1.25, disc Ø 0.7 × λ/4, half-angle 30°, gap max(3d, 0.0025 λ) | [Wikipedia: Discone](https://en.wikipedia.org/wiki/Discone_antenna). NEC-2 rod model: SWR ≲ 2 from ≈ 1.25 f to 8 f |
 
@@ -55,6 +58,7 @@ The **design formulas were calibrated with openEMS (FDTD)** using the scripts th
 | **PCB trace monopole** | L = λ/4 / √εeff with εeff = 1 + q(εr − 1), **q = 0.048 √(h/w) εr^0.47** | Resonance with L = 22.6 mm: FR-4 1.6 mm 2.80 GHz (q 0.121); FR-4 0.8 mm 2.94 GHz (q 0.082); εr 10.2 1.27 mm (L 16.9 mm) 2.82 GHz (q 0.16). Z ≈ 69 Ω, directivity 3.0 dBi, efficiency 98 % |
 | **Printed IFA** | f · (La + 0.225 H) = c / (4 √εIFA), εIFA = 1 + 0.2745 (h/mm)^0.133 εr^0.47 (εr − 1); 50 Ω tap S = 2.5 mm √(H/5 mm) | FR-4 1.6 mm: H = 5 mm → 2.32 GHz, 48 − j2 Ω (S11 −31 dB); H = 8 mm → 2.65 GHz, 82 Ω with S = 4 mm. RO4003C 0.8 mm, H = 5 mm → 2.52 GHz, 59 + j17 Ω. H = 3 mm could not be matched with S = 0.5 H (R < 25 Ω), so the model is limited to H ≈ 4–10 mm |
 | **Printed dipole** | L = 0.855 · λ/2 / √εeff(monopole fit) | K = 0.96 resonated at 2.174 instead of 2.442 GHz, so K = 0.855. Verified: FR-4 2.411 GHz, RO4003C 2.445 GHz |
+| **Printed V dipole** | the printed dipole with its arms folded by ψ = (180° − angle)/2 off the dipole axis: L = K_V · λ/2 / √εeff along the arms, square w × w stubs at the port, then diagonal strips (copper polygons). L is divided by the FDTD resonance ratio at the angle (interpolated). Port 50 Ω | In-browser FDTD (CPU, FR-4 1.6 mm, w = 3 mm, 1.15–1.3 GHz, K = 0.855 for every angle): 180° resonance 1.237 GHz (+1.0 %), 54 Ω; 120° 1.195 GHz (−2.4 %), 41 Ω; 90° 1.212 GHz (−1.1 %), 31 Ω; efficiency 96–98 %. Folding lowers R, so the default is 120° (SWR ≈ 1.2 on 50 Ω), not the 90° the name suggests. First try: polygons with mesh lines only at their vertices left 4.5 mm cells across the 3 mm diagonal strip, the staircase broke into islands and the 90° V "resonated" at 1.51 GHz with 15 Ω; the mesh now fills polygon boxes every min-feature/2 (test: the staircase connects the stub to the tip) |
 | **Meander monopole** | total trace = 1.215 × the straight monopole, folded into runs of width W and pitch P | FR-4 1.6 mm, 2.44 GHz, W 8 mm, P 3 mm: 1.25 gave 2.373 GHz (S11 −20 dB, 41 Ω), so 1.215. One calibration point only |
 | **PCB small loop** | Grover inductance (ρ = 0.2235 (w + t)), Rr = 31171 (A/λ²)², Rloss = perimeter/(2w) · Rs, capacitor ESR = XL/Q; L-network Cs (series) + Cp (shunt) to 50 Ω | Analytic (Microchip AN831, TI SWRA046 style). Typical 433 MHz, 30 × 20 mm: L ≈ 80 nH, Rr ≈ 49 mΩ, efficiency ≈ 5 % |
 | **Patch** | Balanis TL model (above); now also exported to openEMS | — |
@@ -72,7 +76,7 @@ The **design formulas were calibrated with openEMS (FDTD)** using the scripts th
 
 ### The openEMS export (`src/lib/openems.ts`)
 
-The script builds the substrate (loss as κ = 2πf0·ε0·εr·tan δ), copper rectangles (PEC sheets, edge "thirds" mesh), a lumped port, a λ/2 air box (MUR) and an NF2FF box. It then:
+The script builds the substrate (loss as κ = 2πf0·ε0·εr·tan δ), copper rectangles (PEC sheets, edge "thirds" mesh) and polygons (`AddPolygon`, a mesh line at every vertex; the FDTD staircases them, as does the in-browser engine), a lumped port, a λ/2 air box (MUR) and an NF2FF box. It then:
 1. runs openEMS (−50 dB end criterion);
 2. prints the resonances (Im Zin = 0) and the directivity, efficiency and gain over the full sphere;
 3. saves `<name>_results.json` / `_s11.csv` / `_results.png` next to itself (S11, Zin, polar cuts).

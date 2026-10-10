@@ -1,6 +1,6 @@
 import type { Manifold, ManifoldToplevel } from "manifold-3d";
 import type { Design } from "../../types";
-import { isProbe, type PcbRect } from "../../pcb";
+import { copperBoxes, isProbe, type PcbRect } from "../../pcb";
 import { CLEAR, mm } from "../rules";
 import { box, rod, type V3 } from "../shapes";
 import { clamshell, DRAIN, drainAt } from "./clamshell";
@@ -39,7 +39,7 @@ function segDist(p: V3, a: V3, b: V3): number {
 }
 
 /** Non-ground copper of a layer (both layers when omitted), in mm. */
-const radiator = (d: Design, layer?: Layer) => d.pcb!.rects.filter((r) => !isGround(r) && (!layer || r.layer === layer)).map(rmm);
+const radiator = (d: Design, layer?: Layer) => copperBoxes(d.pcb!).filter((r) => !isGround(r) && (!layer || r.layer === layer)).map(rmm);
 
 /** Edges of the ground pour that face the radiator: the sides of each ground rectangle that are not on the board outline. */
 function groundEdges(d: Design): Rect[] {

@@ -21,6 +21,7 @@ const VARIANTS: Record<string, Params[]> = {
   meander: [{ W: 0.06 }],
   ifa: [{ bw: 0.01 }],
   helix: [{ bands: "1e9-3e9" }],
+  cloverleaf: [{ leaves: "4", hand: "lhcp" }],
   biquad: [{ bands: "2e9-3e9" }],
 };
 

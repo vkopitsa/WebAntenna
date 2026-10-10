@@ -280,11 +280,8 @@ export function segCurrents(sol: Solution): { ir: Float64Array; ii: Float64Array
   return { ir: or, ii: oi };
 }
 
-/**
- * Far-field power gain (dBi, total of both polarisations) in direction (θ, φ) from the solved currents.
- * Gain = 4πU / Pin, with Pin = ½ Re(V I*) for the 1 V source (lossless wires).
- */
-export function gainFn(sol: Solution): (theta: number, phi: number) => number {
+/** Far-field pattern of the solved currents: (θ, φ) → [Fθ re, Fθ im, Fφ re, Fφ im], and the factor 4π·kU/Pin to gain. */
+function farField(sol: Solution): { F: (theta: number, phi: number) => [number, number, number, number]; toGain: number } {
   const { f } = sol;
   const k = (2 * Math.PI * f) / C0;
   const w = 2 * Math.PI * f;
@@ -293,7 +290,7 @@ export function gainFn(sol: Solution): (theta: number, phi: number) => number {
   // I_in = 1/Z → Pin = ½ Re(1/Z*) = ½ R/|Z|²
   const pin = 0.5 * zr / (zr * zr + zi * zi);
   const kU = ((w * MU0) ** 2) / (32 * Math.PI * Math.PI * ETA0);
-  return (theta, phi) => {
+  const F = (theta: number, phi: number): [number, number, number, number] => {
     const st = Math.sin(theta), ct = Math.cos(theta), sp = Math.sin(phi), cp = Math.cos(phi);
     const rh: Vec3 = [st * cp, st * sp, ct];
     const th: Vec3 = [ct * cp, ct * sp, -st];
@@ -307,8 +304,36 @@ export function gainFn(sol: Solution): (theta: number, phi: number) => number {
       const dp = ph[0] * e.dl[0] + ph[1] * e.dl[1];
       ftr += jr * dt; fti += ji * dt; fpr += jr * dp; fpi += ji * dp;
     }
-    const U = kU * (ftr * ftr + fti * fti + fpr * fpr + fpi * fpi);
-    const g = (4 * Math.PI * U) / pin;
-    return 10 * Math.log10(Math.max(g, 1e-12));
+    return [ftr, fti, fpr, fpi];
+  };
+  return { F, toGain: (4 * Math.PI * kU) / pin };
+}
+
+const dBg = (g: number) => 10 * Math.log10(Math.max(g, 1e-12));
+
+/**
+ * Far-field power gain (dBi, total of both polarisations) in direction (θ, φ) from the solved currents.
+ * Gain = 4πU / Pin, with Pin = ½ Re(V I*) for the 1 V source (lossless wires).
+ */
+export function gainFn(sol: Solution): (theta: number, phi: number) => number {
+  const { F, toGain } = farField(sol);
+  return (theta, phi) => {
+    const [ftr, fti, fpr, fpi] = F(theta, phi);
+    return dBg(toGain * (ftr * ftr + fti * fti + fpr * fpr + fpi * fpi));
+  };
+}
+
+/**
+ * Circular-polarisation gains (dBic) in direction (θ, φ). e^{jωt}, IEEE sense: an RHCP wave is E ∝ θ̂ − jφ̂ (rotates
+ * θ̂ → φ̂, with r̂ = θ̂ × φ̂ the thumb), so its amplitude is ê*·E = (Eθ + jEφ)/√2; LHCP (Eθ − jEφ)/√2. rhcp + lhcp = total.
+ * Checked on the axial-mode helix: a right-hand winding gives RHCP along its axis.
+ */
+export function cpGainFn(sol: Solution): (theta: number, phi: number) => { rhcp: number; lhcp: number } {
+  const { F, toGain } = farField(sol);
+  return (theta, phi) => {
+    const [ar, ai, br, bi] = F(theta, phi);
+    // Fθ ± jFφ: j(br + j bi) = −bi + j br
+    const rr = ar - bi, ri = ai + br, lr = ar + bi, li = ai - br;
+    return { rhcp: dBg((toGain * (rr * rr + ri * ri)) / 2), lhcp: dBg((toGain * (lr * lr + li * li)) / 2) };
   };
 }

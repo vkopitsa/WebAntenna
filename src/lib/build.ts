@@ -5,7 +5,7 @@
 import type { AntennaDef, Design, Params, Vec3, Wire } from "./types";
 import { num } from "./types";
 import { centre, formatBands, parseBands } from "./bands";
-import { isProbe, type Pcb } from "./pcb";
+import { copperBoxes, isProbe, type Pcb } from "./pcb";
 import type { ZPoint } from "./simulate";
 
 export type Arg = string | number | { len: number } | { hz: number } | { pct: number };
@@ -127,9 +127,14 @@ const PRINTED: Record<string, { what: string; how: string; points: number; dim: 
   ifa: { what: "Radiating arm", how: "Trim {0} off the open end of the arm", points: 1, dim: (p) => sumLong(p, /Radiating arm/) },
   meander: { what: "Meander trace (total)", how: "Trim {0} off the end of the last run", points: 1, dim: (p) => sumLong(p, /Meander|Feed lead/) },
   printeddipole: { what: "Dipole arms", how: "Trim {0} off the end of each arm", points: 2, dim: (p) => sumLong(p, /^Arm/) },
+  printedvdipole: { what: "Dipole arms", how: "Trim {0} off the end of each arm", points: 2, dim: (p) => sumLong(p, /^Arm/) + polyLong(p, /^Arm/) },
   patch: { what: "Patch length", how: "Trim {0} off the radiating edge opposite the feed", points: 1, dim: (p) => extentX(p, /Patch/) },
 };
 function sumLong(p: Pcb, re: RegExp) { return p.rects.filter((q) => re.test(q.label)).reduce((s, q) => s + Math.max(q.x1 - q.x0, q.y1 - q.y0), 0); }
+/** Polygon strips: the longest edge of each. */
+function polyLong(p: Pcb, re: RegExp) {
+  return (p.polys ?? []).filter((q) => re.test(q.label)).reduce((s, q) => s + Math.max(...q.pts.map((a, i) => { const b = q.pts[(i + 1) % q.pts.length]; return Math.hypot(b[0] - a[0], b[1] - a[1]); })), 0);
+}
 function extentX(p: Pcb, re: RegExp) { const rs = p.rects.filter((q) => re.test(q.label)); return Math.max(...rs.map((q) => q.x1)) - Math.min(...rs.map((q) => q.x0)); }
 
 function whatFor(pc: Piece, def: AntennaDef): string {
@@ -190,7 +195,7 @@ export function tuning(def: AntennaDef, p: Params, d = def.build(p)): { rows: Tu
 export interface BomRow { item: Msg; qty: Msg; note?: Msg }
 export interface CutRow { tag: string; what: Msg; qty: number; length: number; cut: number; dia: number; note?: Msg }
 
-const BALANCED = new Set(["dipole", "fandipole", "yagi", "moxon", "quad", "printeddipole"]);
+const BALANCED = new Set(["dipole", "fandipole", "yagi", "moxon", "quad", "printeddipole", "printedvdipole"]);
 
 function connector(f: number, printed: boolean, probe: boolean): Msg {
   if (probe) return M("SMA panel jack (probe through the board)");
@@ -213,6 +218,7 @@ function feedMatch(def: AntennaDef, d: Design): Msg | null {
 function cutWhat(pc: Piece, def: AntennaDef): string {
   if (pc.mech) return "Boom or support";
   if (def.id === "helix" && pc.group === "driven") return "Helix wire";
+  if (def.id === "cloverleaf" && pc.group === "driven") return "Leaf wire";
   if (def.id === "discone") return pc.group === "ground" ? "Cone rod" : "Disc rod";
   if (def.id === "collinear" && pc.group === "line") return "Top whip";
   if (def.id === "yagi" && pc.closed) return "Folded dipole";
@@ -275,7 +281,7 @@ export function bom(def: AntennaDef, d: Design, cuts: CutRow[]): BomRow[] {
   }
   if (pcb) {
     const b = pcb.board;
-    const layers = new Set(pcb.rects.map((q) => q.layer)).size;
+    const layers = new Set(copperBoxes(pcb).map((q) => q.layer)).size;
     rows.push({ item: M("PCB {0} × {1}, {2} thick, εr {3}", { len: b.x1 - b.x0 }, { len: b.y1 - b.y0 }, { len: pcb.h }, pcb.er), qty: M("{0} pc", 1), note: layers > 1 ? M("Copper on both sides") : M("Copper on the top side") });
     rows.push({ item: connector(d.f, true, isProbe(pcb)), qty: M("{0} pc", 1) });
   } else {
@@ -417,7 +423,7 @@ export const BUILD_STRINGS = [
   ...Object.values(NOT_TRIMMED), ...Object.values(PRINTED).flatMap((x) => [x.what, x.how]),
   "Band element", "Folded dipole", "Move each end of the folded dipole in by {0}", "Disc rod", "Cone rod", "Top whip",
   "Wind it on a former; see the helix dimensions", "PCB with the loop trace ({0} × {1} loop)", "Reflector loop", "Driven loop", "Radiator", "Driven element", "Director", "Reflector", "Parasitic element", "Radial",
-  "Matching section or stub", "Wire", "Boom or support", "Helix wire", "Coax section (cut braid to braid)",
+  "Matching section or stub", "Wire", "Boom or support", "Helix wire", "Leaf wire", "Coax section (cut braid to braid)",
   "Shorten the loop by {0} (at the joint or overlap)", "Trim {0} off the open end", "Trim {0} off each end",
   "SMA panel jack (probe through the board)", "SMA edge-mount or u.FL connector", "SMA edge-mount connector",
   "SO-239 (UHF) or N chassis socket", "N or SMA chassis socket", "SMA chassis socket",

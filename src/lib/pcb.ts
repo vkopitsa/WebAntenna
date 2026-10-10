@@ -1,9 +1,12 @@
 // Printed (PCB) antennas: board + copper rectangles + lumped feed port. Board in the xy plane,
-// bottom copper at z = 0, top copper at z = h. Rectangles keep the openEMS mesh exact (edge "thirds" rule).
+// bottom copper at z = 0, top copper at z = h. Rectangles keep the openEMS mesh exact (edge "thirds" rule);
+// polygons (diagonal traces) are staircased by the FDTD mesh, like openEMS does.
 import type { Plate, Vec3 } from "./types";
 import { rect, v } from "./geom";
 
 export interface PcbRect { layer: "top" | "bottom"; x0: number; y0: number; x1: number; y1: number; label: string }
+/** Copper polygon (simple, either winding), for traces that are not axis-aligned. */
+export interface PcbPoly { layer: "top" | "bottom"; pts: [number, number][]; label: string }
 export interface PcbPort {
   /** Box of the lumped port (metres). For an in-plane gap port z0 = z1 = h; for a probe z0 = 0, z1 = h. */
   start: Vec3; stop: Vec3;
@@ -14,11 +17,39 @@ export interface Pcb {
   board: { x0: number; y0: number; x1: number; y1: number };
   h: number; er: number; tanD: number; t: number;
   rects: PcbRect[];
+  polys?: PcbPoly[];
   port: PcbPort;
 }
 
 export const r = (layer: PcbRect["layer"], x0: number, y0: number, x1: number, y1: number, label: string): PcbRect =>
   ({ layer, x0: Math.min(x0, x1), y0: Math.min(y0, y1), x1: Math.max(x0, x1), y1: Math.max(y0, y1), label });
+
+/** Bounding rectangle of a polygon (same layer and label). */
+export const polyBox = (q: PcbPoly): PcbRect => {
+  const xs = q.pts.map((p) => p[0]), ys = q.pts.map((p) => p[1]);
+  return r(q.layer, Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys), q.label);
+};
+
+/** Every copper shape as a rectangle (polygons by their bounding box): for extents, keep-outs and layer counts. */
+export const copperBoxes = (p: Pcb): PcbRect[] => [...p.rects, ...(p.polys ?? []).map(polyBox)];
+
+/** Point in polygon (even–odd rule). */
+export function inPoly(pts: [number, number][], x: number, y: number): boolean {
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, yi] = pts[i], [xj, yj] = pts[j];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+/** Narrowest copper feature: the short side of every rectangle and the shortest edge of every polygon. */
+export function minCopperFeature(p: Pcb): number {
+  let m = Infinity;
+  for (const q of p.rects) m = Math.min(m, q.x1 - q.x0, q.y1 - q.y0);
+  for (const q of p.polys ?? []) q.pts.forEach((a, i) => { const b = q.pts[(i + 1) % q.pts.length]; m = Math.min(m, Math.hypot(b[0] - a[0], b[1] - a[1])); });
+  return m;
+}
 
 /** Drawing / CAD plates for a PCB: substrate, then copper (merged visually per label). */
 export function pcbPlates(p: Pcb): Plate[] {
@@ -30,6 +61,7 @@ export function pcbPlates(p: Pcb): Plate[] {
     const z = q.layer === "top" ? h : -t;
     plates.push({ pts: rect(v((q.x0 + q.x1) / 2, (q.y0 + q.y1) / 2, z), v((q.x1 - q.x0) / 2, 0, 0), v(0, (q.y1 - q.y0) / 2, 0)), thickness: t, material: "metal", label: q.label });
   }
+  for (const q of p.polys ?? []) plates.push({ pts: q.pts.map(([x, y]) => v(x, y, q.layer === "top" ? h : -t)), thickness: t, material: "metal", label: q.label });
   return plates;
 }
 

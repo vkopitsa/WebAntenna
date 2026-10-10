@@ -9,6 +9,7 @@ import { moxon } from "./moxon";
 import { quad } from "./quad";
 import { biquad } from "./biquad";
 import { helix } from "./helix";
+import { cloverleaf } from "./cloverleaf";
 import { patch } from "./patch";
 import { discone } from "./discone";
 import { fandipole } from "./fandipole";
@@ -16,6 +17,7 @@ import { pcbmonopole } from "./pcbmonopole";
 import { ifa } from "./ifa";
 import { meander } from "./meander";
 import { printeddipole } from "./printeddipole";
+import { printedvdipole } from "./printedvdipole";
 import { pcbloop } from "./pcbloop";
 import { centre, widthPct } from "../bands";
 import { band } from "./common";
@@ -63,5 +65,5 @@ function withBands(def: AntennaDef): AntennaDef {
   };
 }
 
-export const ANTENNAS: AntennaDef[] = [dipole, fandipole, groundplane, jpole, collinear, yagi, moxon, quad, biquad, helix, patch, pcbmonopole, meander, ifa, printeddipole, pcbloop, discone].map(withBands);
+export const ANTENNAS: AntennaDef[] = [dipole, fandipole, groundplane, jpole, collinear, yagi, moxon, quad, biquad, helix, cloverleaf, patch, pcbmonopole, meander, ifa, printeddipole, printedvdipole, pcbloop, discone].map(withBands);
 export const ANTENNA_BY_ID: Record<string, AntennaDef> = Object.fromEntries(ANTENNAS.map((a) => [a.id, a]));

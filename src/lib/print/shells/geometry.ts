@@ -1,4 +1,5 @@
 import type { Design, Vec3 } from "../../types";
+import { copperBoxes } from "../../pcb";
 import { MAX_SIZE, mm } from "../rules";
 import { add, pieceBottoms, scale, sub, unit, type V3 } from "../shapes";
 
@@ -32,7 +33,7 @@ export function envelope(d: Design): Box3 {
   // PCB copper plates (the arm can overrun the board): the board united with every copper rectangle in x/y, z -t .. h+t
   if (d.pcb) {
     const b = d.pcb.board, t = mm(d.pcb.t), xs = [b.x0, b.x1], ys = [b.y0, b.y1];
-    for (const q of d.pcb.rects) { xs.push(q.x0, q.x1); ys.push(q.y0, q.y1); }
+    for (const q of copperBoxes(d.pcb)) { xs.push(q.x0, q.x1); ys.push(q.y0, q.y1); }
     pts.push([mm(Math.min(...xs)), mm(Math.min(...ys)), -t], [mm(Math.max(...xs)), mm(Math.max(...ys)), mm(d.pcb.h) + t]);
   } else for (const pl of d.plates ?? []) for (const p of pl.pts) pts.push(mmv(p));
   return bounds(pts);

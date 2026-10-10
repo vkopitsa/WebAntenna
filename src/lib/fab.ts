@@ -1,7 +1,7 @@
 // PCB fabrication outputs for printed antennas: Gerber RS-274X (X2 attributes), Excellon drill, DXF R12.
 // Origin at the board's lower-left corner, millimetres. Copper is the exact rectangle set the FDTD and
 // openEMS models use, so what you order is what was simulated.
-import { isProbe, type Pcb, type PcbRect } from "./pcb";
+import { copperBoxes, isProbe, type Pcb, type PcbRect } from "./pcb";
 import type { AntennaDef, Design, Params } from "./types";
 import { buildPack, en } from "./build";
 import { zip } from "./zip";
@@ -15,16 +15,20 @@ function header(fn: string, gen: string): string[] {
   return [`%TF.GenerationSoftware,AntennaGenerator,,${gen}*%`, `%TF.FileFunction,${fn}*%`, "%TF.FilePolarity,Positive*%", "%FSLAX46Y46*%", "%MOMM*%", "%LPD*%", "G01*"];
 }
 
-function region(q: PcbRect, ox: number, oy: number): string[] {
-  const x0 = q.x0 - ox, y0 = q.y0 - oy, x1 = q.x1 - ox, y1 = q.y1 - oy;
-  return ["G36*", `X${g(x0)}Y${g(y0)}D02*`, `X${g(x1)}Y${g(y0)}D01*`, `X${g(x1)}Y${g(y1)}D01*`, `X${g(x0)}Y${g(y1)}D01*`, `X${g(x0)}Y${g(y0)}D01*`, "G37*"];
+const corners = (q: PcbRect): [number, number][] => [[q.x0, q.y0], [q.x1, q.y0], [q.x1, q.y1], [q.x0, q.y1]];
+
+/** Filled G36/G37 region, closed back to its first vertex. */
+function region(pts: [number, number][], ox: number, oy: number): string[] {
+  const at = ([x, y]: [number, number], op: string) => `X${g(x - ox)}Y${g(y - oy)}${op}*`;
+  return ["G36*", at(pts[0], "D02"), ...pts.slice(1).map((p) => at(p, "D01")), at(pts[0], "D01"), "G37*"];
 }
 
 export function gerberCopper(p: Pcb, layer: "top" | "bottom", gen = "1"): string {
   const ox = p.board.x0, oy = p.board.y0;
   const L = header(layer === "top" ? "Copper,L1,Top" : "Copper,L2,Bot", gen);
   if (isProbe(p)) L.push(`%ADD10C,${(PROBE_CLEAR * 1e3).toFixed(6)}*%`);
-  for (const q of p.rects.filter((r) => r.layer === layer)) L.push(...region(q, ox, oy));
+  for (const q of p.rects.filter((r) => r.layer === layer)) L.push(...region(corners(q), ox, oy));
+  for (const q of (p.polys ?? []).filter((r) => r.layer === layer)) L.push(...region(q.pts, ox, oy));
   if (isProbe(p) && layer === "bottom") {
     // the probe passes the ground through a clearance hole
     L.push("%LPC*%", "D10*", `X${g(p.port.start[0] - ox)}Y${g(p.port.start[1] - oy)}D03*`, "%LPD*%");
@@ -59,6 +63,7 @@ export function toDXF(p: Pcb): string {
   const box = (x0: number, y0: number, x1: number, y1: number): [number, number][] => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
   poly("OUTLINE", box(p.board.x0, p.board.y0, p.board.x1, p.board.y1));
   for (const q of p.rects) poly(q.layer === "top" ? "TOP" : "BOTTOM", box(q.x0, q.y0, q.x1, q.y1));
+  for (const q of p.polys ?? []) poly(q.layer === "top" ? "TOP" : "BOTTOM", q.pts);
   const s = p.port.start, t = p.port.stop;
   if (isProbe(p)) {
     out.push("0", "CIRCLE", "8", "DRILL", "10", mm(s[0] - ox), "20", mm(s[1] - oy), "30", "0.0", "40", (PROBE_DRILL * 500).toFixed(4));
@@ -77,7 +82,7 @@ export function fabZip(def: AntennaDef, p: Params, d: Design, base: string, gen:
   const files: { name: string; data: string }[] = [
     { name: `${base}.GTL`, data: gerberCopper(pcb, "top", gen) },
   ];
-  if (pcb.rects.some((q) => q.layer === "bottom")) files.push({ name: `${base}.GBL`, data: gerberCopper(pcb, "bottom", gen) });
+  if (copperBoxes(pcb).some((q) => q.layer === "bottom")) files.push({ name: `${base}.GBL`, data: gerberCopper(pcb, "bottom", gen) });
   files.push({ name: `${base}.GKO`, data: gerberOutline(pcb, gen) });
   const drl = excellon(pcb);
   if (drl) files.push({ name: `${base}.DRL`, data: drl });
@@ -95,7 +100,7 @@ function readme(def: AntennaDef, p: Params, d: Design, names: string[]): string 
     "",
     `Design frequency: ${(d.f / 1e6).toFixed(3)} MHz`,
     `Board: ${mm(pcb.board.x1 - pcb.board.x0)} x ${mm(pcb.board.y1 - pcb.board.y0)}, ${mm(pcb.h)} thick, er ${pcb.er}, tan d ${pcb.tanD}, copper ${(pcb.t * 1e6).toFixed(0)} um`,
-    `Layers: ${pcb.rects.some((q) => q.layer === "bottom") ? "2 (top + bottom)" : "1 (top only; bottom copper not used)"}`,
+    `Layers: ${copperBoxes(pcb).some((q) => q.layer === "bottom") ? "2 (top + bottom)" : "1 (top only; bottom copper not used)"}`,
     "Units: millimetres. Origin: lower-left corner of the board.",
     "",
     "Files (Gerber RS-274X with X2 attributes; Protel extensions):",

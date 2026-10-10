@@ -44,7 +44,7 @@ describe("tuning", () => {
     for (const id of ["helix", "discone", "biquad"]) { const t = tuning(ANTENNA_BY_ID[id], ANTENNA_BY_ID[id].defaults); expect(t.rows).toEqual([]); expect(t.note?.s).toBeTruthy(); }
   });
   it("printed antennas have a trim step", () => {
-    for (const id of ["ifa", "pcbmonopole", "meander", "printeddipole", "patch"]) expect(tuning(ANTENNA_BY_ID[id], ANTENNA_BY_ID[id].defaults).rows).toHaveLength(1);
+    for (const id of ["ifa", "pcbmonopole", "meander", "printeddipole", "printedvdipole", "patch"]) expect(tuning(ANTENNA_BY_ID[id], ANTENNA_BY_ID[id].defaults).rows).toHaveLength(1);
   });
 });
 
