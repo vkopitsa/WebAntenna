@@ -11,7 +11,6 @@ import { SPREADER_HOWTO, SPREADER_STRINGS, moxonParts, quadParts } from "./famil
 import { STANDOFF_HOWTO, STANDOFF_STRINGS, biquadParts } from "./families/standoff";
 import { SPACER_HOWTO, SPACER_STRINGS, collinearParts, jpoleParts } from "./families/spacer";
 import { SHELL_HOWTO, SHELL_STRINGS, shellFor } from "./shells";
-import { ANTENNA_BY_ID } from "../antennas";
 import { en } from "../build";
 
 export { buildPart, USE_LABELS, type BuiltPart, type PartSpec, type Segment } from "./parts";
@@ -34,7 +33,8 @@ const FAMILIES: Record<string, (p: Params, d: Design) => PartSpec[]> = {
  *  Cheap: nothing is built here. */
 export const partsFor = (defId: string, p: Params, d: Design): PartSpec[] => {
   const family = FAMILIES[defId]?.(p, d) ?? [];
-  const shell = shellFor(defId, p, d, ANTENNA_BY_ID[defId]?.category ?? "");
+  // printed antennas get the PCB enclosure: every one has a board model except the PCB loop (drawn as plates only)
+  const shell = shellFor(defId, p, d, !!d.pcb || defId === "pcbloop");
   return shell ? [...family, shell] : family;
 };
 

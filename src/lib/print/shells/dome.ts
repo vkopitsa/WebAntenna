@@ -43,6 +43,9 @@ export function dome(M: ManifoldToplevel, o: DomeOpts): Manifold[] {
   for (const c of cuts) body = body.subtract(c);                // one at a time (batch booleans of disjoint operands lose volume)
   return stack(body, H, (zc) => {
     const kinkZ = top + (Math.SQRT2 - 1) * o.wall;
+    // A cut in the cone (rc < ro) is unreachable under domeFits: the body is cut only when H > SEG_H, so every piece is
+    // taller than SEG_H / 2 = 85 mm, while the cone above the kink is r + wall ≤ FOOT / 2 = 85 mm tall; every cut lies
+    // in the tube. The cone branch below is kept for a dome built outside those limits.
     const rc = zc <= kinkZ ? ro : Math.max(0, o.r + o.wall * Math.SQRT2 - (zc - top));   // outer radius of the body at the cut
     const Ro = ro + o.wall + CLEAR / 2, ri = ro + CLEAR / 2, tube = rc >= ro;
     // underside inside the skirt: a 45 degree chamfer from (ri, zc) up to the wall (tube) or, in the cone, a flatter one up to its shell

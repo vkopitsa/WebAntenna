@@ -71,12 +71,21 @@ describe("shell geometry", () => {
     // polyline with a shared vertex on the surface: one exit, not two
     const poly = exits(mk([[0, 0, 0], [10, 0, 0], [30, 0, 0]]), box);
     expect(poly.length).toBe(1); expect(poly[0].at[0]).toBeCloseTo(10, 6);
+    // free far end: a wire ending past the surface with nothing attached; the polyline's outer piece ends free too
+    expect(inner[0].free).toBe(true);
+    expect(poly[0].free).toBe(true);
+    // a closed loop through the roof: its wires run on into each other, neither exit is free
+    const loop = exits(mk([[-5, 0, 0], [-5, 0, 20], [5, 0, 20], [5, 0, 0], [-5, 0, 0]]), box);
+    expect(loop.length).toBe(2);
+    expect(loop.every((x) => Math.abs(x.at[2] - 10) < 1e-9 && x.free === false)).toBe(true);
   });
   it("fits", () => {
     expect(boxFits({ lo: [0, 0, 0], hi: [162, 50, 50] }, 2)).toBe(true);    // 162 + 2·(2 + 7) = 180
     expect(boxFits({ lo: [0, 0, 0], hi: [163, 50, 50] }, 2)).toBe(false);
+    // domes: the body height (to the cone apex) splits into at most 3 pieces of SEG_H
     expect(domeFits(80, 500, 2)).toBe(true);
     expect(domeFits(84, 100, 2)).toBe(false);
-    expect(domeFits(30, 600, 2)).toBe(false);
+    expect(domeFits(30, 3 * 170, 2)).toBe(true);
+    expect(domeFits(30, 3 * 170 + 1, 2)).toBe(false);
   });
 });

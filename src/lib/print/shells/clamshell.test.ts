@@ -55,7 +55,6 @@ describe("clamshell", () => {
       const roof = box(M, [inn.lo[0], inn.lo[1], inn.hi[2]], [inn.hi[0], inn.hi[1], inn.hi[2] + wall]);
       const floor = box(M, [inn.lo[0], inn.lo[1], inn.lo[2] - wall], [inn.hi[0], inn.hi[1], inn.lo[2]]);
       const rf = frac(top, roof), ff = frac(bot, floor);
-      console.log(name, "roof fill", rf.toFixed(4), "floor fill", ff.toFixed(4));
       expect(rf).toBeGreaterThanOrEqual(0.99);
       expect(ff).toBeGreaterThanOrEqual(0.99);
     });
@@ -64,7 +63,6 @@ describe("clamshell", () => {
     const [bot, top] = clamshell(M, { inner, wall: 2, splitZ: 0 });
     const band = box(M, [31.4, -15, 0], [32, 15, 3.3]);
     const f = frac(top, band);
-    console.log("outdoor wall band fill", f.toFixed(4));
     expect(f).toBeGreaterThanOrEqual(0.99);
     expect(bot.boundingBox().max[2]).toBeGreaterThan(0);
   });

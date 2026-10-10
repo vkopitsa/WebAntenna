@@ -10,6 +10,7 @@ import { fmtHz } from "../lib/units";
 import { fmtMsg } from "../msg";
 import { download } from "../download";
 import { PrintPanel } from "./PrintPanel";
+import { partsFor } from "../lib/print";
 
 
 
@@ -22,6 +23,7 @@ export function BuildPanel({ def, params, design }: { def: AntennaDef; params: P
   const [mirror, setMirror] = useState(false);
   const pack = useMemo(() => buildPack(def, params, design), [def, params, design]);
   const kind = useMemo(() => templateKind(def, design), [def, design]);
+  const hasParts = useMemo(() => partsFor(def.id, params, design).length > 0, [def.id, params, design]);
   const m = (x?: Msg) => (x ? fmtMsg(t, unit, x) : "");
   const base = `${def.id}-${Math.round(design.f / 1e3) / 1e3}MHz`;
   return (
@@ -38,7 +40,7 @@ export function BuildPanel({ def, params, design }: { def: AntennaDef; params: P
         <p className="hint">{kind === "pcb" ? t("The PDF has the build sheet and the copper layers at 1:1; the zip has Gerber, drill and DXF files for a PCB fab.") : kind === "strip" ? t("The PDF has the build sheet and a 1:1 boom drilling strip to tape along the boom.") : kind === "wire" ? t("The PDF has the build sheet and a 1:1 template to bend or wind the wire on.") : t("This antenna is too large for a paper template: use the cut list and a tape measure. The PDF has the build sheet.")} {t("Print the PDF at 100 % (actual size) and check the 50 mm scale bar. PDF text is in English.")}</p>
       </div>
 
-      {!design.pcb && <PrintPanel def={def} params={params} design={design} base={base} />}
+      {hasParts && <PrintPanel def={def} params={params} design={design} base={base} />}
 
       <div className="box">
         <h3>{t("Bill of materials")}</h3>

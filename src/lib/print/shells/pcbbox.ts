@@ -161,12 +161,12 @@ export function pcbEntry(d: Design): { at: V3; dir: V3; probe: boolean } {
   return { at: e.at, dir: e.dir, probe: false };
 }
 
-/** Air over the board: the gap, or room for the coax pigtail lying on the board when it is edge-fed (both halves keep
- *  a flat outer face; a probe feed's SMA jack is underneath). */
 /** The split between the halves: through the board for a probe feed; for an edge feed at the height of the cable lying
  *  on the board, so the coax is clamped straight between the halves. */
 export const pcbSplit = (d: Design) => mm(d.pcb!.h) + (isProbe(d.pcb!) ? -mm(d.pcb!.h) / 2 : PIGTAIL / 2);
 
+/** Air over the board: the gap, or room for the coax pigtail lying on the board when it is edge-fed (both halves keep
+ *  a flat outer face; a probe feed's SMA jack is underneath). */
 export const airAbove = (d: Design) => { const { gap } = STYLE[styleOf(d)]; return isProbe(d.pcb!) ? gap : Math.max(gap, CHANNEL + 0.2); };
 
 /** The cavity: the board and every copper rectangle (copper may overrun the board) grown by the gap in x/y, z −gap .. h + air. */

@@ -54,7 +54,7 @@ describe("partsFor", () => {
         for (const s of partsFor(def.id, p, def.build(p))) {
           const r = buildPart(M, s, s.id);
           if (r.ok) r.segments.forEach((g) => expect(Math.max(...g.size)).toBeLessThanOrEqual(MAX_SIZE));
-          else expect(["Too large to print in one piece: {0}", FAIL.thick, FAIL.radome], `${def.id} ${JSON.stringify(extra)} ${s.id}`).toContain(r.error.s);
+          else expect(["Too large to print in one piece: {0}", FAIL.thick, FAIL.radome, FAIL.hood], `${def.id} ${JSON.stringify(extra)} ${s.id}`).toContain(r.error.s);
         }
       }
     }

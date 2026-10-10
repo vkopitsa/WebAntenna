@@ -22,6 +22,8 @@ export const SHELL_STRINGS = [
   "Covers the antenna with a {0} wall, keeping {1} of air round the radiator.",
   "Covers the feedpoint and the connector from above: slots let the wires out, the open bottom lets water drain.",
   "A plastic shell lowers the resonance by about 1–3 %: retune with Trim (printed antennas: check with the FDTD simulation).",
+  "Connector cover",
+  "Covers the connector under the reflector, against its underside: the coax leaves through the hole in the floor.",
 ];
 
 /** How-to steps, in order. */
@@ -41,6 +43,12 @@ export const SHELL_HOWTO = {
     "Solder and test the feedpoint first, then lower the hood over it so the wires slide into their slots.",
     "Seal the slots and the top hole with silicone.",
   ],
+  /** Helix too large for a radome: the cover over the panel jack under the reflector. */
+  jack: [
+    "Print it on its flat floor.",
+    "Thread the coax through the floor hole first, then mount the panel jack, connect the coax and press the open top against the underside of the reflector.",
+    "Seal the rim to the reflector and the coax hole with silicone.",
+  ],
   pcb: [
     "Print each half on its flat outer face.",
     "Solder the coax pigtail (or the SMA jack under a probe feed) to the board, then lay the board in the bottom half between its edge stops, with the coax through its hole.",
@@ -57,12 +65,19 @@ const EYE_ROPE = 8;   // halyard hole above the dipole centre's hanging eye
 const JACK_H = 25;
 /** GP mast clearance: the hood's open bottom edge is the hub plate's underside, and the mast strapped to the hub's side
  *  block must end at or below it (its axis, gpMastAxis, runs under the hood's corner). */
-export const GP_MAST_TOP = -PLATE;    // room above the GP hub plate for the panel jack and the solder joints
+export const GP_MAST_TOP = -PLATE;    // the hub plate's underside: the hood's bottom edge and the highest the mast may reach
+/** Coax hole in the floor of the helix connector cover. */
+export const JACK_HOLE = 8;
+const JACK = 30;                      // the cover's cavity: a 30 mm cube under the reflector (plus the gap)
+/** Families whose feed part is built in the antenna's own frame, at the feed: a full box would cut through it, so they
+ *  always get the feed hood. */
+const FEED_HOLDER = new Set(["dipole", "fandipole", "groundplane", "yagi"]);
 
 export type ShellPlan =
   | { kind: "dome"; style: Style; inner: Box3; opts: DomeOpts; toWorld: V3; pieceZ: (i: number, n: number) => number }
   | { kind: "box"; style: Style; inner: Box3; splitZ: number; gland: V3; toWorld?: undefined; pieceZ?: undefined }
-  | { kind: "feed"; style: Style; inner: Box3; exits: Exit[]; toWorld?: undefined; pieceZ?: undefined };
+  | { kind: "feed"; style: Style; inner: Box3; exits: Exit[]; toWorld?: undefined; pieceZ?: undefined }
+  | { kind: "jack"; style: Style; inner: Box3; toWorld?: undefined; pieceZ?: undefined };
 
 function domePlan(defId: string, p: Params, d: Design, s: Style): DomeOpts | null {
   const { wall, gap } = STYLE[s];
@@ -102,7 +117,7 @@ function feedHood(defId: string, p: Params, d: Design, gap: number): { inner: Bo
     // centre insulator hub; the arm lugs (square, w wide) leave through slots, the halyard through the roof
     const { wireD, gap: g, arms } = dipoleArms(d, defId === "dipole" ? ["driven"] : ["driven", "parasitic"]);
     const hb = centreHubBox(g, wireD), inner = grow({ lo: hb.lo, hi: hb.hi }, gap);
-    return { inner, exits: [...arms.map((a) => ({ at: leave(inner, a.start, a.dir), dir: a.dir, d: lugD(hb.w, a.dir), w: hb.w, from: a.start })), { at: [0, 0, inner.hi[2]], dir: [0, 0, 1], d: EYE_ROPE }] };
+    return { inner, exits: [...arms.map((a) => ({ at: leave(inner, a.start, a.dir), dir: a.dir, d: lugD(hb.w, a.dir), w: hb.w, from: a.start })), { at: [0, 0, inner.hi[2]], dir: [0, 0, 1], d: EYE_ROPE, free: true }] };
   }
   if (defId === "groundplane") {
     // hub plate and the jack above it; the hood ends at the plate's underside, so the mast block and the coax plug stay out
@@ -130,12 +145,18 @@ function feedHood(defId: string, p: Params, d: Design, gap: number): { inner: Bo
 export function shellPlan(defId: string, p: Params, d: Design): ShellPlan {
   const style = styleOf(d), { wall, gap } = STYLE[style];
   const dp = domePlan(defId, p, d, style);
-  if (dp && domeFits(dp.r, dp.z1 - dp.z0, wall)) {
+  if (dp && domeFits(dp.r, domeHeight(dp), wall)) {
     const H = domeHeight(dp);
     return { kind: "dome", style, inner: { lo: [-dp.r, -dp.r, dp.z0], hi: [dp.r, dp.r, dp.z1] }, opts: dp, toWorld: [0, 0, domeOffset(dp)], pieceZ: (i, n) => (n > 1 ? pieceBottoms(H)[i] : 0) };
   }
+  if (defId === "helix") {
+    // too large for a radome: a cover over the panel jack, mirrored under the reflector (open face up against it)
+    const inner = grow(cubeAt([0, 0, -JACK / 2], JACK), gap);
+    inner.hi[2] = 0;
+    return { kind: "jack", style, inner };
+  }
   const fp = feedPoint(d);
-  if (!dp) {
+  if (!dp && !FEED_HOLDER.has(defId)) {
     // full box: the coax gland goes down through the floor, at least a wall clear of the side walls (the cavity grows
     // in x or y if it is too narrow for that)
     const full = grow(envelope(d), gap), need = GLAND + 2 * wall, gland: V3 = [...fp];
@@ -150,23 +171,36 @@ export function shellPlan(defId: string, p: Params, d: Design): ShellPlan {
 }
 
 /** How-to steps: the hood gets the GP mast note or the dipole halyard step before its sealing step. */
-function howTo(defId: string, kind: ShellPlan["kind"]): string[] {
+function howTo(defId: string, kind: Exclude<ShellPlan["kind"], "jack">): string[] {
   const st = SHELL_HOWTO[kind];
   if (kind !== "feed") return st;
   const extra = defId === "groundplane" ? SHELL_HOWTO.gpMast : defId === "dipole" || defId === "fandipole" ? SHELL_HOWTO.halyard : [];
   return [...st.slice(0, -1), ...extra, st[st.length - 1]];
 }
 
-export function shellFor(defId: string, p: Params, d: Design, category: string): PartSpec | null {
+export function shellFor(defId: string, p: Params, d: Design, printed: boolean): PartSpec | null {
   const style = styleOf(d), { wall, gap } = STYLE[style];
   const L = (x: number) => ({ len: x / 1000 });
-  if (category === "Printed") return {
+  if (printed) return {
     id: "shell", title: SHELL_STRINGS[1], use: "holder", qty: 1,
     purpose: msg(SHELL_STRINGS[3], L(wall), L(gap)), warn: msg(SHELL_STRINGS[5]),
-    howTo: SHELL_HOWTO.pcb.map((s) => msg(s)),
+    howTo: (d.pcb ? SHELL_HOWTO.pcb : SHELL_HOWTO.box).map((s) => msg(s)),   // the PCB loop has no board model: a plain box
     build: (M: ManifoldToplevel) => pcbShell(M, d),
   };
   const plan = shellPlan(defId, p, d);
+  if (plan.kind === "jack") {
+    const i = plan.inner, h = i.hi[2] - i.lo[2];
+    return {
+      id: "shell", title: SHELL_STRINGS[6], use: "holder", qty: 1,
+      purpose: msg(SHELL_STRINGS[7]), howTo: SHELL_HOWTO.jack.map((s) => msg(s)),
+      // a hood built upside down (open face at z = 0, floor on top) and mirrored under the reflector; the hood's round
+      // roof hole is d + CLEAR + 1 across
+      build: (M: ManifoldToplevel) => [hood(M, {
+        inner: { lo: [i.lo[0], i.lo[1], 0], hi: [i.hi[0], i.hi[1], h] }, wall,
+        exits: [{ at: [0, 0, h], dir: [0, 0, 1], d: JACK_HOLE - CLEAR - 1, free: true }],
+      })[0].mirror([0, 0, 1])],
+    };
+  }
   const titles = { dome: SHELL_STRINGS[0], box: SHELL_STRINGS[1], feed: SHELL_STRINGS[2] };
   return {
     id: "shell", title: titles[plan.kind], use: "holder", qty: 1,

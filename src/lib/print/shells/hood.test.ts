@@ -3,8 +3,8 @@ import type { ManifoldToplevel } from "manifold-3d";
 import { loadManifold } from "../manifold";
 import { box, rod, type V3 } from "../shapes";
 import type { Box3, Exit } from "./geometry";
-import { hood } from "./hood";
-import { PartError } from "../parts";
+import { hood, roundHole } from "./hood";
+import { FAIL, PartError } from "../parts";
 
 let M: ManifoldToplevel;
 beforeAll(async () => { M = await loadManifold(); });
@@ -13,7 +13,7 @@ const s = Math.SQRT1_2;
 const xs: Exit[] = [
   { at: [0, 15, 0], dir: [0, 1, 0], d: 3 },                 // sideways
   { at: [20, 0, -4], dir: [s, 0, -s], d: 4 },               // drooping
-  { at: [5, 5, 12], dir: [0, 0, 1], d: 8 },                 // up: a round hole through the roof
+  { at: [5, 5, 12], dir: [0, 0, 1], d: 8, free: true },     // up, ending free: a round hole through the roof
 ];
 
 describe("hood", () => {
@@ -70,5 +70,24 @@ describe("hood", () => {
     const narrow: Box3 = { lo: [-20, -6, -10], hi: [20, 6, 12] };
     const cut: Exit[] = [{ at: [0, 0, 12], dir: [0, 0, 1], d: 17 }, { at: [0, 6, 0], dir: [0, 1, 0], d: 20 }, { at: [0, -6, 0], dir: [0, -1, 0], d: 20 }];
     expect(() => hood(M, { inner: narrow, wall: 2, exits: cut })).toThrow(PartError);
+    try { hood(M, { inner: narrow, wall: 2, exits: cut }); } catch (e) { expect((e as PartError).m.s).toBe(FAIL.hood); }
+  });
+  it("a round roof hole only for a free wire pointing up; a loop through the roof gets L-slots open to the bottom", () => {
+    expect(roundHole(xs[2], inner)).toBe(true);
+    expect(roundHole({ ...xs[2], free: false }, inner)).toBe(false);
+    expect(roundHole({ ...xs[2], dir: [Math.SQRT1_2, 0, Math.SQRT1_2] }, inner)).toBe(false);
+    expect(roundHole(xs[0], inner)).toBe(false);
+    // a loop up through the roof and back: the nearest side walls are +x for the first exit, -y for the second
+    const loop: Exit[] = [{ at: [12, 2, 12], dir: [0, 0, 1], d: 3 }, { at: [-4, -9, 12], dir: [0, 0, 1], d: 3 }];
+    const h = hood(M, { inner, wall: 2, exits: loop })[0];
+    expect(h.decompose().length).toBe(1);
+    const z0 = inner.lo[2];
+    for (const [x, out] of [[loop[0], [25, 2, 12]], [loop[1], [-4, -20, 12]]] as [Exit, V3][]) {
+      expect(h.intersect(rod(M, x.at, out, x.d)).volume()).toBeLessThan(1e-3);                       // along the roof, out past the wall
+      expect(h.intersect(rod(M, out, [out[0], out[1], z0 - 5], x.d)).volume()).toBeLessThan(1e-3);   // and down past the bottom
+    }
+    // the rest of the roof stays: only the two channels are missing
+    const roof = box(M, [inner.lo[0], inner.lo[1], 12], [inner.hi[0], inner.hi[1], 14]);
+    expect(h.intersect(roof).volume() / roof.volume()).toBeGreaterThan(0.9);
   });
 });

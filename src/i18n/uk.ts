@@ -585,6 +585,7 @@ export const UK: Record<string, string> = {
   "Could not build this part: {0}": "Не вдалося побудувати деталь: {0}",
   "Wire too thick for this part": "Дріт надто товстий для цієї деталі",
   "Radome too narrow for the coax": "Обтічник завузький для коаксіалу",
+  "Wires too close together for the hood slots": "Дроти надто близько один до одного для прорізів ковпака",
   "Jig": "Кондуктор",
   "Holder": "Тримач",
   "Former": "Оправка",
@@ -723,4 +724,9 @@ export const UK: Record<string, string> = {
   "Seal the slots and the top hole with silicone.": "Загерметизуйте прорізи і верхній отвір силіконом.",
   "The mast must end at the top of the hub's side block: the hood sits over the plate above it.": "Щогла має закінчуватися на верху бічного блока маточини: ковпак сідає на пластину над ним.",
   "Pass the support rope through the hole in the top before tying it to the eye.": "Протягніть несучу мотузку крізь отвір угорі, перш ніж прив'язати її до вушка.",
+  "Connector cover": "Кожух роз'єму",
+  "Covers the connector under the reflector, against its underside: the coax leaves through the hole in the floor.": "Накриває роз'єм під рефлектором, щільно до його нижнього боку: коаксіал виходить крізь отвір у дні.",
+  "Print it on its flat floor.": "Друкуйте його на пласкому дні.",
+  "Thread the coax through the floor hole first, then mount the panel jack, connect the coax and press the open top against the underside of the reflector.": "Спершу протягніть коаксіал крізь отвір у дні, потім установіть панельне гніздо, під'єднайте коаксіал і притисніть відкритий верх до нижнього боку рефлектора.",
+  "Seal the rim to the reflector and the coax hole with silicone.": "Загерметизуйте силіконом край до рефлектора і отвір для коаксіалу.",
 };
