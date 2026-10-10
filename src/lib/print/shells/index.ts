@@ -12,6 +12,7 @@ import { boxFits, domeFits, envelope, exits, feedPoint, grow, STYLE, styleOf, ty
 import { clamshell } from "./clamshell";
 import { dome, domeHeight, domeOffset, type DomeOpts } from "./dome";
 import { hood } from "./hood";
+import { pcbShell } from "./pcbbox";
 
 /** Shells: dome radome, clamshell box or feedpoint hood. */
 export const SHELL_STRINGS = [
@@ -39,6 +40,11 @@ export const SHELL_HOWTO = {
     "Print it on its flat top.",
     "Solder and test the feedpoint first, then lower the hood over it so the wires slide into their slots.",
     "Seal the slots and the top hole with silicone.",
+  ],
+  pcb: [
+    "Print each half on its flat outer face.",
+    "Solder the coax pigtail (or the SMA jack under a probe feed) to the board, then lay the board on the posts of the bottom half with the coax through its hole.",
+    "Close the top half and fit four M3 screws and nuts; where there are no posts, fix the board with a drop of hot glue next to the coax.",
   ],
   /** Ground plane only, before the sealing step. */
   gpMast: ["The mast must end at the top of the hub's side block: the hood sits over the plate above it."],
@@ -152,10 +158,15 @@ function howTo(defId: string, kind: ShellPlan["kind"]): string[] {
 }
 
 export function shellFor(defId: string, p: Params, d: Design, category: string): PartSpec | null {
-  if (category === "Printed") return null;                        // printed antennas: Task 5
   const style = styleOf(d), { wall, gap } = STYLE[style];
-  const plan = shellPlan(defId, p, d);
   const L = (x: number) => ({ len: x / 1000 });
+  if (category === "Printed") return {
+    id: "shell", title: SHELL_STRINGS[1], use: "holder", qty: 1,
+    purpose: msg(SHELL_STRINGS[3], L(wall), L(gap)), warn: msg(SHELL_STRINGS[5]),
+    howTo: SHELL_HOWTO.pcb.map((s) => msg(s)),
+    build: (M: ManifoldToplevel) => pcbShell(M, d),
+  };
+  const plan = shellPlan(defId, p, d);
   const titles = { dome: SHELL_STRINGS[0], box: SHELL_STRINGS[1], feed: SHELL_STRINGS[2] };
   return {
     id: "shell", title: titles[plan.kind], use: "holder", qty: 1,

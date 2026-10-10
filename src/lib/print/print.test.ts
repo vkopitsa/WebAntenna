@@ -36,8 +36,8 @@ describe("partsFor", () => {
   it("every wire antenna has at least one printed part", () => {
     for (const def of ANTENNAS) { const d = def.build(def.defaults); if (!d.pcb && def.category !== "Printed") expect(partsFor(def.id, def.defaults, d).length, def.id).toBeGreaterThan(0); }
   });
-  it("printed (PCB) antennas have no printed parts", () => {
-    for (const def of ANTENNAS) { const d = def.build(def.defaults); if (d.pcb) expect(partsFor(def.id, def.defaults, d)).toEqual([]); }
+  it("printed antennas have exactly one part, the shell", () => {
+    for (const def of ANTENNAS) { const d = def.build(def.defaults); if (def.category === "Printed") expect(partsFor(def.id, def.defaults, d).map((s) => s.id), def.id).toEqual(["shell"]); }
   });
   it("every part of every antenna builds at defaults", () => {
     for (const def of ANTENNAS) for (const s of partsFor(def.id, def.defaults, def.build(def.defaults))) expect(buildPart(M, s, s.id).ok, `${def.id} ${s.id}`).toBe(true);
