@@ -22,7 +22,7 @@ export type BuiltPart = { id: string; ok: true; segments: Segment[] } | { id: st
 export const msg = (s: string, ...a: Arg[]): Msg => ({ s, a });
 
 /** Failures a family reports itself (thrown from `build`): shown to the user like "Too large". */
-export const FAIL = { thick: "Wire too thick for this part", radome: "Radome too narrow for the coax", hood: "Wires too close together for the hood slots" };
+export const FAIL = { thick: "Wire too thick for this part", radome: "Radome too narrow for the coax", hood: "Wires too close together for the hood slots", room: "No room for a feedpoint hood next to the spreader hub" };
 
 /** Thrown from `PartSpec.build` when the design cannot be printed this way. */
 export class PartError extends Error {

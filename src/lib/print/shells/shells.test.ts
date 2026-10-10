@@ -9,7 +9,8 @@ import { add, bar, box, rod, scale, type V3 } from "../shapes";
 import { gpMastAxis } from "../families/hub";
 import { centreHubBox, dipoleArms } from "../families/centre";
 import { exits, feedPoint, STYLE, styleOf, type Box3, type Exit } from "./geometry";
-import { GP_MAST_TOP, JACK_HOLE, SHELL_HOWTO, shellPlan } from "./index";
+import { GP_MAST_TOP, hubHood, JACK_HOLE, SHELL_HOWTO, shellPlan, type ShellPlan } from "./index";
+import { quadGeometry } from "../families/spreader";
 import { hood, roundHole } from "./hood";
 import { setup } from "../families/testkit";
 
@@ -17,6 +18,8 @@ let M: ManifoldToplevel;
 beforeAll(async () => { M = await loadManifold(); });
 const wireIds = ANTENNAS.filter((a) => a.category !== "Printed").map((a) => a.id);
 const near = (a: number, b: number) => Math.abs(a - b) < 1e-6;
+/** The hood actually built: next to a spreader hub its cube shrinks (null: no room). */
+const built = (plan: Extract<ShellPlan, { kind: "feed" }>, id: string, p: Params, d: Design) => (plan.hub ? hubHood(M, id, p, d) : plan);
 /** A roof L-slot's path: along the roof to past the nearest side wall, then straight down past the open bottom. */
 function lPath(M: ManifoldToplevel, x: Exit, inner: Box3, wall: number): Manifold[] {
   const walls = [0, 1].flatMap((i) => [{ i, s: -1, dist: x.at[i] - inner.lo[i] }, { i, s: 1, dist: inner.hi[i] - x.at[i] }]);
@@ -43,14 +46,31 @@ describe("shells for wire antennas", () => {
     expect(plan("helix")).toBe("dome");
     expect(plan("helix", { bands: "144e6-146e6" })).toBe("jack");
   });
-  it("families with a world-frame feed holder (dipole, fan, GP, Yagi) always get the hood, however small", () => {
-    for (const id of ["dipole", "fandipole", "groundplane", "yagi"]) for (const f of [1.2e9, 2.4e9, 5.8e9]) {
-      const { p, d } = setup(id, { bands: `${f * 0.99}-${f * 1.01}` });
-      expect(shellPlan(id, p, d).kind, `${id} ${f}`).toBe("feed");
+  it("families with a world-frame feed holder (dipole, fan, GP, Yagi) or spreader hub (Moxon, quad) always get the hood, however small", () => {
+    for (const id of ["dipole", "fandipole", "groundplane", "yagi", "moxon", "quad"]) for (const f of [1.2e9, 2.4e9, 5.8e9]) {
+      const { p, d } = setup(id, { bands: `${f * 0.99}-${f * 1.01}` }), plan = shellPlan(id, p, d);
+      expect(plan.kind, `${id} ${f}`).toBe("feed");
+      expect(plan.kind === "feed" && !!plan.hub, `${id} ${f}`).toBe(["moxon", "quad"].includes(id));
     }
   });
+  it("Moxon and quad hoods shrink to keep the gap from the spreader hub (30 … 12 mm cube), or report no room", () => {
+    for (const [id, f] of [["moxon", 145e6], ["moxon", 435e6], ["quad", 435e6], ["moxon", 2.4e9], ["quad", 2.4e9]] as const) {
+      const { p, d } = setup(id, { bands: `${f * 0.99}-${f * 1.01}` }), plan = shellPlan(id, p, d);
+      if (plan.kind !== "feed") throw new Error(id);
+      const spec = partsFor(id, p, d).find((s) => s.id === "shell")!, r = buildPart(M, spec, id), h = built(plan, id, p, d);
+      const tag = `${id} ${f / 1e6}`;
+      if (!h) { expect(r.ok, tag).toBe(false); if (!r.ok) expect(r.error.s, tag).toBe(FAIL.room); continue; }
+      expect(r.ok, tag).toBe(true);
+      const { wall, gap } = STYLE[styleOf(d)], side = h.inner.hi[0] - h.inner.lo[0] - 2 * gap;
+      expect(side, tag).toBeGreaterThanOrEqual(12 - 1e-9); expect(side, tag).toBeLessThanOrEqual(30 + 1e-9);
+      const [hub] = partsFor(id, p, d).find((s) => s.id === `${id}-hub`)!.build(M);
+      const hubs = id === "moxon" ? [hub] : quadGeometry(d).loops.map((l) => hub.translate([l.x, 0, 0]));
+      const keep = box(M, add(h.inner.lo, [-wall - gap, -wall - gap, -wall - gap]), add(h.inner.hi, [wall + gap, wall + gap, wall + gap]));
+      for (const q of hubs) expect(q.intersect(keep).volume(), tag).toBeLessThan(1e-2);
+    }
+  }, 60_000);
   it("full shells keep the gap from every live wire", () => {
-    for (const [id, extra] of [["jpole", { bands: "2400e6-2483e6" }], ["helix", {}], ["helix", { bands: "5725e6-5875e6", d: 1e-3, turns: 5 }], ["moxon", { bands: "2400e6-2483e6", d: 1e-3 }], ["biquad", {}]] as const) {
+    for (const [id, extra] of [["jpole", { bands: "2400e6-2483e6" }], ["helix", {}], ["helix", { bands: "5725e6-5875e6", d: 1e-3, turns: 5 }], ["collinear", { bands: "5742e6-5858e6" }], ["biquad", {}]] as const) {
       const { p, d } = setup(id, extra);
       const plan = shellPlan(id, p, d);
       expect(plan.kind === "feed", `${id} ${JSON.stringify(extra)}`).toBe(false);
@@ -76,21 +96,22 @@ describe("shells for wire antennas", () => {
   it("feed hoods: one solid, every exit ray clear, every slot open straight down past the bottom", () => {
     const hs = hoods();
     expect(hs.map((h) => h.id)).toEqual(expect.arrayContaining(["dipole", "fandipole", "groundplane", "yagi", "discone"]));
-    for (const { id, extra, d, plan, spec } of hs) {
+    for (const { id, extra, p, d, plan, spec } of hs) {
       if (plan.kind !== "feed") continue;
+      const fh = built(plan, id, p, d)!;
       const tag = `${id} ${JSON.stringify(extra)}`;
       const r = buildPart(M, spec, id);
       expect(r.ok, tag).toBe(true);
       const [h] = spec.build(M);
       expect(h.decompose().length, tag).toBe(1);
-      const wall = STYLE[styleOf(d)].wall, z0 = plan.inner.lo[2];
-      for (const x of plan.exits) {
+      const wall = STYLE[styleOf(d)].wall, z0 = fh.inner.lo[2];
+      for (const x of fh.exits) {
         if (Math.abs(x.at[2] - z0) < 1e-6 && x.dir[2] < 0) continue;          // out through the open bottom
         // probe with the exit's own shape: a lug (w) as its bar, a wire as a rod of its diameter
         const probe = (a: V3, b: V3) => (x.w ? bar(M, a, b, x.w) : rod(M, a, b, x.d));
         expect(h.intersect(probe(add(x.at, scale(x.dir, -1)), add(x.at, scale(x.dir, wall + 10)))).volume(), `${tag} exit ${x.at}`).toBeLessThan(1e-2);
-        if (!near(x.at[2], plan.inner.hi[2])) expect(h.intersect(probe(x.at, [x.at[0], x.at[1], z0 - 5])).volume(), `${tag} slot ${x.at}`).toBeLessThan(1e-2);
-        else if (!roundHole(x, plan.inner)) for (const q of lPath(M, x, plan.inner, wall)) expect(h.intersect(q).volume(), `${tag} L-slot ${x.at}`).toBeLessThan(1e-2);
+        if (!near(x.at[2], fh.inner.hi[2])) expect(h.intersect(probe(x.at, [x.at[0], x.at[1], z0 - 5])).volume(), `${tag} slot ${x.at}`).toBeLessThan(1e-2);
+        else if (!roundHole(x, fh.inner)) for (const q of lPath(M, x, fh.inner, wall)) expect(h.intersect(q).volume(), `${tag} L-slot ${x.at}`).toBeLessThan(1e-2);
       }
     }
   }, 120_000);
@@ -205,15 +226,16 @@ describe("shells for wire antennas", () => {
 });
 
 /** World-frame family parts that sit inside or next to the antenna, moved from their own build frame: a full box must
- *  keep them outside its walls. The Moxon and quad spreader hubs are left out (see the final-fix report: a full box
- *  around a UHF Moxon or quad still crosses the hub). */
-const WORLD: Record<string, (q: Manifold, d: Design) => Manifold> = {
-  "dipole-centre": (q) => q, "fan-centre": (q) => q, "gp-hub": (q) => q, "discone-hub": (q) => q, "helix-tube": (q) => q, "helix-frame": (q) => q,
-  "yagi-driven": (q, d) => q.translate(feedPoint(d)),
-  "biquad-standoff": (q) => q.transform([0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1]),   // its print frame (z up from the reflector) back to x up
+ *  keep them outside its walls, and the Moxon and quad hoods must keep off the spreader hubs. */
+const WORLD: Record<string, (q: Manifold, d: Design) => Manifold[]> = {
+  "dipole-centre": (q) => [q], "fan-centre": (q) => [q], "gp-hub": (q) => [q], "discone-hub": (q) => [q], "helix-tube": (q) => [q], "helix-frame": (q) => [q],
+  "yagi-driven": (q, d) => [q.translate(feedPoint(d))],
+  "biquad-standoff": (q) => [q.transform([0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1])],   // its print frame (z up from the reflector) back to x up
+  "moxon-hub": (q) => [q],
+  "quad-hub": (q, d) => quadGeometry(d).loops.map((l) => q.translate([l.x, 0, 0])),   // one per loop
 };
 const FREQS = [50e6, 145e6, 435e6, 868e6, 1.2e9, 2.4e9, 5.8e9];
-const ALLOWED = ["Too large to print in one piece: {0}", FAIL.thick, FAIL.radome, FAIL.hood];
+const ALLOWED = ["Too large to print in one piece: {0}", FAIL.thick, FAIL.radome, FAIL.hood, FAIL.room];
 
 describe("shells across the frequency range", () => {
   it("every wire antenna × 50 MHz … 5.8 GHz: builds or fails cleanly; boxes clear of world-frame parts; hoods open below", () => {
@@ -223,21 +245,21 @@ describe("shells across the frequency range", () => {
       const r = buildPart(M, spec, id);
       if (!r.ok) { expect(ALLOWED, `${tag} ${r.error.s} ${JSON.stringify(r.error.a)}`).toContain(r.error.s); continue; }
       const { wall } = STYLE[styleOf(d)], shell = spec.build(M);
-      if (plan.kind === "box") {
+      if (plan.kind === "box" || (plan.kind === "feed" && plan.hub)) {
         for (const s of specs.filter((q) => WORLD[q.id])) {
           let parts: Manifold[];
           try { parts = s.build(M); } catch { continue; }                     // a family part that cannot be built here
-          for (const q of parts.map((x) => WORLD[s.id](x, d))) expect(shell.reduce((a, h) => a + h.intersect(q).volume(), 0), `${tag} ${s.id}`).toBeLessThan(1e-2);
+          for (const q of parts.flatMap((x) => WORLD[s.id](x, d))) expect(shell.reduce((a, h) => a + h.intersect(q).volume(), 0), `${tag} ${s.id}`).toBeLessThan(1e-2);
         }
       }
       if (id === "helix" && plan.kind !== "dome") expect(shell[0].boundingBox().max[2], tag).toBeLessThanOrEqual(1e-6);
       if (plan.kind === "feed") {
-        const [h] = shell, z0 = plan.inner.lo[2];
-        for (const x of plan.exits) {
+        const fh = built(plan, id, p, d)!, [h] = shell, z0 = fh.inner.lo[2];
+        for (const x of fh.exits) {
           if (near(x.at[2], z0) && x.dir[2] < 0) continue;
           const probe = (a: V3, b: V3) => (x.w ? bar(M, a, b, x.w) : rod(M, a, b, x.d));
-          if (!near(x.at[2], plan.inner.hi[2])) expect(h.intersect(probe(x.at, [x.at[0], x.at[1], z0 - 5])).volume(), `${tag} slot ${x.at}`).toBeLessThan(1e-2);
-          else if (!roundHole(x, plan.inner)) for (const q of lPath(M, x, plan.inner, wall)) expect(h.intersect(q).volume(), `${tag} L-slot ${x.at}`).toBeLessThan(1e-2);
+          if (!near(x.at[2], fh.inner.hi[2])) expect(h.intersect(probe(x.at, [x.at[0], x.at[1], z0 - 5])).volume(), `${tag} slot ${x.at}`).toBeLessThan(1e-2);
+          else if (!roundHole(x, fh.inner)) for (const q of lPath(M, x, fh.inner, wall)) expect(h.intersect(q).volume(), `${tag} L-slot ${x.at}`).toBeLessThan(1e-2);
         }
       }
     }

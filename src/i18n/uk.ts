@@ -586,6 +586,7 @@ export const UK: Record<string, string> = {
   "Wire too thick for this part": "Дріт надто товстий для цієї деталі",
   "Radome too narrow for the coax": "Обтічник завузький для коаксіалу",
   "Wires too close together for the hood slots": "Дроти надто близько один до одного для прорізів ковпака",
+  "No room for a feedpoint hood next to the spreader hub": "Біля маточини розпірок немає місця для ковпака точки живлення",
   "Jig": "Кондуктор",
   "Holder": "Тримач",
   "Former": "Оправка",

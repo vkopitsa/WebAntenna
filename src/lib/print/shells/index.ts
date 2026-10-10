@@ -1,13 +1,14 @@
-import type { ManifoldToplevel } from "manifold-3d";
+import type { Manifold, ManifoldToplevel } from "manifold-3d";
 import type { Design, Params } from "../../types";
 import { num, str } from "../../types";
-import { msg, type PartSpec } from "../parts";
+import { FAIL, msg, PartError, type PartSpec } from "../parts";
 import { CLEAR, WALL, mm } from "../rules";
-import { add, pieceBottoms, rod, scale, type V3 } from "../shapes";
+import { add, box, pieceBottoms, rod, scale, type V3 } from "../shapes";
 import { helixGeometry } from "../families/former";
 import { centreHubBox, dipoleArms } from "../families/centre";
 import { yagiDrivenBox } from "../families/boom";
 import { D_IN, D_LUG, PLATE, disconeGeometry, hubGeometry } from "../families/hub";
+import { moxonParts, quadGeometry, quadParts } from "../families/spreader";
 import { boxFits, domeFits, envelope, exits, feedPoint, grow, STYLE, styleOf, type Box3, type Exit, type Style } from "./geometry";
 import { clamshell } from "./clamshell";
 import { dome, domeHeight, domeOffset, type DomeOpts } from "./dome";
@@ -72,11 +73,15 @@ const JACK = 30;                      // the cover's cavity: a 30 mm cube under 
 /** Families whose feed part is built in the antenna's own frame, at the feed: a full box would cut through it, so they
  *  always get the feed hood. */
 const FEED_HOLDER = new Set(["dipole", "fandipole", "groundplane", "yagi"]);
+/** Families whose spreader hub fills the middle of the antenna: no full box either; the hood at the feed shrinks
+ *  (HUB_CUBE, from 30 mm down to 12 mm) until it keeps the gap from the hub. */
+const SPREADER = new Set(["moxon", "quad"]);
+const HUB_CUBE = { max: 30, min: 12, step: 1 };
 
 export type ShellPlan =
   | { kind: "dome"; style: Style; inner: Box3; opts: DomeOpts; toWorld: V3; pieceZ: (i: number, n: number) => number }
   | { kind: "box"; style: Style; inner: Box3; splitZ: number; gland: V3; toWorld?: undefined; pieceZ?: undefined }
-  | { kind: "feed"; style: Style; inner: Box3; exits: Exit[]; toWorld?: undefined; pieceZ?: undefined }
+  | { kind: "feed"; style: Style; inner: Box3; exits: Exit[]; hub?: boolean; toWorld?: undefined; pieceZ?: undefined }
   | { kind: "jack"; style: Style; inner: Box3; toWorld?: undefined; pieceZ?: undefined };
 
 function domePlan(defId: string, p: Params, d: Design, s: Style): DomeOpts | null {
@@ -156,7 +161,7 @@ export function shellPlan(defId: string, p: Params, d: Design): ShellPlan {
     return { kind: "jack", style, inner };
   }
   const fp = feedPoint(d);
-  if (!dp && !FEED_HOLDER.has(defId)) {
+  if (!dp && !FEED_HOLDER.has(defId) && !SPREADER.has(defId)) {
     // full box: the coax gland goes down through the floor, at least a wall clear of the side walls (the cavity grows
     // in x or y if it is too narrow for that)
     const full = grow(envelope(d), gap), need = GLAND + 2 * wall, gland: V3 = [...fp];
@@ -167,7 +172,26 @@ export function shellPlan(defId: string, p: Params, d: Design): ShellPlan {
     }
     if (boxFits(full, wall)) return { kind: "box", style, inner: full, splitZ: fp[2], gland };
   }
-  return { kind: "feed", style, ...feedHood(defId, p, d, gap) };
+  // next to a spreader hub, inner/exits are the largest cube's; the hood actually built comes from hubHood()
+  return { kind: "feed", style, ...feedHood(defId, p, d, gap), ...(SPREADER.has(defId) ? { hub: true } : {}) };
+}
+
+/** Spreader hubs in world frame: the Moxon hub at the origin, one quad hub at each loop's x. */
+function spreaderHubs(M: ManifoldToplevel, defId: string, p: Params, d: Design): Manifold[] {
+  if (defId === "moxon") return moxonParts(p, d)[0].build(M);
+  if (defId === "quad") { const [hub] = quadParts(p, d)[0].build(M); return quadGeometry(d).loops.map((l) => hub.translate([l.x, 0, 0])); }
+  return [];
+}
+
+/** The Moxon / quad feed hood: the largest cube at the feed point (30 mm down to 12 mm) whose hood, grown by the gap,
+ *  stays clear of the hubs' built meshes; null when even the smallest does not. */
+export function hubHood(M: ManifoldToplevel, defId: string, p: Params, d: Design): { inner: Box3; exits: Exit[] } | null {
+  const { wall, gap } = STYLE[styleOf(d)], fp = feedPoint(d), hubs = spreaderHubs(M, defId, p, d);
+  for (let s = HUB_CUBE.max; s >= HUB_CUBE.min; s -= HUB_CUBE.step) {
+    const inner = grow(cubeAt(fp, s), gap), keep = grow(inner, wall + gap), k = box(M, keep.lo, keep.hi);
+    if (hubs.every((h) => h.intersect(k).volume() < 1e-2)) return { inner, exits: exits(d, inner) };
+  }
+  return null;
 }
 
 /** How-to steps: the hood gets the GP mast note or the dipole halyard step before its sealing step. */
@@ -209,6 +233,11 @@ export function shellFor(defId: string, p: Params, d: Design, printed: boolean):
     howTo: howTo(defId, plan.kind).map((s) => msg(s)),
     build: (M: ManifoldToplevel) => {
       if (plan.kind === "dome") return dome(M, plan.opts);
+      if (plan.kind === "feed" && plan.hub) {
+        const h = hubHood(M, defId, p, d);
+        if (!h) throw new PartError(msg(FAIL.room));
+        return hood(M, { inner: h.inner, wall, exits: h.exits });
+      }
       if (plan.kind === "feed") return hood(M, { inner: plan.inner, wall, exits: plan.exits });   // buildPart reports "Too large"
       const g = plan.gland, cuts = [rod(M, [g[0], g[1], plan.inner.lo[2] - wall - 2], [g[0], g[1], plan.inner.lo[2] + 1], GLAND)];
       return clamshell(M, { inner: plan.inner, wall, splitZ: plan.splitZ, cuts, drain: style === "outdoor" });
