@@ -595,4 +595,11 @@ export const UK: Record<string, string> = {
   "Seal the window with hot glue or silicone against water.": "Загерметизуйте вікно термоклеєм або силіконом від води.",
   "Pass the arm end through the small hole, fold it back and twist it round itself.": "Протягніть кінець плеча в малий отвір, загніть назад і закрутіть навколо себе.",
   "Tie the support rope through the large hole.": "Прив'яжіть мотузку підвісу через великий отвір.",
+  "Ground-plane radial hub": "Вузол радіалів GP",
+  "Sets {0} radials at {1}° droop (the droop sets the feed impedance). Takes an SO-239 or N 4-hole panel jack with M3 screws and nuts; the radial ends meet at the flange screws for soldering. Zip-tie the block to the mast.": "Задає радіали ({0} шт.) з нахилом {1}° (нахил визначає вхідний опір). Під панельне гніздо SO-239 або N з 4 отворами, гвинти й гайки M3; кінці радіалів сходяться біля гвинтів фланця для паяння. Блок кріпиться до щогли стяжками.",
+  "Bolt the panel jack on top with four M3 screws; the nuts drop into the pockets underneath.": "Прикрутіть панельне гніздо зверху чотирма гвинтами M3; гайки вкладаються в гнізда знизу.",
+  "Push each radial into its bore until the end reaches a flange screw; wrap the end round the screw or under a solder lug and solder it.": "Вставте кожен радіал у його канал, доки кінець не дійде до гвинта фланця; обгорніть кінець навколо гвинта або під пелюстку й припаяйте.",
+  "Solder the radiator to the jack's centre pin so it stands vertical.": "Припаяйте випромінювач до центрального контакту гнізда вертикально.",
+  "Strap the side block to the mast with two zip ties or a hose clamp through the slots; the coax goes down through the centre.": "Притягніть боковий блок до щогли двома стяжками або хомутом через прорізи; коаксіал іде вниз через центр.",
+  "Seal the jack and the joints against water.": "Загерметизуйте гніздо та з'єднання від води.",
 };

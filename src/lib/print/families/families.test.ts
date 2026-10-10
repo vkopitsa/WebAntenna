@@ -7,6 +7,7 @@ import { partsFor } from "..";
 import { rod, type V3 } from "../shapes";
 import { CLEAR } from "../rules";
 import { dipoleArms } from "./centre";
+import { radialDirs } from "./hub";
 
 let M: ManifoldToplevel;
 beforeAll(async () => { M = await loadManifold(); });
@@ -31,6 +32,22 @@ describe("dipole", () => {
       for (const a of arms) {
         expect(inside(centre, along(a.start, a.dir, 10, 30, wireD))).toBeLessThan(1e-3);
         expect(inside(centre, along(a.start, a.dir, 10, 30, wireD + CLEAR + 2))).toBeGreaterThan(1);
+      }
+    }
+  });
+});
+
+describe("ground plane", () => {
+  it("hub: bores follow the radials (within 0.5°) and are surrounded by plastic", () => {
+    for (const droop of [0, 30, 45, 60]) {
+      const { d } = setup("groundplane", { droop });
+      const dirs = radialDirs(d);
+      dirs.forEach((u) => expect(Math.abs((Math.asin(-u[2]) * 180) / Math.PI - droop)).toBeLessThan(0.5));
+      const hub = part("groundplane", "gp-hub", { droop }).build(M)[0];
+      const wireD = 2000 * d.wires[1].r;
+      for (const u of dirs) {
+        expect(inside(hub, along([0, 0, 0], u, 20, 45, wireD))).toBeLessThan(1e-3);
+        expect(inside(hub, along([0, 0, 0], u, 20, 45, wireD + CLEAR + 2))).toBeGreaterThan(1);
       }
     }
   });
