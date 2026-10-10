@@ -30,6 +30,11 @@ export const SPREADER_HOWTO = {
     "Push the cap onto the rod end; trim the rod so the corner lands at the designed position.",
     "Press the wire corner into the groove from outside; a drop of glue or a short zip tie keeps it there.",
   ],
+  moxonCap: [
+    "Push the cap onto the rod end; trim the rod so the corner lands at the designed position.",
+    "Press the wire corner into the groove from outside; a drop of glue or a short zip tie keeps it there.",
+    "The same cap fits both sides of the antenna: turn it over for the other side.",
+  ],
   gap: [
     "Pass each wire tip through its hole, fold it back and twist it round itself, so the hole centres set the gap.",
     "Use one insulator on each side of the antenna.",
@@ -62,21 +67,60 @@ export function quadGeometry(d: Design) {
   return { wireD: mm(2 * live(d)[0].r), loops: xs.map((x) => ({ x, h: Math.max(...pts.filter((p) => Math.abs(p[0] - x) < 1e-3).map((p) => Math.abs(p[1]))) })) };
 }
 
+/** Where the rod stops behind the corner: far enough that neither wire leg meets the rod volume. */
+export function capTipSetback(dir: V3, legs: [V3, V3], rodD: number, wireD: number): number {
+  const rb = rodD + CLEAR, ch = wireD + CLEAR, R = rb / 2 + ch / 2 + 0.5;
+  let t = ch / 2 + WALL + 1;
+  for (const l of legs) {
+    const c = -(dir[0] * l[0] + dir[1] * l[1] + dir[2] * l[2]);   // cos of the angle between -dir and the leg
+    if (c > 1e-6) t = Math.max(t, (R * c) / Math.sqrt(1 - c * c + 1e-12));
+  }
+  return t;
+}
+
 /** Cap on a spreader rod end whose wire corner is at `at`; `dir` points along the rod outwards, `legs` along the two wire
- *  sides away from the corner. The groove is open towards the outside of the corner, so wire tension pulls the wire in. */
+ *  sides away from the corner. The groove is open towards the outside of the corner, so wire tension pulls the wire in.
+ *  The rod occupies 30 mm behind `at - dir * capTipSetback(...)`. */
 export function cornerCap(M: ManifoldToplevel, at: V3, dir: V3, legs: [V3, V3], rodD: number, wireD: number): Manifold {
   const rb = rodD + CLEAR, ch = wireD + CLEAR, so = rb / 2 + WALL;
-  const tip = sub(at, scale(dir, ch / 2 + WALL + 1));               // rod end
+  const tip = sub(at, scale(dir, capTipSetback(dir, legs, rodD, wireD)));   // rod end
   const body = rod(M, sub(tip, scale(dir, 30)), add(at, scale(dir, ch / 2 + WALL)), 2 * so);
   const out = unit(scale(add(legs[0], legs[1]), -1));
   const grooves = legs.map((l) => {
-    const c = channel(M, at, add(at, scale(l, 2 * so)), wireD);
+    const sin = Math.sqrt(Math.max(0.01, 1 - Math.pow(dir[0] * l[0] + dir[1] * l[1] + dir[2] * l[2], 2)));
+    const len = Math.max(2 * so, (so + ch) / sin + 2);
+    const c = channel(M, at, add(at, scale(l, len)), wireD);
     return M.Manifold.hull([c, c.translate(scale(out, 2 * so))]);
   });
   return body.subtract(M.Manifold.union([rod(M, sub(tip, scale(dir, 31)), tip, rb), ...grooves]));
 }
 
+/** The unrotated cap arguments for the Moxon corner at `corner` (mm) on the driver ("front") or reflector side. */
+export function moxonCapArgs(corner: V3, front: boolean): { at: V3; dir: V3; legs: [V3, V3] } {
+  return { at: corner, dir: unit(corner), legs: [[front ? -1 : 1, 0, 0], [0, -Math.sign(corner[1]), 0]] };
+}
+
 /** Rod socket hub at the origin: a core and one socket per direction, each with an M3 lock screw from +z. */
+/** Core radius so that neighbouring sockets (width rod + 2 walls) do not overlap, at least `base`. */
+export function hubCore(dirs: V3[], rodD: number, base: number): number {
+  let phi = Math.PI;
+  for (let i = 0; i < dirs.length; i++) for (let j = i + 1; j < dirs.length; j++) {
+    const c = dirs[i][0] * dirs[j][0] + dirs[i][1] * dirs[j][1] + dirs[i][2] * dirs[j][2];
+    phi = Math.min(phi, Math.acos(Math.max(-1, Math.min(1, c))));
+  }
+  return Math.max(base, ((rodD + CLEAR) / 2 + WALL) / Math.sin(Math.max(phi, 0.05) / 2));
+}
+
+/** Socket directions and core radius of the hubs (mm). */
+export function moxonHubLayout(d: Design, rodD: number) {
+  const g = moxonGeometry(d), dirs = ([[g.xE, g.yA, 0], [g.xE, -g.yA, 0], [g.xR, g.yA, 0], [g.xR, -g.yA, 0]] as V3[]).map(unit);
+  return { dirs, core: hubCore(dirs, rodD, rodD + 6) };
+}
+const QUAD_DIRS: V3[] = ([[0, 1, 1], [0, 1, -1], [0, -1, 1], [0, -1, -1]] as V3[]).map(unit);
+export function quadHubLayout(rodD: number, bd: number) {
+  return { dirs: QUAD_DIRS, core: hubCore(QUAD_DIRS, rodD, (bd + CLEAR) / 2 + WALL + 1) };
+}
+
 function socketHub(M: ManifoldToplevel, dirs: V3[], rodD: number, core: number): { body: Manifold; cuts: Manifold[] } {
   const rb = rodD + CLEAR, w = Math.max(rb + 2 * WALL, 12);
   const body = M.Manifold.union(dirs.map((u) => bar(M, scale(u, core - 2), scale(u, core + SOCK), w)));
@@ -90,10 +134,10 @@ function socketHub(M: ManifoldToplevel, dirs: V3[], rodD: number, core: number):
 export function moxonParts(p: Params, d: Design): PartSpec[] {
   const g = moxonGeometry(d), rodD = mm(num(p, "rod", 8.5e-3));
   const corners: V3[] = [[g.xE, g.yA, 0], [g.xE, -g.yA, 0], [g.xR, g.yA, 0], [g.xR, -g.yA, 0]];
-  const core = rodD + 6, w = Math.max(rodD + CLEAR + 2 * WALL, 12);
-  const capPart = (M: ManifoldToplevel, at: V3, legX: number) => {
-    const dir = unit(at);
-    return [toZ(cornerCap(M, at, dir, [[legX, 0, 0], [0, -1, 0]], rodD, g.wireD), at, dir)];
+  const core = moxonHubLayout(d, rodD).core, w = Math.max(rodD + CLEAR + 2 * WALL, 12);
+  const capPart = (M: ManifoldToplevel, at: V3, front: boolean) => {
+    const a = moxonCapArgs(at, front);
+    return [toZ(cornerCap(M, a.at, a.dir, a.legs, rodD, g.wireD), a.at, a.dir)];
   };
   const L = (x: number) => ({ len: x / 1000 });
   return [
@@ -106,8 +150,8 @@ export function moxonParts(p: Params, d: Design): PartSpec[] {
         return [body.subtract(M.Manifold.union([...h.cuts, ...[-w / 2 - 10, -w / 2 - 22].map((z) => zipSlot(M, [0, 0, z], 1, 2, 14))]))];
       },
     },
-    { id: "moxon-cap-front", title: SPREADER_STRINGS[1], use: "holder", qty: 2, purpose: msg(SPREADER_STRINGS[7]), howTo: SPREADER_HOWTO.cap.map((s) => msg(s)), build: (M) => capPart(M, corners[0], -1) },
-    { id: "moxon-cap-rear", title: SPREADER_STRINGS[2], use: "holder", qty: 2, purpose: msg(SPREADER_STRINGS[7]), howTo: SPREADER_HOWTO.cap.map((s) => msg(s)), build: (M) => capPart(M, corners[2], 1) },
+    { id: "moxon-cap-front", title: SPREADER_STRINGS[1], use: "holder", qty: 2, purpose: msg(SPREADER_STRINGS[7]), howTo: SPREADER_HOWTO.moxonCap.map((s) => msg(s)), build: (M) => capPart(M, corners[0], true) },
+    { id: "moxon-cap-rear", title: SPREADER_STRINGS[2], use: "holder", qty: 2, purpose: msg(SPREADER_STRINGS[7]), howTo: SPREADER_HOWTO.moxonCap.map((s) => msg(s)), build: (M) => capPart(M, corners[2], false) },
     {
       id: "moxon-gap", title: SPREADER_STRINGS[3], use: "holder", qty: 2, purpose: msg(SPREADER_STRINGS[8], L(g.C)), howTo: SPREADER_HOWTO.gap.map((s) => msg(s)),
       build: (M) => {
@@ -121,8 +165,7 @@ export function moxonParts(p: Params, d: Design): PartSpec[] {
 
 export function quadParts(p: Params, d: Design): PartSpec[] {
   const g = quadGeometry(d), rodD = mm(num(p, "rod", 8.5e-3)), bd = mm(num(p, "bd", 25e-3));
-  const dirs: V3[] = [[0, 1, 1], [0, 1, -1], [0, -1, 1], [0, -1, -1]].map((v) => unit(v as V3));
-  const core = (bd + CLEAR) / 2 + WALL + 1, w = Math.max(rodD + CLEAR + 2 * WALL, 12);
+  const { dirs, core } = quadHubLayout(rodD, bd), w = Math.max(rodD + CLEAR + 2 * WALL, 12);
   const L = (x: number) => ({ len: x / 1000 });
   return [
     {

@@ -3,7 +3,7 @@ import type { ManifoldToplevel } from "manifold-3d";
 import { loadManifold } from "../manifold";
 import { CLEAR } from "../rules";
 import { toZ, unit, type V3 } from "../shapes";
-import { cornerCap, moxonGeometry, quadGeometry } from "./spreader";
+import { capTipSetback, cornerCap, moxonCapArgs, moxonGeometry, moxonHubLayout, quadGeometry, quadHubLayout } from "./spreader";
 import { along, ball, inside, part, setup } from "./testkit";
 
 let M: ManifoldToplevel;
@@ -15,10 +15,11 @@ describe("moxon", () => {
       const { d } = setup("moxon", { rod });
       const g = moxonGeometry(d);
       const hub = part("moxon", "moxon-hub", { rod }).build(M)[0];
+      const s0 = moxonHubLayout(d, rod * 1000).core + 1;
       for (const c of [[g.xE, g.yA], [g.xE, -g.yA], [g.xR, g.yA], [g.xR, -g.yA]]) {
         const u = unit([c[0], c[1], 0]);
-        expect(inside(hub, along(M, [0, 0, 0], u, 20, 50, rod * 1000)), `${rod} ${c}`).toBeLessThan(1e-3);
-        expect(inside(hub, along(M, [0, 0, 0], u, 25, 50, rod * 1000 + CLEAR + 2))).toBeGreaterThan(1);
+        expect(inside(hub, along(M, [0, 0, 0], u, s0, s0 + 30, rod * 1000)), `${rod} ${c}`).toBeLessThan(1e-3);
+        expect(inside(hub, along(M, [0, 0, 0], u, s0, s0 + 30, rod * 1000 + CLEAR + 2))).toBeGreaterThan(1);
       }
     }
   });
@@ -48,8 +49,9 @@ describe("quad", () => {
     const cap = cornerCap(M, at, dir, [[0, -1, 0], [0, 0, -1]], 8.5, 2);
     expect(inside(cap, ball(M, at, 2))).toBeLessThan(1e-3);
     expect(inside(cap, ball(M, [0, 295, 300], 2))).toBeLessThan(1e-3);
-    expect(inside(cap, along(M, at, dir, -25, -6, 8.5))).toBeLessThan(1e-3);
-    expect(inside(cap, along(M, at, dir, -25, -6, 8.5 + CLEAR + 2))).toBeGreaterThan(1);
+    const sb = capTipSetback(dir, [[0, -1, 0], [0, 0, -1]], 8.5, 2);
+    expect(inside(cap, along(M, at, dir, -(sb + 25), -(sb + 1), 8.5))).toBeLessThan(1e-3);
+    expect(inside(cap, along(M, at, dir, -(sb + 25), -(sb + 1), 8.5 + CLEAR + 2))).toBeGreaterThan(1);
   });
   it("toZ with a general direction: the cap corner lands at the origin, the rod sleeve below", () => {
     const at: V3 = [0, 300, 300], dir = unit([0, 1, 1]);
@@ -60,4 +62,48 @@ describe("quad", () => {
     expect(bb.min[2]).toBeLessThan(-30);
     for (const k of [0, 1]) expect(Math.abs(bb.min[k] + bb.max[k]) / 2).toBeLessThan(8);
   });
+});
+
+describe("corner caps", () => {
+  const quadArgs = { at: [0, 100, 100] as V3, dir: unit([0, 1, 1]), legs: [[0, -1, 0], [0, 0, -1]] as [V3, V3] };
+  const cases = () => {
+    const g = moxonGeometry(setup("moxon").d);
+    return {
+      "moxon front": moxonCapArgs([g.xE, g.yA, 0], true),
+      "moxon rear": moxonCapArgs([g.xR, g.yA, 0], false),
+      quad: quadArgs,
+    };
+  };
+  for (const rodD of [3, 8.5, 25]) {
+    it(`rod ${rodD}: wire legs clear of cap and rod, corner held, groove open outwards`, () => {
+      for (const [name, a] of Object.entries(cases())) {
+        const wireD = 2;
+        const cap = cornerCap(M, a.at, a.dir, a.legs, rodD, wireD);
+        const tip = a.at.map((v, i) => v - a.dir[i] * capTipSetback(a.dir, a.legs, rodD, wireD)) as V3;
+        const rodVol = along(M, tip, a.dir.map((v) => -v) as V3, 0, 30, rodD);
+        for (const l of a.legs) {
+          const wire = along(M, a.at, l, 0.5, 20, wireD * 0.98);
+          expect(inside(cap, wire), `${name} ${rodD} cap`).toBeLessThan(1e-2);
+          expect(inside(rodVol, wire), `${name} ${rodD} rod`).toBeLessThan(1e-2);
+        }
+        expect(inside(cap, ball(M, a.at, wireD + 2)), `${name} corner held`).toBeGreaterThan(1);
+        const out = unit(a.legs[0].map((v, i) => -(v + a.legs[1][i])) as V3);
+        const so = (rodD + CLEAR) / 2 + 2;
+        const at = (k: number) => a.at.map((v, i) => v + out[i] * k) as V3;
+        expect(inside(cap, ball(M, at(2 * so), wireD)), `${name} out clear`).toBeLessThan(1e-3);
+        const kin = Math.min(2 * so, 0.8 * capTipSetback(a.dir, a.legs, rodD, wireD));
+        expect(inside(cap, ball(M, at(-kin), wireD)), `${name} ${rodD} in plastic`).toBeGreaterThan(1);
+      }
+    });
+  }
+});
+
+describe("hub sockets do not overlap", () => {
+  const bores = (M: ManifoldToplevel, dirs: V3[], core: number, rodD: number) =>
+    dirs.map((u) => along(M, [0, 0, 0], u, core, core + 40, rodD + CLEAR));
+  const noOverlap = (bs: ReturnType<typeof bores>) => {
+    for (let i = 0; i < bs.length; i++) for (let j = i + 1; j < bs.length; j++) expect(inside(bs[i], bs[j]), `${i}-${j}`).toBeLessThan(1e-3);
+  };
+  it("moxon", () => { for (const rod of [3, 8.5, 25]) { const l = moxonHubLayout(setup("moxon").d, rod); noOverlap(bores(M, l.dirs, l.core, rod)); } });
+  it("quad", () => { for (const rod of [3, 8.5, 25]) for (const bd of [10, 25, 60]) { const l = quadHubLayout(rod, bd); noOverlap(bores(M, l.dirs, l.core, rod)); } });
 });

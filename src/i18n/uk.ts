@@ -676,4 +676,5 @@ export const UK: Record<string, string> = {
   "Slide the hub onto the boom at the loop position and lock it with an M3 screw.": "Насуньте вузол на траверсу в місці рамки і зафіксуйте гвинтом M3.",
   "Push the spreader rods into the sockets and glue them.": "Вставте стрижні розпірок у гнізда і вклейте їх.",
   "Fit a corner cap on each rod end and press the wire corners into the grooves.": "Встановіть кутовий наконечник на кінець кожного стрижня і втисніть кути дроту в канавки.",
+  "The same cap fits both sides of the antenna: turn it over for the other side.": "Той самий наконечник підходить для обох боків антени: для іншого боку переверніть його.",
 };
