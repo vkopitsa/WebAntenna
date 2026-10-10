@@ -8,6 +8,10 @@ It is a static React + TypeScript site and runs entirely in the browser.
 
 [![Deploy to GitHub Pages](https://github.com/vkopitsa/webantenna/actions/workflows/deploy.yml/badge.svg)](https://github.com/vkopitsa/webantenna/actions/workflows/deploy.yml)
 
+![Animated tour: a 9-element Yagi is rotated in 3D and set to 12 elements, the Simulation tab shows S11, impedance, SWR, Smith chart and radiation patterns, the Build tab shows the bill of materials and cut list, Synthesis ranks candidate antennas, a printed inverted-F antenna is opened and an in-browser FDTD run starts, then the theme switches to dark and the language to Ukrainian](docs/demo.gif)
+
+*A tour: design, simulation, build pack, synthesis, printed antennas with in-browser FDTD, dark theme and Ukrainian.*
+
 ![Antenna Generator Simulation tab for a 9-element 2 m Yagi: S11, input impedance and SWR over the band, Smith chart, and horizontal and vertical radiation patterns](docs/screenshot.jpg)
 
 *Simulation tab: a 9-element Yagi for 2 m, solved by the built-in MoM solver (13.3 dBi, F/B 17.7 dB).*
