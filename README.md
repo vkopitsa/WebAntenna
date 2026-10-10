@@ -46,6 +46,9 @@ Formulas, sources and NEC-2 checks: [docs/ANTENNAS.md](docs/ANTENNAS.md).
   - **1:1 template (SVG)** in millimetres for plotters and laser cutters;
   - **Gerber + drill + DXF (.zip)** for printed antennas (RS-274X with X2 attributes, Excellon, DXF R12, README with the stack-up),
     plus notes on how εr shifts the frequency (FR-4 spread, the same layout on RO4003C).
+- **3D-printed parts (STL):** for the dipole, ground plane and Yagi, the Build tab generates parts that hold the wires where the model has them
+  (dipole centre and end insulators, a ground-plane radial hub with a jack flange at the designed droop, Yagi element clips, a driven-element block
+  or a boom drilling guide), each with how-to steps. STL is in mm with the fit clearance built in; use your slicer's usual settings.
 - **Measured vs model:** load a NanoVNA / VNA `.s1p` or `.s2p` in the Simulation tab. It is overlaid on the simulation, and the app compares the
   measured best match with the target, says how many mm to trim (or add), and can rescale the design for the next build.
 - Dimension table plus per-element tables (Yagi elements, collinear sections). mm or inches.

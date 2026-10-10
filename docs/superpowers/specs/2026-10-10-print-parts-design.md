@@ -39,7 +39,7 @@ Solder joints are always left in an open window, never buried in plastic.
 ```
 src/lib/print/                 NO DOM, NO React, NO i18n (same rule as src/lib)
   rules.ts       the constants above
-  parts.ts       PartSpec { id, title, use: "jig" | "holder" | "former", qty, purpose: Msg,
+  parts.ts       PartSpec { id, title, use: "jig" | "holder" | "former", qty, purpose: Msg, howTo: Msg[],
                  build(M: ManifoldToplevel) → Manifold[] (one per segment) }
                  partsFor(def, design) → { parts: PartSpec[], skipped: { title, reason: Msg }[] }
   shapes.ts      wireChannel, snapClip, tubeClamp, boltHole + nutTrap, connectorFlange,
@@ -64,7 +64,9 @@ selected parts with manifold → `stl.ts` → download one STL, or all parts as 
 quantity, bounding size, one-line purpose (e.g. "sets the radial droop to 45°, which gives ≈ 50 Ω"),
 an **STL** button per part and **All parts (.zip)**. Selecting a part shows it in the existing SVG 3D view
 (triangle mesh drawn as flat-shaded faces; no WebGL). Skipped parts are listed with their reason.
-The build steps get one neutral line: "PETG or ASA for outdoor parts." Strings go through `t()`; numbers
+The panel hint carries the printing advice (STL in mm, PETG/ASA outdoors, PLA for jigs). Each part has numbered
+how-to steps (`PartSpec.howTo`), shown under the preview and written to `README.txt` in the parts zip
+(added after spec approval, at the user's request). Strings go through `t()`; numbers
 through `Msg` so mm/inch works.
 
 ## Part catalogue
