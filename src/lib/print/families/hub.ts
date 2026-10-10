@@ -42,11 +42,20 @@ export function hubGeometry(d: Design) {
   return { wireD, ch, w, rLug, paths };
 }
 
+/** Mast block azimuth: between the first two radials. */
+const mastAz = (paths: { h: V3 }[]) => Math.atan2(paths[0].h[1], paths[0].h[0]) + Math.PI / paths.length;
+
+/** Where a mast strapped to the GP hub's side block runs (vertical, mm): the block face at radius 28 between radials. */
+export function gpMastAxis(d: Design): V3 {
+  const az = mastAz(hubGeometry(d).paths);
+  return [Math.cos(az) * 28 + Math.cos(az) * 15, Math.sin(az) * 28 + Math.sin(az) * 15, 0];   // mast centre: block face + a 30 mm mast's radius
+}
+
 export function groundPlaneParts(d: Design): PartSpec[] {
   const g = hubGeometry(d);
   const { ch, w, rLug, paths } = g;
   const droop = (Math.asin(-paths[0].dir[2]) * 180) / Math.PI;
-  const az = Math.atan2(paths[0].h[1], paths[0].h[0]) + Math.PI / paths.length;   // mast block between the first two radials
+  const az = mastAz(paths);   // mast block between the first two radials
   const azDeg = (az * 180) / Math.PI;
   const hub: PartSpec = {
     id: "gp-hub", title: "Ground-plane radial hub", use: "holder", qty: 1,

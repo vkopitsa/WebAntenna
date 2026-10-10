@@ -10,6 +10,8 @@ import { FORMER_HOWTO, FORMER_STRINGS, helixParts } from "./families/former";
 import { SPREADER_HOWTO, SPREADER_STRINGS, moxonParts, quadParts } from "./families/spreader";
 import { STANDOFF_HOWTO, STANDOFF_STRINGS, biquadParts } from "./families/standoff";
 import { SPACER_HOWTO, SPACER_STRINGS, collinearParts, jpoleParts } from "./families/spacer";
+import { SHELL_HOWTO, SHELL_STRINGS, shellFor } from "./shells";
+import { ANTENNA_BY_ID } from "../antennas";
 import { en } from "../build";
 
 export { buildPart, USE_LABELS, type BuiltPart, type PartSpec, type Segment } from "./parts";
@@ -28,8 +30,13 @@ const FAMILIES: Record<string, (p: Params, d: Design) => PartSpec[]> = {
   collinear: collinearParts,
 };
 
-/** Printable parts for an antenna design; empty when the type has none (yet). Cheap: nothing is built here. */
-export const partsFor = (defId: string, p: Params, d: Design): PartSpec[] => FAMILIES[defId]?.(p, d) ?? [];
+/** Printable parts for an antenna design (the family's parts plus its shell); empty when the type has none (yet).
+ *  Cheap: nothing is built here. */
+export const partsFor = (defId: string, p: Params, d: Design): PartSpec[] => {
+  const family = FAMILIES[defId]?.(p, d) ?? [];
+  const shell = shellFor(defId, p, d, family, ANTENNA_BY_ID[defId]?.category ?? "");
+  return shell ? [...family, shell] : family;
+};
 
 /** Build and check every part of a design, then free all WASM geometry (the results are plain arrays). */
 export function buildParts(M: ManifoldToplevel, defId: string, p: Params, d: Design): BuiltPart[] {
@@ -40,6 +47,7 @@ export function buildParts(M: ManifoldToplevel, defId: string, p: Params, d: Des
 export const PRINT_STRINGS = [
   ...PART_STRINGS, ...CENTRE_STRINGS, ...HUB_STRINGS, ...BOOM_STRINGS, ...FORMER_STRINGS, ...DISCONE_STRINGS, ...SPREADER_STRINGS, ...STANDOFF_STRINGS, ...SPACER_STRINGS, ...FAN_STRINGS,
   ...Object.values(CENTRE_HOWTO).flat(), ...HUB_HOWTO, ...Object.values(BOOM_HOWTO).flat(), ...FORMER_HOWTO, ...DISCONE_HOWTO, ...Object.values(SPREADER_HOWTO).flat(), ...STANDOFF_HOWTO, ...Object.values(SPACER_HOWTO).flat(), ...Object.values(FAN_HOWTO).flat(),
+  ...SHELL_STRINGS, ...Object.values(SHELL_HOWTO).flat(),
 ];
 
 /** README.txt for the parts zip: every part with its quantity, purpose and how-to steps, in English with lengths in mm. */

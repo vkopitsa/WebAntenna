@@ -22,7 +22,7 @@ const along = (a: V3, u: V3, s0: number, s1: number, d: number) => rod(M, [a[0] 
 describe("dipole", () => {
   it("has a centre insulator and two end insulators", () => {
     const { p, d } = setup("dipole");
-    expect(partsFor("dipole", p, d).map((s) => [s.id, s.qty])).toEqual([["dipole-centre", 1], ["dipole-end", 2]]);
+    expect(partsFor("dipole", p, d).map((s) => [s.id, s.qty])).toEqual([["dipole-centre", 1], ["dipole-end", 2], ["shell", 1]]);
   });
   it("centre: the arm channels follow the droop and are clear for the wire", () => {
     for (const droop of [0, 30, 60]) {
@@ -79,9 +79,9 @@ describe("ground plane", () => {
 describe("yagi", () => {
   it("insulated: n − 1 clips and a driven block; through-boom: one drilling guide", () => {
     const { p, d } = setup("yagi");
-    expect(partsFor("yagi", p, d).map((s) => [s.id, s.qty])).toEqual([["yagi-clip", Number(p.n) - 1], ["yagi-driven", 1]]);
+    expect(partsFor("yagi", p, d).map((s) => [s.id, s.qty])).toEqual([["yagi-clip", Number(p.n) - 1], ["yagi-driven", 1], ["shell", 1]]);
     const t = setup("yagi", { boom: "through" });
-    expect(partsFor("yagi", t.p, t.d).map((s) => s.id)).toEqual(["yagi-drill"]);
+    expect(partsFor("yagi", t.p, t.d).map((s) => s.id)).toEqual(["yagi-drill", "shell"]);
   });
   it("clip: the element fits with 0.3 mm clearance and sits on 2 mm of plastic above the boom", () => {
     const { d } = setup("yagi");
