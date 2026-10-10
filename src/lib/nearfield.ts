@@ -12,8 +12,8 @@ const ETA0 = 4e-7 * Math.PI * C0;
 
 /** Pixel (i, j) centre = origin + u·(i+½)·w/nx + v·(j+½)·h/ny; u, v unit vectors (v points down the screen). r is measured from ref. */
 export interface FieldPlane { origin: Vec3; u: Vec3; v: Vec3; w: number; h: number; nx: number; ny: number; ref: Vec3 }
-/** e: 6 floats per pixel (ExR ExI EyR EyI EzR EzI, V/m for a 1 V source); r: distance from the plane's ref. */
-export interface FieldGrid { nx: number; ny: number; e: Float32Array; r: Float32Array }
+/** e: 6 floats per pixel (ExR ExI EyR EyI EzR EzI, V/m for a 1 V source); r: distance from the plane's ref; d: to the nearest current element. */
+export interface FieldGrid { nx: number; ny: number; e: Float32Array; r: Float32Array; d: Float32Array }
 /** segs: 6 floats per MoM segment (p, q); ir/ii: segment midpoint currents along p → q. */
 export interface RadiationField { f: number; grid: FieldGrid; segs: Float64Array; ir: Float64Array; ii: Float64Array }
 export type RGB = [number, number, number];
@@ -58,7 +58,7 @@ export function fieldAt(els: CurrentElement[], k: number, pt: Vec3, out: Float64
 export function nearField(els: CurrentElement[], f: number, plane: FieldPlane): FieldGrid {
   const { origin: o, u, v, w, h, nx, ny, ref } = plane;
   const k = (2 * Math.PI * f) / C0;
-  const e = new Float32Array(6 * nx * ny), rr = new Float32Array(nx * ny), out = new Float64Array(6);
+  const e = new Float32Array(6 * nx * ny), rr = new Float32Array(nx * ny), dd = new Float32Array(nx * ny), out = new Float64Array(6);
   for (let j = 0; j < ny; j++)
     for (let i = 0; i < nx; i++) {
       const a = ((i + 0.5) * w) / nx, b = ((j + 0.5) * h) / ny;
@@ -67,8 +67,11 @@ export function nearField(els: CurrentElement[], f: number, plane: FieldPlane): 
       const p = j * nx + i;
       e.set(out, 6 * p);
       rr[p] = Math.hypot(pt[0] - ref[0], pt[1] - ref[1], pt[2] - ref[2]);
+      let dmin = Infinity;
+      for (const el of els) dmin = Math.min(dmin, Math.hypot(pt[0] - el.mid[0], pt[1] - el.mid[1], pt[2] - el.mid[2]));
+      dd[p] = dmin;
     }
-  return { nx, ny, e, r: rr };
+  return { nx, ny, e, r: rr, d: dd };
 }
 
 /** Solve the design at d.f and sample its near field on the plane; null when the wire solver can't model it. */
@@ -90,12 +93,16 @@ export function envelope(e: Float32Array, p: number): number {
   return Math.sqrt((a + b) / 2 + Math.sqrt(((a - b) / 2) ** 2 + c * c));
 }
 
-/** 99th percentile of envelope·r over the grid; 1 for an all-zero field. */
-export function fieldScale(grid: FieldGrid): number {
-  const n = grid.nx * grid.ny, v = new Float32Array(n);
-  for (let p = 0; p < n; p++) v[p] = envelope(grid.e, p) * grid.r[p];
+/**
+ * 99th percentile of envelope·r over the pixels at least minDist from every wire (the radiated field; the near
+ * field next to the wires then saturates), or over every pixel when none is that far. 1 for an all-zero field.
+ */
+export function fieldScale(grid: FieldGrid, minDist: number): number {
+  const n = grid.nx * grid.ny, all = new Float32Array(n), far: number[] = [];
+  for (let p = 0; p < n; p++) { all[p] = envelope(grid.e, p) * grid.r[p]; if (grid.d[p] >= minDist) far.push(all[p]); }
+  const v = far.length ? Float32Array.from(far) : all;
   v.sort();
-  const s = v[Math.min(n - 1, Math.floor(0.99 * n))];
+  const s = v[Math.min(v.length - 1, Math.floor(0.99 * v.length))];
   return s > 0 && Number.isFinite(s) ? s : 1;
 }
 
@@ -111,7 +118,8 @@ export function rampLUT(lo: RGB, mid: RGB, hi: RGB): Uint8ClampedArray {
   return lut;
 }
 
-const GAMMA = 0.6;
+/** > 1 keeps the background dark and the crests thin. */
+const GAMMA = 2.5;
 
 /** RGBA pixels for |Re(E e^{jφ})|·r / scale (phase null: the envelope), through the LUT. */
 export function shade(grid: FieldGrid, phase: number | null, scale: number, lut: Uint8ClampedArray, out: Uint8ClampedArray): void {

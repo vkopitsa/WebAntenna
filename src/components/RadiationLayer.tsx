@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Vec3 } from "../lib/types";
+import { C0 } from "../lib/rf";
 import { fieldScale, rampLUT, shade, type RadiationField, type RGB } from "../lib/nearfield";
 
 const PERIOD = 1500; // ms per RF cycle
@@ -26,7 +27,7 @@ export function RadiationLayer({ data, toScreen, W, H, theme, playing }: {
   // theme / scheme: re-read the tokens when the colours change
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const colours = useMemo(() => ({ lut: rampLUT(token("--field-lo"), token("--field-mid"), token("--field-hi")), glow: token("--field-hi") }), [theme, scheme]);
-  const scale = useMemo(() => fieldScale(data.grid), [data]);
+  const scale = useMemo(() => fieldScale(data.grid, C0 / data.f / 2), [data]);
   const segs = useMemo(() => {
     const n = data.ir.length, pts: { a: [number, number]; b: [number, number] }[] = [];
     const v = (i: number): Vec3 => [data.segs[i], data.segs[i + 1], data.segs[i + 2]];

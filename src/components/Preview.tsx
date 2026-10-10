@@ -9,10 +9,12 @@ import { cameraBasis, screenPlane } from "./plane";
 import { RadiationLayer } from "./RadiationLayer";
 import { useNearField } from "../useNearField";
 import { momEligible } from "../lib/simulate";
+import { C0 } from "../lib/rf";
 
 /** [yaw, pitch]: top = x right / y up; front = looking along −x (y right); side = looking along +y (x right). */
 const VIEWS: Record<Exclude<ViewMode, "3d">, [number, number]> = { top: [90, 90], front: [180, 0], side: [90, 0] };
 const W = 800, H = 540, PAD = 48;
+const RAD_SPAN = 3, RAD_PAD = 2;
 
 /**
  * Orthographic right-handed camera: looks along d = (cos ψ, sin ψ) tilted down by θ; screen-right = d × ẑ.
@@ -44,6 +46,12 @@ export function Preview({ design, svgRef, type, params }: { design: Design; svgR
   const [cy, cp] = view === "3d" ? [yaw, pitch] : VIEWS[view];
   const drag = useRef<{ x: number; y: number; yaw: number; pitch: number } | null>(null);
 
+  const [radiation, setRadiation] = useState(false);
+  const eligible = momEligible(type, design);
+  const on = radiation && eligible;
+  // Radiation view: at least RAD_SPAN wavelengths, and RAD_PAD/2 wavelengths around the antenna, so the wavefronts are visible.
+  const minSpan = on ? RAD_SPAN * (C0 / design.f) : 0, radPad = on ? RAD_PAD * (C0 / design.f) : 0;
+
   const scene = useMemo(() => {
     const P = camera(cy, cp);
     const wires = design.wires.filter((w) => !w.necOnly);
@@ -58,7 +66,7 @@ export function Preview({ design, svgRef, type, params }: { design: Design; svgR
     const xs = pts.map((x) => x[0]), ys = pts.map((x) => x[1]);
     const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
     const span = Math.max(maxX - minX, maxY - minY, 1e-6);
-    const k = Math.min((W - 2 * PAD) / Math.max(maxX - minX, span * 0.05), (H - 2 * PAD) / Math.max(maxY - minY, span * 0.05));
+    const k = Math.min((W - 2 * PAD) / Math.max(maxX - minX, span * 0.05, minSpan, maxX - minX + radPad), (H - 2 * PAD) / Math.max(maxY - minY, span * 0.05, (minSpan * H) / W, maxY - minY + radPad));
     const ox = W / 2 - ((minX + maxX) / 2) * k, oy = H / 2 - ((minY + maxY) / 2) * k;
     const S = (x: number, y: number): [number, number] => [ox + x * k, oy + y * k];
     pw.sort((a, b) => b.z - a.z);
@@ -66,14 +74,11 @@ export function Preview({ design, svgRef, type, params }: { design: Design; svgR
     // world point the field plane passes through and r is measured from: the feed, else the middle of the drawing
     const mid = wires.length ? wires.reduce<Vec3>((s, w) => [s[0] + (w.a[0] + w.b[0]) / (2 * wires.length), s[1] + (w.a[1] + w.b[1]) / (2 * wires.length), s[2] + (w.a[2] + w.b[2]) / (2 * wires.length)], [0, 0, 0]) : [0, 0, 0] as Vec3;
     return { pw, pp, S, k, P, ox, oy, fp: fp ? P(fp) : null, fpw: fp ?? mid };
-  }, [design, cy, cp]);
+  }, [design, cy, cp, minSpan, radPad]);
 
   const { pw, pp, S, k, P, ox, oy, fp, fpw } = scene;
-  const [radiation, setRadiation] = useState(false);
   const [playing, setPlaying] = useState(true);
   const theme = useStore((s) => s.theme);
-  const eligible = momEligible(type, design);
-  const on = radiation && eligible;
   const plane = useMemo(() => (on ? screenPlane(cy, cp, { ox, oy, k, W, H }, fpw, 200) : null), [on, cy, cp, ox, oy, k, fpw]);
   const field = useNearField(type, params, plane, on);
   const fieldKey = JSON.stringify([type, params, plane]);

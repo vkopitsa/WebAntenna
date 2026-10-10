@@ -118,8 +118,8 @@ describe("near field", () => {
   });
 
   it("fieldScale handles an all-zero field; shade writes opaque pixels from the LUT", () => {
-    const grid = { nx: 2, ny: 1, e: new Float32Array(12), r: new Float32Array(2) };
-    expect(fieldScale(grid)).toBe(1);
+    const grid = { nx: 2, ny: 1, e: new Float32Array(12), r: new Float32Array(2), d: new Float32Array(2) };
+    expect(fieldScale(grid, 0)).toBe(1);
     const lut = rampLUT([0, 0, 0], [128, 64, 0], [255, 255, 200]);
     expect(lut.length).toBe(1024);
     const out = new Uint8ClampedArray(8);
@@ -131,5 +131,21 @@ describe("near field", () => {
     expect(out[0]).toBe(0);
     shade(grid, null, 1, lut, out); // envelope ignores phase
     expect(out[0]).toBe(255);
+  });
+
+  it("fieldScale is set by the radiated field, not by hot spots next to a wire", () => {
+    // 100 pixels: 99 far ones at 1 (×r), one next to a wire at 1000
+    const n = 100, grid = { nx: n, ny: 1, e: new Float32Array(6 * n), r: new Float32Array(n).fill(1), d: new Float32Array(n).fill(5) };
+    for (let p = 0; p < n; p++) grid.e[6 * p] = 1;
+    grid.e[0] = 1000; grid.d[0] = 0.01;
+    expect(fieldScale(grid, 0.5)).toBeCloseTo(1);
+    // nothing far enough: fall back to every pixel
+    expect(fieldScale(grid, 10)).toBeCloseTo(1000);
+  });
+
+  it("nearField records each pixel's distance to the nearest current element", () => {
+    const g = nearField(el, f, { origin: [0, 0, 0], u: [1, 0, 0], v: [0, 1, 0], w: 2, h: 1, nx: 2, ny: 1, ref: [0, 0, 0] });
+    expect(g.d[0]).toBeCloseTo(Math.hypot(0.5, 0.5));
+    expect(g.d[1]).toBeCloseTo(Math.hypot(1.5, 0.5));
   });
 });

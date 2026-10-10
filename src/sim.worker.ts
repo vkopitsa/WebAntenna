@@ -15,7 +15,7 @@ self.onmessage = (e: MessageEvent<SimRequest | SynthRequest | FieldRequest>) => 
     try {
       const d = ANTENNA_BY_ID[field.type].build(field.params);
       const data = solveField(field.type, d, field.plane);
-      const transfer = data ? [data.grid.e.buffer, data.grid.r.buffer, data.segs.buffer, data.ir.buffer, data.ii.buffer] : [];
+      const transfer = data ? [data.grid.e.buffer, data.grid.r.buffer, data.grid.d.buffer, data.segs.buffer, data.ir.buffer, data.ii.buffer] : [];
       (self as unknown as Worker).postMessage({ id, field: data }, transfer);
     } catch (err) {
       postMessage({ id, error: String(err) });
