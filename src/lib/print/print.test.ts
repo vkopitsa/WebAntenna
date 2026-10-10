@@ -33,6 +33,9 @@ describe("STL writer", () => {
 });
 
 describe("partsFor", () => {
+  it("every wire antenna has at least one printed part", () => {
+    for (const def of ANTENNAS) { const d = def.build(def.defaults); if (!d.pcb && def.category !== "Printed") expect(partsFor(def.id, def.defaults, d).length, def.id).toBeGreaterThan(0); }
+  });
   it("printed (PCB) antennas have no printed parts", () => {
     for (const def of ANTENNAS) { const d = def.build(def.defaults); if (d.pcb) expect(partsFor(def.id, def.defaults, d)).toEqual([]); }
   });

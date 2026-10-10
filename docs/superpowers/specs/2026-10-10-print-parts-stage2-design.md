@@ -1,6 +1,6 @@
 # 3D-printable build parts, stage 2: helix formers and parts for the other wire antennas
 
-Date: 2026-10-10. Status: approved in brainstorming, awaiting spec review.
+Date: 2026-10-10. Status: implemented (differences from the first plan are noted below).
 Builds on `2026-10-10-print-parts-design.md` (stage 1: dipole, ground plane, Yagi). Same rules, engine,
 worker and panel; this stage only adds families, a few shapes and three antenna parameters.
 
@@ -18,10 +18,10 @@ the rtl-sdr.com discone rod hub, martybugs.net biquad, cage-antenna spacers (Pri
 | Antenna | Parts (use) |
 |---|---|
 | Helix | **Grooved tube** (former) *or* **rib frame** (former), print one; both with the reflector base built in |
-| Discone | **Rod hub** (holder): disc rods radial, cone rods at the cone angle, coax through the centre, mast zip slots |
-| Moxon | **Spreader hub** (holder), **corner caps** (holder, driver ×2 and reflector ×2), **gap insulators** (holder ×2, set C) |
+| Discone | **Rod hub** (holder): disc rods radial, cone rods at the cone angle, coax through the centre, axial mast socket with M3 lock screw (new print-only param `mast`, default 25 mm; replaced the side zip-tie block, which hit the cone rods) |
+| Moxon | **Spreader hub** (holder), **corner caps** (holder, front ×2 and rear ×2; same part turned over), **gap insulators** (holder ×2, set C) |
 | Quad | **Spreader hub** per loop (holder ×2, on the boom), **corner caps** (holder ×8) |
-| Biquad | **Feed standoff** (holder): sets the element height over the reflector, drill template for the connector |
+| Biquad | **Feed standoff** (holder): 5 mm base plate with the N/SO-239 flange pattern turned 45° and a feed-gap slot; leg grooves run past the plate (works at 5.8 GHz); drill template for the connector |
 | J-pole | **Stub spacers** (holder), **feed-tap gauge** (jig) |
 | Fan dipole | **Centre block** (holder, one channel pair per band), **leg spreaders** (holder) |
 | Collinear | **Radome spacers** (holder) |
@@ -88,8 +88,8 @@ Prints upright with no supports (a 10–16° groove is a shallow overhang). The 
 - **Moxon hub:** a disc at the rectangle centre with 4 horizontal rod sockets (rod + CLEAR, 40 mm deep,
   M3 grub-screw hole) pointing at the 4 corners, angles from the wires (atan2(A/2, E/2)), plus a mast box
   with zip slots below.
-- **Moxon corner caps:** `cornerCap` at each corner; driver and reflector corners differ, left and right
-  are the same part flipped (qty 2 each).
+- **Moxon corner caps:** `cornerCap` at each corner; front and rear corners differ; left and right
+  are the same part turned over (qty 2 each).
 - **Moxon gap insulator:** a bar with two wire holes exactly C apart (centre to centre, from the tip
   coordinates); the wire tips are looped through it, so C cannot drift. Qty 2. C > 170 mm → "Too large".
 - **Quad hub:** a block on the boom (bore bd + CLEAR, M3 screw) with 4 rod sockets at 45° in the loop
@@ -114,7 +114,7 @@ Base: `flangeCut` (N/SO-239), also the reflector drilling template.
   each wire's own direction, only for wires that reach past Y; qty 2 each (same part on both legs).
   Y is chosen so the wire spread fits the bed: Ymax = min(⅔ of the longest arm, distance where the spread
   reaches ~150 mm), positions Ymax/2 and Ymax. Fewer than 2 wires at a position → no spreader there.
-- **Collinear radome spacers:** a disc of diameter rid − CLEAR with a bore od + CLEAR and vent notches,
+- **Collinear radome spacers:** a disc of diameter rid − CLEAR with a bore od + CLEAR and four Ø≤4 mm vent holes at 45°/135°/225°/315° midway between bore and rim,
   slid to the middle of each section; qty n. rid < od + 2·WALL → its own message "Radome too narrow for
   the coax" (also accepted by the extremes test).
 

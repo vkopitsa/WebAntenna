@@ -136,6 +136,15 @@ which is about 5× slower than the CPU engine but runs the same kernels.
   Files: .GTL, .GBL, .GKO (0.1 mm outline), .DRL (Excellon, metric) for a probe feed, .dxf (R12, layers OUTLINE/TOP/BOTTOM/PORT/DRILL).
   Checked with gerbonara (all files parse, bounding boxes match the board) and ezdxf.
 
+## Printed build parts (`src/lib/print/`)
+
+Every wire antenna gets 3D-printable parts built from `Design.wires`. Dipole: centre block and end insulators. Ground plane: radial hub.
+Yagi: element clips and driven block. Helix: grooved tube or rib frame (print one; base flange with SMA hole and feed slot, stacked
+with D-keyed spigots above 170 mm). Discone: rod hub with an axial mast socket (`mast` param). Moxon: spreader hub, front and rear
+corner caps (one part, turned over) and 2 tip-gap insulators set to C. Quad: a hub per loop and 8 corner caps. Biquad: feed standoff
+with a 5 mm plate and a 45° connector flange. J-pole: stub spacers and a clip-on feed-tap gauge. Fan dipole: centre block and leg
+spreaders. Collinear: radome spacers, one per section (`rid` param). Print-only params `rod`, `bd`, `rid`, `mast` do not affect NEC or MoM.
+
 ## Built-in simulator (`src/lib/mom.ts`, `src/lib/simulate.ts`)
 
 The **Simulation** tab shows openEMS-style results:

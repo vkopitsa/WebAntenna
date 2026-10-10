@@ -120,4 +120,6 @@ One design, three implementation plans, each shippable on its own:
 2. Helix former and mount, Moxon and quad spreaders/hub, discone hub, Yagi boom saddle.
 3. J-pole, collinear, biquad and fan-dipole parts, Moxon tip-gap gauge, ground-plane alignment sleeve.
 
+Stages 2 and 3 are implemented by `2026-10-10-print-parts-stage2-design.md`, except the Yagi boom saddle (deferred).
+
 After stage 1, update CLAUDE.md: replace the "STL … skipped on purpose" note with the print layout above.
