@@ -147,6 +147,11 @@ function loopSim(params: Params, d: Design, freqs: number[], fPat: number): SimR
   };
 }
 
+/** True when the wire MoM solver models this design (the `method: "mom"` path of simulate()). */
+export function momEligible(defId: string, d: Design): boolean {
+  return defId !== "patch" && defId !== "collinear" && defId !== "pcbloop" && !d.pcb && !!d.necSupported && !!d.feed;
+}
+
 export interface SimOptions {
   /** Pattern frequency; default the design frequency. */
   patternF?: number;
