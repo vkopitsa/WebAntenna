@@ -15,6 +15,9 @@ function svgText(svg: SVGSVGElement): string {
     const d = dst[i] as SVGElement;
     for (const p of ["fill", "stroke", "stroke-width", "stroke-opacity", "fill-opacity", "font-size", "font-family", "font-weight"]) d.style.setProperty(p, cs.getPropertyValue(p));
   });
+  // the Radiation view clears the background on screen; files always get it
+  const bg = clone.querySelector(".svg-bg") as SVGElement | null;
+  if (bg) bg.style.setProperty("fill", getComputedStyle(document.documentElement).getPropertyValue("--chart-bg").trim());
   clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
   return `<?xml version="1.0" encoding="UTF-8"?>\n${clone.outerHTML}\n`;
 }

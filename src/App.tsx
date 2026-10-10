@@ -66,7 +66,7 @@ export default function App() {
           </div>
           {tab === "synth" ? <SynthPanel /> : design ? (tab === "design" ? (
             <>
-              <Preview design={design} svgRef={svgRef} />
+              <Preview design={design} svgRef={svgRef} type={type} params={params} />
               <Exports def={def} params={params} design={design} svgRef={svgRef} />
               <Results design={design} />
               <p className="hint disclaimer">{t("Formulas give a starting point. Build slightly long, measure with an antenna analyser or VNA, then trim.")}</p>

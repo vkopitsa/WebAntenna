@@ -1,10 +1,14 @@
-import { useMemo, useRef } from "react";
-import type { Design, Vec3, Wire } from "../lib/types";
+import { useCallback, useMemo, useRef, useState } from "react";
+import type { Design, Params, Vec3, Wire } from "../lib/types";
 import { niceStep } from "../lib/units";
 import { set, useStore, type ViewMode } from "../store";
 import { useT } from "../i18n";
 import { fmtLen } from "../format";
 import { Select } from "./inputs";
+import { cameraBasis, screenPlane } from "./plane";
+import { RadiationLayer } from "./RadiationLayer";
+import { useNearField } from "../useNearField";
+import { momEligible } from "../lib/simulate";
 
 /** [yaw, pitch]: top = x right / y up; front = looking along −x (y right); side = looking along +y (x right). */
 const VIEWS: Record<Exclude<ViewMode, "3d">, [number, number]> = { top: [90, 90], front: [180, 0], side: [90, 0] };
@@ -15,13 +19,9 @@ const W = 800, H = 540, PAD = 48;
  * Returns [screen x, screen y (down), depth (far = larger)].
  */
 function camera(yawDeg: number, pitchDeg: number) {
-  const y = (yawDeg * Math.PI) / 180, p = (pitchDeg * Math.PI) / 180;
-  const cy = Math.cos(y), sy = Math.sin(y), cp = Math.cos(p), sp = Math.sin(p);
-  return (q: Vec3): [number, number, number] => {
-    const u = q[0] * sy - q[1] * cy;
-    const d = q[0] * cy + q[1] * sy;
-    return [u, -(q[2] * cp + d * sp), d * cp - q[2] * sp];
-  };
+  const { right, down, depth } = cameraBasis(yawDeg, pitchDeg);
+  const dot = (a: Vec3, q: Vec3) => a[0] * q[0] + a[1] * q[1] + a[2] * q[2];
+  return (q: Vec3): [number, number, number] => [dot(right, q), dot(down, q), dot(depth, q)];
 }
 
 function feedPoint(d: Design): Vec3 | null {
@@ -34,7 +34,7 @@ function feedPoint(d: Design): Vec3 | null {
   return [(w.a[0] + w.b[0]) / 2, (w.a[1] + w.b[1]) / 2, (w.a[2] + w.b[2]) / 2];
 }
 
-export function Preview({ design, svgRef }: { design: Design; svgRef: React.RefObject<SVGSVGElement | null> }) {
+export function Preview({ design, svgRef, type, params }: { design: Design; svgRef: React.RefObject<SVGSVGElement | null>; type: string; params: Params }) {
   const t = useT();
   const isPcb = !!design.pcb;
   const view = useStore((s) => (isPcb ? s.pcbView : s.view));
@@ -63,10 +63,22 @@ export function Preview({ design, svgRef }: { design: Design; svgRef: React.RefO
     const S = (x: number, y: number): [number, number] => [ox + x * k, oy + y * k];
     pw.sort((a, b) => b.z - a.z);
     pp.sort((a, b) => b.z - a.z);
-    return { pw, pp, S, k, P, fp: fp ? P(fp) : null };
+    // world point the field plane passes through and r is measured from: the feed, else the middle of the drawing
+    const mid = wires.length ? wires.reduce<Vec3>((s, w) => [s[0] + (w.a[0] + w.b[0]) / (2 * wires.length), s[1] + (w.a[1] + w.b[1]) / (2 * wires.length), s[2] + (w.a[2] + w.b[2]) / (2 * wires.length)], [0, 0, 0]) : [0, 0, 0] as Vec3;
+    return { pw, pp, S, k, P, ox, oy, fp: fp ? P(fp) : null, fpw: fp ?? mid };
   }, [design, cy, cp]);
 
-  const { pw, pp, S, k, P, fp } = scene;
+  const { pw, pp, S, k, P, ox, oy, fp, fpw } = scene;
+  const [radiation, setRadiation] = useState(false);
+  const [playing, setPlaying] = useState(true);
+  const theme = useStore((s) => s.theme);
+  const eligible = momEligible(type, design);
+  const on = radiation && eligible;
+  const plane = useMemo(() => (on ? screenPlane(cy, cp, { ox, oy, k, W, H }, fpw, 200) : null), [on, cy, cp, ox, oy, k, fpw]);
+  const field = useNearField(type, params, plane, on);
+  const fieldKey = JSON.stringify([type, params, plane]);
+  const fresh = field.status === "done" && field.key === fieldKey ? field.data : null;
+  const toScreen = useCallback((q: Vec3) => { const p = P(q); return S(p[0], p[1]); }, [P, S]);
   // Scale bar: a nice length near 1/5 of the drawing width, in the display unit.
   const unitM = unit === "in" ? 0.0254 : 0.001;
   const barUnits = niceStep((W / 5 / k) / unitM);
@@ -82,7 +94,10 @@ export function Preview({ design, svgRef }: { design: Design; svgRef: React.RefO
     <div className="preview">
       <div className="preview-tools">
         <Select value={view} ariaLabel="View" options={[["3d", "3D (drag to rotate)"], ["top", "Top"], ["front", "Front"], ["side", "Side"]]} onChange={(v) => setView(v)} />
+        <button className={on ? "on" : ""} aria-pressed={on} disabled={!eligible} title={eligible ? undefined : t("Wire antennas only (MoM)")} onClick={() => setRadiation((r) => !r)}>{t("Radiation")}</button>
+        {on && <button onClick={() => setPlaying((p) => !p)}>{playing ? t("Pause") : t("Play")}</button>}
       </div>
+      {fresh && <RadiationLayer data={fresh} toScreen={toScreen} W={W} H={H} theme={theme} playing={playing} />}
       <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={t("Antenna drawing")}
         onPointerDown={(e) => { (e.target as Element).setPointerCapture?.(e.pointerId); drag.current = { x: e.clientX, y: e.clientY, yaw: cy, pitch: cp }; if (view !== "3d") setView("3d", { yaw: cy, pitch: cp }); }}
         onPointerMove={(e) => {
@@ -90,7 +105,7 @@ export function Preview({ design, svgRef }: { design: Design; svgRef: React.RefO
           set({ yaw: d.yaw + (e.clientX - d.x) * 0.5, pitch: Math.max(-89, Math.min(89, d.pitch + (e.clientY - d.y) * 0.5)) });
         }}
         onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }}>
-        <rect x="0" y="0" width={W} height={H} className="svg-bg" />
+        <rect x="0" y="0" width={W} height={H} className={fresh ? "svg-bg clear" : "svg-bg"} />
         {pp.map(({ p, q }, i) => (
           <polygon key={`p${i}`} points={q.map((x) => S(x[0], x[1]).join(",")).join(" ")} className={`plate plate-${p.material}`}>
             <title>{t(p.label)}</title>
@@ -125,6 +140,14 @@ export function Preview({ design, svgRef }: { design: Design; svgRef: React.RefO
           ))}
         </g>
       </svg>
+      {on && (
+        <div className="radiation-legend">
+          {field.status === "running" || (field.status === "done" && field.key !== fieldKey) ? <span>{t("Computing field…")}</span>
+            : field.status === "error" ? <span>{field.error}</span>
+            : field.status === "done" && !field.data ? <span>{t("Wire antennas only (MoM)")}</span>
+            : fresh ? <><span className="ramp" />{t("Electric field (instantaneous, × distance)")}<span className="glow" />{t("Current on the wire")}</> : null}
+        </div>
+      )}
     </div>
   );
 }
