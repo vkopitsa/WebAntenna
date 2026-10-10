@@ -47,7 +47,8 @@ src/lib/                 NO DOM, NO React, NO i18n. Runs in Node (tests) and in 
   fdtd/nf2ff.ts          far field from the box (J = n×H, M = −n×E), radiated and accepted power
 src/gpu/fdtdGpu.ts       WebGPU engine: same layout as cpu.ts in WGSL compute kernels
 src/fdtdJob.ts           runFdtd / tuneFdtd → SimResult; src/fdtd.worker.ts + src/useFdtd.ts run it off the main thread
-src/print.worker.ts      loads manifold.wasm on demand and builds the parts; usePrintParts.ts, PrintPanel.tsx, MeshView.tsx
+src/print.worker.ts      loads manifold.wasm and builds the parts; a fresh worker per build (manifold leaks ~1 MB/build inside
+                         its bindings, terminating frees it); usePrintParts.ts, PrintPanel.tsx, MeshView.tsx
 src/sim.worker.ts        runs simulate() and synthesize() off the main thread; useSimulation.ts / useSynthesis.ts
 src/store.ts             state via useSyncExternalStore; localStorage "antgen.settings.v1"; share hash #t=…&bands=…
 src/components/          Sidebar (picker, params, band editor), Preview (SVG 3D), Results, Exports, BuildPanel,
