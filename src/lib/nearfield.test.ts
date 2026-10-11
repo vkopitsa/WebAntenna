@@ -189,3 +189,12 @@ describe("near field", () => {
     expect(solver.solves).toBe(2);
   });
 });
+
+describe("PCB stand-in on a board many wavelengths across", () => {
+  it("keeps the wire grid bounded (a 0.5 m ground at 40 GHz ran out of memory / overflowed the stack)", () => {
+    const def = ANTENNA_BY_ID.pcbmonopole;
+    const d = def.build({ ...def.defaults, bands: "40e9-41e9", gl: 0.5, bw: 0.35 });
+    const st = pcbStandIn(d)!;
+    expect(st.design.wires.length).toBeLessThan(3000);
+  });
+});

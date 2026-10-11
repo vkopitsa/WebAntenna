@@ -48,6 +48,9 @@ function tuneElements(geometry: (facs: number[]) => Wire[], fc: number[], lambda
   return { facs, z: fc.map((_, i) => zAt(i)) };
 }
 
+/** Most elements on one feed: each band costs MoM solves while tuning (12 bands took 15 s) and past six the fan wraps round. */
+export const FAN_MAX = 6;
+
 export const fandipole: AntennaDef = {
   id: "fandipole",
   name: "Fan (parallel) dipole",
@@ -64,7 +67,7 @@ export const fandipole: AntennaDef = {
   build(p): Design {
     const { bands, sweeps } = band(p);
     const d = num(p, "d"), fan = deg(num(p, "fan", 20)), r = d / 2;
-    const order = [...bands].sort((a, b) => centre(a) - centre(b)); // longest element first, lies flat
+    const order = bands.slice(0, FAN_MAX).sort((a, b) => centre(a) - centre(b)); // longest element first, lies flat
     const lamMin = wavelength(centre(order[order.length - 1]));
     const gap = Math.max(4 * d, Math.min(0.015 * lamMin, 0.05));
     const fc = order.map(centre);
@@ -105,6 +108,7 @@ export const fandipole: AntennaDef = {
       notes: [
         "Element lengths are tuned with the built-in MoM solver so every band is resonant (X = 0) at its centre, with all elements in place.",
         "Real-world tuning: trim the longest element first, then each shorter one.",
+        ...(bands.length > FAN_MAX ? ["Only the first 6 bands get an element; the rest are ignored."] : []),
         ...(lowR ? ["Warning: one band has a feed resistance below 30 Ω because of element interaction. Widen the fan angle or drop a band."] : []),
       ],
       necSupported: true,

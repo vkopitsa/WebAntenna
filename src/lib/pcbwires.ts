@@ -61,9 +61,13 @@ export function pcbStandIn(d: Design): { design: Design; fs: number } | null {
   const p = d.pcb;
   if (!p) return null;
   const fs = d.f * Math.sqrt(standInEeff(p)) * STANDIN_K;
-  const smax = wavelength(fs) / 12;
+  // grid cells of λs/12, but no finer than ~500 grid wires in all: the MoM caps the unknowns at 450 anyway, and a
+  // board many wavelengths across (a 0.5 m ground at 40 GHz) made millions of wires (out of memory, stack overflow)
+  const copper = copperPlanes(p);
+  const area = copper.reduce((s, pl) => s + pl.rects.reduce((t, q) => t + (q.x1 - q.x0) * (q.y1 - q.y0), 0), 0);
+  const smax = Math.max(wavelength(fs) / 12, Math.sqrt((2 * area) / 500));
   const shapes: Shape[] = [];
-  for (const plane of copperPlanes(p)) {
+  for (const plane of copper) {
     const z = plane.z;
     // a pour repeated on both faces of the main board (stitched) is one conductor: keep the top one
     const dup = (q: PcbRect) => z === 0 && p.rects.some((t) => t.layer === "top" && same(t, q));

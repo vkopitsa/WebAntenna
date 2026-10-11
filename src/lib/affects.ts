@@ -58,6 +58,10 @@ function diff(a: Design, b: Design): Affected | null {
 }
 
 const cache = new Map<string, Affected | null>();
+/** Builds slower than this (the fan dipole tunes with MoM: ~2 s at 6 bands) get no highlight: hovering a field must not freeze the UI. */
+const SLOW_MS = 150;
+/** The last base design, shared by every param of the same params (hovering down the sidebar). */
+let base: { id: string; d: Design; slow: boolean } | null = null;
 
 export function affected(def: AntennaDef, params: Params, key: string): Affected | null {
   const id = `${def.id}|${key}|${JSON.stringify(params)}`;
@@ -65,7 +69,13 @@ export function affected(def: AntennaDef, params: Params, key: string): Affected
   let res: Affected | null = null;
   try {
     const np = nudged(def, params, key);
-    if (np) res = diff(def.build(params), def.build(np));
+    const bid = `${def.id}|${JSON.stringify(params)}`;
+    if (np && base?.id !== bid) {
+      const t0 = performance.now();
+      const d = def.build(params);
+      base = { id: bid, d, slow: performance.now() - t0 > SLOW_MS };
+    }
+    if (np && base && !base.slow) res = diff(base.d, def.build(np));
   } catch {
     res = null;
   }

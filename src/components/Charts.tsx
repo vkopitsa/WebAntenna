@@ -12,8 +12,10 @@ const fmt = (v: number, d = 1) => (Number.isFinite(v) ? v.toFixed(d) : "∞");
 function ticks(lo: number, hi: number, n = 5): number[] {
   const st = niceStep((hi - lo) / n);
   const out: number[] = [];
-  for (let v = Math.ceil(lo / st) * st; v <= hi + st * 1e-9; v += st) out.push(+v.toPrecision(12));
-  return out;
+  // by index, not v += st: a step below the float spacing of lo (1 GHz ± mHz) never advanced v
+  const k0 = Math.ceil(lo / st);
+  for (let k = k0; k * st <= hi + st * 1e-9 && k - k0 < 50; k++) out.push(+(k * st).toPrecision(12));
+  return [...new Set(out)];
 }
 
 /** Shared frame: title, optional legend (≥ 2 series), the plot, and an HTML tooltip layer. */

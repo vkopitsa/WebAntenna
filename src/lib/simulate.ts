@@ -196,10 +196,10 @@ export function simulate(def: AntennaDef, params: Params, d: Design, opt: SimOpt
   };
 }
 
-/** Frequencies offered for the pattern: band centres. */
+/** Frequencies offered for the pattern: band centres (once each: "+ Add band" starts with a copy of the last band). */
 export const patternChoices = (params: Params, d: Design): number[] => {
   const b = parseBands(String(params.bands ?? ""));
-  return b.length ? b.map(centre) : [d.f];
+  return b.length ? [...new Set(b.map(centre))] : [d.f];
 };
 
 /** Reflection coefficient and derived values for reference impedance z0. */

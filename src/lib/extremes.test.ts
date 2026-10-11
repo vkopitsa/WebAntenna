@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { ANTENNAS } from "./antennas";
 import { SPRING_MAX_TURNS } from "./antennas/spring";
+import { FAN_MAX } from "./antennas/fandipole";
+import { patternChoices } from "./simulate";
 import { toNEC } from "./export";
 import { buildPack } from "./build";
 import { buildPackPDF, templateSVG } from "./template";
@@ -29,5 +31,17 @@ describe("band extremes", () => {
     const d = def.build({ ...def.defaults, bands: "1e6-1e6" });
     expect(d.wires.length).toBeLessThanOrEqual(SPRING_MAX_TURNS * 8 + 5);
     expect(d.notes.some((n) => n.includes("more than 100 turns"))).toBe(true);
+  });
+  it("the fan dipole tunes at most FAN_MAX elements and says so (12 bands took 15 s on the main thread)", () => {
+    const def = ANTENNAS.find((a) => a.id === "fandipole")!;
+    const bands = Array.from({ length: 12 }, (_, i) => `${(3.5e6 * 1.45 ** i).toFixed(0)}-${(3.6e6 * 1.45 ** i).toFixed(0)}`).join(";");
+    const d = def.build({ ...def.defaults, bands });
+    expect(d.wires.length).toBe(1 + 2 * FAN_MAX);
+    expect(d.notes.some((n) => n.startsWith("Only the first 6 bands"))).toBe(true);
+  }, 60000);
+  it("pattern choices are unique when bands repeat (duplicate React keys)", () => {
+    const def = ANTENNAS.find((a) => a.id === "dipole")!;
+    const p = { ...def.defaults, bands: "144e6-146e6;144e6-146e6" };
+    expect(patternChoices(p, def.build(p))).toEqual([145e6]);
   });
 });

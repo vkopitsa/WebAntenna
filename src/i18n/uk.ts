@@ -326,6 +326,7 @@ export const UK: Record<string, string> = {
   "Feed impedance at each band centre (MoM)": "Вхідний імпеданс у центрі кожного діапазону (MoM)",
   "Element lengths are tuned with the built-in MoM solver so every band is resonant (X = 0) at its centre, with all elements in place.": "Довжини елементів підібрано вбудованим MoM-розв'язувачем так, щоб кожен діапазон резонував (X = 0) у своєму центрі з усіма елементами на місці.",
   "Real-world tuning: trim the longest element first, then each shorter one.": "Налаштування наживо: спершу підріжте найдовший елемент, потім коротші по черзі.",
+  "Only the first 6 bands get an element; the rest are ignored.": "Елемент отримують лише перші 6 діапазонів; решта ігноруються.",
   "Warning: one band has a feed resistance below 30 Ω because of element interaction. Widen the fan angle or drop a band.": "Увага: на одному з діапазонів вхідний опір нижче 30 Ω через взаємовплив елементів. Збільште кут віяла або приберіть діапазон.",
   "200 Ω (folded dipole + 4:1)": "200 Ω (петлевий вібратор + 4:1)",
   "3D radiation pattern": "3D діаграма спрямованості",

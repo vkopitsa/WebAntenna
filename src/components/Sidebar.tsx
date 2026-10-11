@@ -6,6 +6,7 @@ import { fromUnit, toUnit } from "../format";
 import { FreqInput, Num, Section, Select } from "./inputs";
 import { BAND_PRESETS, WIDE_PRESETS, formatBands, parseBands, type Band } from "../lib/bands";
 import { fmtHz } from "../lib/units";
+import { MAX_BANDS } from "../lib/sanitize";
 import { affected } from "../lib/affects";
 import { setHover, useHover, type Hover } from "../hover";
 import { useEffect, useRef } from "react";
@@ -48,7 +49,7 @@ function BandsInput({ def, value }: { def: ParamDef; value: string }) {
         </div>
       ))}
       <div className="band-actions">
-        <button className="small add-band" onClick={() => commit([...bands, bands[bands.length - 1]])}>{t("+ Add band")}</button>
+        <button className="small add-band" disabled={bands.length >= MAX_BANDS} onClick={() => commit([...bands, bands[bands.length - 1]])}>{t("+ Add band")}</button>
         <button className="small primary" onClick={() => set({ tab: "synth" })} title={t("Find the best antenna type and dimensions for these bands")}>⚡ {t("Synthesize")}</button>
       </div>
       <div className="hint">{multi ? t("Every band is used in the design.") : t("Band 1 sets the dimensions; extra bands are swept in the NEC export.")}</div>

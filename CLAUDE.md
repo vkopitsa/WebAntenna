@@ -145,4 +145,4 @@ docs/ANTENNAS.md         every formula, its source, and the NEC-2 / MoM verifica
 - FDTD: lumped capacitors (needed for the PCB loop), PML instead of Mur, multi-GPU-dispatch for > 4 M cells.
 - Shell detuning not simulated (FDTD shell material).
 - Ground (GN card / Sommerfeld) and conductor loss in MoM; matching-network calculator.
-- Fan dipole with ≥ 5 bands takes ≈ 2 s to tune on the main thread; move design building to the worker if it matters.
+- Fan dipole with ≥ 5 bands takes ≈ 2 s to tune on the main thread (capped at FAN_MAX = 6 elements; the sidebar hover highlight skips builds > 150 ms); move design building to the worker if it matters.

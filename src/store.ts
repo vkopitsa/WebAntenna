@@ -2,7 +2,7 @@
 import { useSyncExternalStore } from "react";
 import { ANTENNA_BY_ID, ANTENNAS } from "./lib/antennas";
 import type { Params } from "./lib/types";
-import { parseBands } from "./lib/bands";
+import { sanitizeParam } from "./lib/sanitize";
 import type { Lang } from "./i18n";
 
 export type Unit = "mm" | "in";
@@ -67,7 +67,7 @@ function load(): State {
 function clean(id: string, saved: Params): Params {
   const def = ANTENNA_BY_ID[id];
   const out: Params = {};
-  for (const pd of def.params) out[pd.key] = saved[pd.key] ?? def.defaults[pd.key];
+  for (const pd of def.params) out[pd.key] = sanitizeParam(pd, saved[pd.key]) ?? def.defaults[pd.key];
   if (typeof saved.f === "number" && saved.bands === undefined && "bands" in out) out.bands = `${saved.f}-${saved.f}`;
   return out;
 }
@@ -82,10 +82,8 @@ function applyHash(s: State): State {
   const p: Params = { ...def.defaults };
   for (const pd of def.params) {
     const raw = q.get(pd.key);
-    if (raw == null) continue;
-    if (pd.kind === "select") { if (pd.options?.some(([v]) => v === raw)) p[pd.key] = raw; }
-    else if (pd.kind === "bands") { if (parseBands(raw).length) p[pd.key] = raw; }
-    else { const n = parseFloat(raw); if (Number.isFinite(n)) p[pd.key] = n; }
+    const v = raw == null ? undefined : sanitizeParam(pd, raw);
+    if (v !== undefined) p[pd.key] = v;
   }
   return { ...s, type: t, params: { ...s.params, [t]: p } };
 }

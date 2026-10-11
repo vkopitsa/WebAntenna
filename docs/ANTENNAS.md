@@ -188,7 +188,7 @@ The S11 sweep can be exported as Touchstone `.s1p` (load it in WebVNA as an over
 
 **Lesson:** the first J-pole and fan-dipole tunings were fitted to NEC-2 decks at λ/40, which are **not converged** for close-spaced parts. The J-pole moved from 38.5 to 31.3 Ω as the segments got finer. Both were re-tuned on converged models:
 - J-pole: tap 0.019 λ, ≈ 45–48 − j7 Ω.
-- Fan dipole: element lengths are now tuned by the solver itself.
+- Fan dipole: element lengths are now tuned by the solver itself (at most 6 elements; extra bands are ignored with a note).
 
 The NEC export now uses λ/80.
 

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { ANTENNAS } from "./lib/antennas";
@@ -15,7 +15,7 @@ const VARIANTS: Record<string, Params[]> = {
   yagi: [{ driven: "split", boom: "through" }],
   patch: [{ feed: "probe" }, { z0: 500 }, { bands: "2e9-3e9" }],
   moxon: [{ d: 0.5 }, { bands: "144e6-146e6;430e6-440e6" }],
-  fandipole: [{ bands: "3.5e6-3.8e6;7e6-7.2e6;14e6-14.35e6;21e6-21.45e6;28e6-29.7e6" }],
+  fandipole: [{ bands: "3.5e6-3.8e6;7e6-7.2e6;14e6-14.35e6;21e6-21.45e6;28e6-29.7e6" }, { bands: "3.5e6-3.8e6;7e6-7.2e6;10.1e6-10.15e6;14e6-14.35e6;18e6-18.2e6;21e6-21.45e6;28e6-29.7e6" }],
   discone: [{ bands: "100e6-2000e6" }],
   pcbloop: [{ a: 0.003, b: 0.003, qc: 1 }],
   meander: [{ W: 0.06 }],
@@ -70,8 +70,11 @@ function uiStrings(): Set<string> {
 }
 
 describe("Ukrainian dictionary", () => {
+  // built once: every antenna and its variants (the 6-band fan dipole tunes for ~2 s)
+  let keys: string[] = [];
+  beforeAll(() => { keys = [...libStrings(), ...uiStrings()]; }, 60_000);
   it("covers every lib and UI string", () => {
-    const missing = [...libStrings(), ...uiStrings()].filter((k) => !(k in UK));
+    const missing = keys.filter((k) => !(k in UK));
     expect(missing).toEqual([]);
   });
   it("placeholders match", () => {
@@ -81,7 +84,7 @@ describe("Ukrainian dictionary", () => {
     }
   });
   it("has no stale keys", () => {
-    const all = new Set([...libStrings(), ...uiStrings()]);
+    const all = new Set(keys);
     expect(Object.keys(UK).filter((k) => !all.has(k))).toEqual([]);
   });
 });
