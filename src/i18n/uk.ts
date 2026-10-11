@@ -287,6 +287,8 @@ export const UK: Record<string, string> = {
   "Wideband SDR": "Широкосмуговий SDR",
   "Cellular (LTE)": "Стільниковий (LTE)",
   "UWB": "UWB",
+  "FPV 1.2 GHz": "FPV 1.2 GHz",
+  "FPV 3.3 GHz": "FPV 3.3 GHz",
   "FPV 5.8 GHz": "FPV 5.8 GHz",
   "Fan (parallel) dipole": "Віялова (паралельна) дипольна антена",
   "Fan angle between elements": "Кут віяла між елементами",
