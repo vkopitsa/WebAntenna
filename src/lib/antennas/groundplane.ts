@@ -35,9 +35,9 @@ export const groundplane: AntennaDef = {
       feed: { wire: 0, at: "start" },
       dims: [
         { label: "Wavelength λ", value: lam },
-        { key: "A", label: "Vertical radiator", value: vert },
-        { key: "B", label: "Each radial", value: rad },
-        { label: "Radial span (tip to tip, horizontal)", value: 2 * rad * Math.cos(dr) },
+        { key: "A", label: "Vertical radiator", value: vert, at: [wires[0].a, wires[0].b] },
+        { key: "B", label: "Each radial", value: rad, at: [wires[1].a, wires[1].b] },
+        { label: "Radial span (tip to tip, horizontal)", value: 2 * rad * Math.cos(dr), at: n % 2 ? undefined : [wires[1].b, wires[1 + n / 2].b] },
       ],
       tables: [],
       perf: [

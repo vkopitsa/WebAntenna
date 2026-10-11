@@ -4,6 +4,7 @@ import { fmt, wavelength } from "../rf";
 import { pcbPlates, PCB_PARAMS, PRINTED_TRIM, r, type Pcb } from "../pcb";
 import { band, BANDS } from "./common";
 import { printedEeff } from "./pcbmonopole";
+import { span } from "./pcbcommon";
 
 /**
  * Length factor on λ/2 / √εeff(monopole fit) for a bare-substrate strip dipole. openEMS (FR-4 1.6 mm, w = 1.5 mm):
@@ -36,10 +37,10 @@ export const printeddipole: AntennaDef = {
       wires: [], plates: pcbPlates(pcb), pcb, feedZ0: 75,
       dims: [
         { label: "Free-space wavelength λ", value: lam },
-        { key: "L", label: "Total length (tip to tip)", value: L },
-        { label: "Each arm", value: arm },
-        { label: "Centre feed gap", value: g },
-        { label: "Trace width", value: w },
+        { key: "L", label: "Total length (tip to tip)", value: L, at: span(0, -L / 2, 0, L / 2, h) },
+        { label: "Each arm", value: arm, at: span(0, g / 2, 0, L / 2, h) },
+        { label: "Centre feed gap", value: g, at: span(0, -g / 2, 0, g / 2, h) },
+        { label: "Trace width", value: w, at: span(-w / 2, L / 4, w / 2, L / 4, h) },
       ],
       tables: [],
       perf: [

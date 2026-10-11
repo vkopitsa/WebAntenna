@@ -1,4 +1,4 @@
-import type { AntennaDef, Design, Wire } from "../types";
+import type { AntennaDef, Design, Vec3, Wire } from "../types";
 import { num } from "../types";
 import { deg, endEffect, fmt, interp, wavelength } from "../rf";
 import { v } from "../geom";
@@ -26,6 +26,7 @@ export const dipole: AntennaDef = {
       { a: v(0, -gap / 2, 0), b: v(0, -gap / 2 - ay, az), r, tag: "A", group: "driven" },
       { a: v(0, gap / 2, 0), b: v(0, gap / 2 + ay, az), r, tag: "A", group: "driven" },
     ];
+    const tipL = wires[1].b, tipR = wires[2].b;
     const droopDeg = num(p, "droop");
     const z = interp([[0, 73], [30, 62], [45, 52], [60, 42]], droopDeg);
     return {
@@ -34,10 +35,13 @@ export const dipole: AntennaDef = {
       feed: { wire: 0, at: "center" },
       dims: [
         { label: "Wavelength λ", value: lam },
-        { label: "Total length (tip to tip, along the wire)", value: total },
-        { key: "A", label: "Each arm", value: arm },
-        { label: "Centre gap at the feed", value: gap },
-        ...(droopDeg > 0 ? [{ label: "Span between tips", value: 2 * ay + gap }, { label: "Tip drop below the apex", value: -az }] : []),
+        { label: "Total length (tip to tip, along the wire)", value: total, at: droopDeg > 0 ? undefined : [tipL, tipR] },
+        { key: "A", label: "Each arm", value: arm, at: [wires[2].a, tipR] },
+        { label: "Centre gap at the feed", value: gap, at: [wires[0].a, wires[0].b] },
+        ...(droopDeg > 0 ? [
+          { label: "Span between tips", value: 2 * ay + gap, at: [tipL, tipR] as [Vec3, Vec3] },
+          { label: "Tip drop below the apex", value: -az, at: [v(0, gap / 2 + ay, 0), tipR] as [Vec3, Vec3] },
+        ] : []),
       ],
       tables: [],
       perf: [

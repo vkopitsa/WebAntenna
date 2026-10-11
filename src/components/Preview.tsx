@@ -10,6 +10,7 @@ import { RadiationLayer } from "./RadiationLayer";
 import { useNearField } from "../useNearField";
 import { radiationEligible } from "../lib/simulate";
 import { C0 } from "../lib/rf";
+import { setHover, useHover } from "../hover";
 
 /** [yaw, pitch]: top = x right / y up; front = looking along −x (y right); side = looking along +y (x right). */
 const VIEWS: Record<Exclude<ViewMode, "3d">, [number, number]> = { top: [90, 90], front: [180, 0], side: [90, 0] };
@@ -36,6 +37,25 @@ function feedPoint(d: Design): Vec3 | null {
   if (d.feed.at === "start") return w.a;
   if (d.feed.at === "end") return w.b;
   return [(w.a[0] + w.b[0]) / 2, (w.a[1] + w.b[1]) / 2, (w.a[2] + w.b[2]) / 2];
+}
+
+/**
+ * Dimension line for a span seen on screen: extension lines out to an arrowed line offset by OFF px on the side away
+ * from the drawing centre, and the label beside it. A span seen end-on (shorter than 6 px) gets only the label.
+ */
+function dimensionLine([a, b]: [[number, number], [number, number]]) {
+  const OFF = 18;
+  const dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy);
+  if (len < 6) return { ext: [] as number[][], arrow: null, label: [a[0] + 14, a[1] - 14] };
+  let nx = -dy / len, ny = dx / len;
+  const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+  if ((mx - W / 2) * nx + (my - H / 2) * ny < 0) { nx = -nx; ny = -ny; }
+  const o = (p: [number, number], d: number) => [p[0] + nx * d, p[1] + ny * d];
+  const [a1, a2] = [o(a, 4), o(a, OFF + 5)], [b1, b2] = [o(b, 4), o(b, OFF + 5)];
+  const [ax, ay] = o(a, OFF), [bx, by] = o(b, OFF);
+  // label above the arrow, kept inside the drawing
+  const lx = Math.max(40, Math.min(W - 40, mx + nx * (OFF + 14))), ly = Math.max(14, Math.min(H - 14, my + ny * (OFF + 14)));
+  return { ext: [[...a1, ...a2], [...b1, ...b2]], arrow: [ax, ay, bx, by], label: [lx, ly] };
 }
 
 export function Preview({ design, svgRef, type, params }: { design: Design; svgRef: React.RefObject<SVGSVGElement | null>; type: string; params: Params }) {
@@ -96,6 +116,9 @@ export function Preview({ design, svgRef, type, params }: { design: Design; svgR
     return { name, dx: (q[0] - o[0]) * 26, dy: (q[1] - o[1]) * 26 };
   });
   const tagged = new Set<string>();
+  const hover = useHover();
+  const lit = hover && !hover.fromDrawing && hover.tags.length ? new Set(hover.tags) : null;
+  const dimLine = hover?.span ? dimensionLine(hover.span.at.map((q) => { const p = P(q); return S(p[0], p[1]); }) as [[number, number], [number, number]]) : null;
 
   return (
     <div className="preview">
@@ -112,6 +135,7 @@ export function Preview({ design, svgRef, type, params }: { design: Design; svgR
           set({ yaw: d.yaw + (e.clientX - d.x) * 0.5, pitch: Math.max(-89, Math.min(89, d.pitch + (e.clientY - d.y) * 0.5)) });
         }}
         onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }}>
+        <defs><marker id="dim-head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M0,1 L10,5 L0,9 z" className="dim-head" /></marker></defs>
         <rect x="0" y="0" width={W} height={H} className={fresh ? "svg-bg clear" : "svg-bg"} />
         {pp.map(({ p, q }, i) => (
           <polygon key={`p${i}`} points={q.map((x) => S(x[0], x[1]).join(",")).join(" ")} className={`plate plate-${p.material}`}>
@@ -120,8 +144,11 @@ export function Preview({ design, svgRef, type, params }: { design: Design; svgR
         ))}
         {pw.map(({ w, a, b }, i) => {
           const [x1, y1] = S(a[0], a[1]), [x2, y2] = S(b[0], b[1]);
-          return <line key={`w${i}`} x1={x1} y1={y1} x2={x2} y2={y2} className={`wire wire-${w.group ?? "driven"}`}
-            strokeWidth={Math.min(16, Math.max(1.6, 2 * w.r * k))} strokeLinecap="round" />;
+          const cls = lit ? (w.tag && lit.has(w.tag) ? " lit" : " faded") : hover?.fromDrawing && w.tag && hover.tags.includes(w.tag) ? " lit" : "";
+          return <line key={`w${i}`} x1={x1} y1={y1} x2={x2} y2={y2} className={`wire wire-${w.group ?? "driven"}${cls}`}
+            strokeWidth={Math.min(16, Math.max(1.6, 2 * w.r * k))} strokeLinecap="round"
+            onPointerEnter={w.tag ? () => { if (!drag.current) setHover({ tags: [w.tag!], fromDrawing: true }); } : undefined}
+            onPointerLeave={w.tag ? () => setHover(null) : undefined} />;
         })}
         {pw.map(({ w, a, b }: { w: Wire; a: number[]; b: number[] }, i) => {
           if (!w.tag) return null;
@@ -131,6 +158,13 @@ export function Preview({ design, svgRef, type, params }: { design: Design; svgR
           const [x, y] = S((a[0] + b[0]) / 2, (a[1] + b[1]) / 2);
           return <text key={`t${i}`} x={x + 6} y={y - 6} className="tag">{w.tag}</text>;
         })}
+        {dimLine && hover?.span && (
+          <g className="dimline" pointerEvents="none">
+            {dimLine.ext.map(([x1, y1, x2, y2], i) => <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} className="dim-ext" />)}
+            {dimLine.arrow && <line x1={dimLine.arrow[0]} y1={dimLine.arrow[1]} x2={dimLine.arrow[2]} y2={dimLine.arrow[3]} className="dim-arrow" markerStart="url(#dim-head)" markerEnd="url(#dim-head)" />}
+            <text x={dimLine.label[0]} y={dimLine.label[1]} textAnchor="middle" dominantBaseline="middle" className="dim-text">{fmtLen(hover.span.value, unit)}</text>
+          </g>
+        )}
         {fp && (() => { const [x, y] = S(fp[0], fp[1]); return <g><circle cx={x} cy={y} r={6} className="feed-dot" /><text x={x + 9} y={y + 16} className="feed-label">{t("feed")}</text></g>; })()}
         <g transform={`translate(${PAD - 16}, ${H - 22})`}>
           <line x1={0} y1={0} x2={barPx} y2={0} className="scalebar" />

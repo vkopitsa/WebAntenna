@@ -4,6 +4,7 @@ import { fmt, wavelength } from "../rf";
 import { PCB_PARAMS } from "../pcb";
 import { rect, v } from "../geom";
 import { band, BANDS } from "./common";
+import { span } from "./pcbcommon";
 
 const MU0 = 4e-7 * Math.PI;
 
@@ -92,10 +93,10 @@ export const pcbloop: AntennaDef = {
       plates,
       dims: [
         { label: "Free-space wavelength λ", value: lam },
-        { key: "a", label: "Loop width (trace centre)", value: a },
-        { key: "b", label: "Loop height (trace centre)", value: b },
-        { label: "Trace width", value: w },
-        { label: "Capacitor gaps", value: g },
+        { key: "a", label: "Loop width (trace centre)", value: a, at: span(-a / 2, 0, a / 2, 0, z) },
+        { key: "b", label: "Loop height (trace centre)", value: b, at: span(-a / 2, -b / 2, -a / 2, b / 2, z) },
+        { label: "Trace width", value: w, at: span(-a / 2 - w / 2, 0, -a / 2 + w / 2, 0, z) },
+        { label: "Capacitor gaps", value: g, at: span(-g / 2, -b / 2, g / 2, -b / 2, z) },
       ],
       tables: [{
         title: "Matching components",

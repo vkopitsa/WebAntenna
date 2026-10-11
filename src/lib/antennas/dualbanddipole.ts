@@ -4,6 +4,7 @@ import { fmt, wavelength } from "../rf";
 import { pcbPlates, PCB_PARAMS, PRINTED_TRIM, r, type Pcb } from "../pcb";
 import { band, BANDS } from "./common";
 import { printedEeff } from "./pcbmonopole";
+import { boardSpans, span } from "./pcbcommon";
 
 /**
  * Length factors on λ/4 / √εeff(monopole fit), each arm measured from the gap: the main strip (low band) and the
@@ -55,18 +56,19 @@ export const dualbanddipole: AntennaDef = {
       rects,
       port: { start: [-w / 2, -g / 2, h], stop: [w / 2, g / 2, h], dir: "y", R: 50 },
     };
+    const bs = boardSpans(pcb.board, h), yw = g / 2 + a1 / 2;
     return {
       wires: [], plates: pcbPlates(pcb), pcb, feedZ0: 50,
       dims: [
         { label: "Free-space wavelength λ", value: lam1 },
-        { key: "L", label: "Total length (tip to tip)", value: g + 2 * a1 },
-        { label: "Main strip, each arm (from the gap)", value: a1 },
-        { key: "B", label: "Side branch, each (from the gap)", value: a2 },
-        { label: "Branch offset (centre to centre)", value: s },
-        { label: "Centre feed gap", value: g },
-        { label: "Trace width", value: w },
-        { label: "Board width", value: pcb.board.x1 - pcb.board.x0 },
-        { label: "Board length", value: pcb.board.y1 - pcb.board.y0 },
+        { key: "L", label: "Total length (tip to tip)", value: g + 2 * a1, at: span(0, -g / 2 - a1, 0, g / 2 + a1, h) },
+        { label: "Main strip, each arm (from the gap)", value: a1, at: span(0, g / 2, 0, g / 2 + a1, h) },
+        { key: "B", label: "Side branch, each (from the gap)", value: a2, at: span(s, g / 2, s, g / 2 + a2, h) },
+        { label: "Branch offset (centre to centre)", value: s, at: span(0, g / 2 + a2, s, g / 2 + a2, h) },
+        { label: "Centre feed gap", value: g, at: span(0, -g / 2, 0, g / 2, h) },
+        { label: "Trace width", value: w, at: span(-w / 2, yw, w / 2, yw, h) },
+        { label: "Board width", value: pcb.board.x1 - pcb.board.x0, at: bs.w },
+        { label: "Board length", value: pcb.board.y1 - pcb.board.y0, at: bs.l },
       ],
       tables: [],
       perf: [

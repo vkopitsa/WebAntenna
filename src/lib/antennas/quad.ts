@@ -38,12 +38,12 @@ export const quad: AntennaDef = {
       dims: [
         { label: "Wavelength λ", value: lam },
         { label: "Driven loop perimeter", value: Pd },
-        { label: "Driven loop side", value: sd },
+        { label: "Driven loop side", value: sd, at: [wires[0].a, wires[0].b], tags: ["DE"] },
         { label: "Reflector loop perimeter", value: Pr },
-        { label: "Reflector loop side", value: sr },
-        { label: "Element spacing", value: S },
-        { label: "Spreader length (centre to corner, driven)", value: sd / Math.SQRT2 },
-        { label: "Spreader length (centre to corner, reflector)", value: sr / Math.SQRT2 },
+        { label: "Reflector loop side", value: sr, at: [wires[4].a, wires[4].b], tags: ["R"] },
+        { label: "Element spacing", value: S, at: [v(S / 2, 0, 0), v(-S / 2, 0, 0)] },
+        { label: "Spreader length (centre to corner, driven)", value: sd / Math.SQRT2, at: [v(S / 2, 0, 0), wires[1].b] },
+        { label: "Spreader length (centre to corner, reflector)", value: sr / Math.SQRT2, at: [v(-S / 2, 0, 0), wires[5].b] },
       ],
       tables: [],
       perf: [

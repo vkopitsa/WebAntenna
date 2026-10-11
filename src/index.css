@@ -163,6 +163,15 @@ label { color: var(--muted); font-size: 12px; }
 .wire-ground { stroke: var(--ground); }
 .wire-feed { stroke: var(--feed-c); }
 .wire-line { stroke: var(--line-c); }
+.wire { transition: opacity 0.12s; }
+.wire.faded { opacity: 0.22; }
+.wire.lit { stroke: var(--accent); filter: drop-shadow(0 0 3px var(--accent)); }
+.dim-ext { stroke: var(--accent); stroke-width: 1; }
+.dim-arrow { stroke: var(--accent); stroke-width: 1.5; }
+.dim-head { fill: var(--accent); }
+.dim-text { fill: var(--accent); font-size: 13px; font-weight: 600; font-family: system-ui, sans-serif; paint-order: stroke; stroke: var(--chart-bg); stroke-width: 4px; }
+tr.linked { cursor: default; }
+tr.linked:hover td, tr.hl td { background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .plate { stroke-width: 1.2; }
 .plate-metal { fill: var(--metal); stroke: var(--metal-edge); }
 .plate-dielectric { fill: var(--dielectric); stroke: var(--dielectric-edge); }

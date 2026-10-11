@@ -35,11 +35,11 @@ export const jpole: AntennaDef = {
       feed: { wire: 5, at: "center" },
       dims: [
         { label: "Wavelength λ", value: lam },
-        { key: "A", label: "Long element (radiator + stub section)", value: long },
-        { key: "B", label: "Short stub", value: stub },
-        { key: "C", label: "Feed tap height above the shorting bar", value: tap },
-        { key: "D", label: "Spacing between elements", value: s },
-        { label: "Radiating section (above the stub)", value: long - stub },
+        { key: "A", label: "Long element (radiator + stub section)", value: long, at: [wires[1].a, wires[2].b] },
+        { key: "B", label: "Short stub", value: stub, at: [wires[3].a, wires[4].b] },
+        { key: "C", label: "Feed tap height above the shorting bar", value: tap, at: [wires[1].a, wires[1].b] },
+        { key: "D", label: "Spacing between elements", value: s, at: [wires[0].a, wires[0].b] },
+        { label: "Radiating section (above the stub)", value: long - stub, at: [v(0, 0, stub), wires[2].b] },
       ],
       tables: [],
       perf: [

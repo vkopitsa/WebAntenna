@@ -80,12 +80,12 @@ export const cloverleaf: AntennaDef = {
     const L = leafK(n, num(p, "tilt", 45), d / lam) * lam;
     const g = Math.max(1.5 * d, 0.02 * lam);
     const wires: Wire[] = [{ a: v(0, 0, -g / 2), b: v(0, 0, g / 2), r, group: "feed" }];
-    let span = 0, top = 0, wire = 0, leg = 0;
+    let span = 0, top = 0, wire = 0, leg = 0, legAt: [Vec3, Vec3] = [v(0, 0, 0), v(0, 0, 0)];
     for (let k = 0; k < n; k++) {
       const pts = leafPoints(L, (2 * Math.PI * k) / n, tilt, g).map((q): Vec3 => [q[0], hand * q[1], q[2]]);
       for (let i = 1; i < pts.length; i++) wires.push({ a: pts[i - 1], b: pts[i], r, group: "driven", tag: k === 0 && i === Math.round(pts.length / 2) ? "L" : undefined });
       for (const q of pts) { span = Math.max(span, Math.hypot(q[0], q[1])); top = Math.max(top, Math.abs(q[2])); }
-      if (k === 0) { for (let i = 1; i < pts.length; i++) wire += dist(pts[i - 1], pts[i]); leg = dist(pts[0], pts[1]); }
+      if (k === 0) { for (let i = 1; i < pts.length; i++) wire += dist(pts[i - 1], pts[i]); leg = dist(pts[0], pts[1]); legAt = [pts[0], pts[1]]; }
     }
     return {
       wires,
@@ -94,10 +94,10 @@ export const cloverleaf: AntennaDef = {
       dims: [
         { label: "Wavelength λ", value: lam },
         { key: "L", label: "Wire per leaf (pin to shield)", value: wire },
-        { label: "Bend from each end (leg)", value: leg },
-        { label: "Feed gap (pin to shield)", value: g },
+        { label: "Bend from each end (leg)", value: leg, at: legAt },
+        { label: "Feed gap (pin to shield)", value: g, at: [wires[0].a, wires[0].b] },
         { label: "Outer diameter", value: 2 * span },
-        { label: "Height", value: 2 * top },
+        { label: "Height", value: 2 * top, at: [v(0, 0, -top), v(0, 0, top)] },
       ],
       tables: [],
       perf: [

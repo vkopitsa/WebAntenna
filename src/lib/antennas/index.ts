@@ -38,7 +38,7 @@ function applyTrim(d: Design, k: number): Design {
   const sv = (v: Vec3): Vec3 => [v[0] * k, v[1] * k, v[2] * k];
   d.wires = d.wires.map((w) => ({ ...w, a: sv(w.a), b: sv(w.b) }));
   d.plates = d.plates.map((pl) => ({ ...pl, pts: pl.pts.map(sv) }));
-  d.dims = d.dims.map((x) => (/wavelength|довжина хвилі/i.test(x.label) ? x : { ...x, value: x.value * k }));
+  d.dims = d.dims.map((x) => (/wavelength|довжина хвилі/i.test(x.label) ? x : { ...x, value: x.value * k, at: x.at && [sv(x.at[0]), sv(x.at[1])] }));
   d.tables = d.tables.map((t) => ({ ...t, rows: t.rows.map((r) => r.map((c, i) => (t.columns[i]?.kind === "len" && typeof c === "number" ? c * k : c))) }));
   return d;
 }

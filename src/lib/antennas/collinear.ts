@@ -37,9 +37,9 @@ export const collinear: AntennaDef = {
       plates: [],
       dims: [
         { label: "Wavelength λ", value: lam },
-        { label: "Section length (λ/2 × VF), cut braid to braid", value: sec },
-        { label: "Top whip (λ/4)", value: whip },
-        { label: "Overall length", value: n * sec + whip },
+        { label: "Section length (λ/2 × VF), cut braid to braid", value: sec, at: [v(0, 0, 0), v(0, 0, sec)], tags: rows.slice(0, n).map((r) => r[0] as string) },
+        { label: "Top whip (λ/4)", value: whip, at: [wires[n].a, wires[n].b], tags: ["W"] },
+        { label: "Overall length", value: n * sec + whip, at: [v(0, 0, 0), wires[n].b] },
       ],
       tables: [{
         title: "Sections",

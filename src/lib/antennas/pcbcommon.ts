@@ -1,4 +1,4 @@
-import type { Params, Wire } from "../types";
+import type { Params, Vec3, Wire } from "../types";
 import { num } from "../types";
 import { r, type Pcb, type PcbRect } from "../pcb";
 
@@ -16,6 +16,12 @@ export function groundedBoard(p: Params, top: number, extra: PcbRect[], port: Pc
 /** In-plane lumped port across the gap between the ground edge (y = 0) and a trace starting at y = g. */
 export const gapPort = (x: number, w: number, g: number, h: number): Pcb["port"] =>
   ({ start: [x - w / 2, 0, h], stop: [x + w / 2, g, h], dir: "y", R: 50 });
+
+/** Dimension span between two board points (x0, y0) → (x1, y1) at height z, in model coordinates. */
+export const span = (x0: number, y0: number, x1: number, y1: number, z: number): [Vec3, Vec3] => [[x0, y0, z], [x1, y1, z]];
+
+/** Width (x) and length (y) spans along the edges of the board, on its top face z. */
+export const boardSpans = (b: Pcb["board"], z: number) => ({ w: span(b.x0, b.y0, b.x1, b.y0, z), l: span(b.x0, b.y0, b.x0, b.y1, z) });
 
 /** Thin-wire stand-in for a flat trace of width w: equivalent radius w/4 (strip ↔ wire). */
 export const traceRadius = (w: number) => w / 4;

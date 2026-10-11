@@ -4,6 +4,7 @@ import { besselJ0, C0, fmt, microstripEeff, microstripWidth, simpson, wavelength
 import { v } from "../geom";
 import { pcbPlates, r as pr, type Pcb } from "../pcb";
 import { band, BANDS } from "./common";
+import { span } from "./pcbcommon";
 
 /** Rectangular microstrip patch (Balanis, Antenna Theory, ch. 14: transmission-line model). */
 export function patchDesign(f: number, er: number, h: number, z0: number) {
@@ -69,23 +70,24 @@ export const patch: AntennaDef = {
     };
     const plates = pcbPlates(pcb);
     const wires: Wire[] = feed === "inset" ? [] : [{ a: v(-L / 2 + y0, 0, -t), b: v(-L / 2 + y0, 0, h), r: 0.65e-3, group: "feed", tag: "P", drawOnly: true }];
+    const notch = feed === "inset" && y0 > 0;
     return {
       wires,
       plates,
       pcb,
       dims: [
         { label: "Free-space wavelength λ", value: q.lam },
-        { key: "W", label: "Patch width W (non-radiating edges)", value: W },
-        { key: "L", label: "Patch length L (resonant)", value: L },
+        { key: "W", label: "Patch width W (non-radiating edges)", value: W, at: span(L / 2, -W / 2, L / 2, W / 2, h) },
+        { key: "L", label: "Patch length L (resonant)", value: L, at: span(xL, W / 2, L / 2, W / 2, h) },
         { label: "Fringing extension ΔL (each edge)", value: q.dL },
-        { key: "y0", label: feed === "inset" ? "Inset depth y0" : "Probe distance from the radiating edge", value: y0 },
+        { key: "y0", label: feed === "inset" ? "Inset depth y0" : "Probe distance from the radiating edge", value: y0, at: notch ? span(xL, wf / 2 + gap, xi, wf / 2 + gap, h) : y0 > 0 ? span(xL, 0, xL + y0, 0, h) : undefined },
         ...(feed === "inset" ? [
-          { key: "wf", label: "Feed line width", value: wf },
-          { label: "Inset notch gap (each side)", value: gap },
+          { key: "wf", label: "Feed line width", value: wf, at: notch ? span(xL, -wf / 2, xL, wf / 2, h) : undefined },
+          { label: "Inset notch gap (each side)", value: gap, at: notch ? span((xL + xi) / 2, wf / 2, (xL + xi) / 2, wf / 2 + gap, h) : undefined },
           { label: "Guided wavelength on the feed line λg", value: q.lamG },
         ] : []),
-        { label: "Ground / substrate length", value: Lg },
-        { label: "Ground / substrate width", value: Wg },
+        { label: "Ground / substrate length", value: Lg, at: span(xg0, -Wg / 2, xg0 + Lg, -Wg / 2, h) },
+        { label: "Ground / substrate width", value: Wg, at: span(xg0, -Wg / 2, xg0, Wg / 2, h) },
       ],
       tables: [],
       perf: [

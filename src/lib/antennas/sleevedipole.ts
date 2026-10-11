@@ -4,6 +4,7 @@ import { fmt, wavelength } from "../rf";
 import { pcbPlates, PCB_PARAMS, PRINTED_TRIM, r, type Pcb } from "../pcb";
 import { band, BANDS } from "./common";
 import { printedEeff } from "./pcbmonopole";
+import { boardSpans, span } from "./pcbcommon";
 
 /**
  * Length factors on λ/4 / √εeff(monopole fit) from the gap: the radiating strip and the U-shaped sleeve (two legs
@@ -44,18 +45,19 @@ export const sleevedipole: AntennaDef = {
       ],
       port: { start: [-w / 2, -g / 2, h], stop: [w / 2, g / 2, h], dir: "y", R: 50 },
     };
+    const bs = boardSpans(pcb.board, h), ys = -g / 2 - b / 2;
     return {
       wires: [], plates: pcbPlates(pcb), pcb, feedZ0: 50,
       dims: [
         { label: "Free-space wavelength λ", value: lam },
-        { key: "L", label: "Radiator (from the gap)", value: a },
-        { key: "S", label: "Sleeve length (from the gap)", value: b },
-        { label: "Sleeve width", value: W },
-        { label: "Cable slot width", value: slot },
-        { label: "Centre feed gap", value: g },
-        { label: "Trace width", value: w },
-        { label: "Board width", value: pcb.board.x1 - pcb.board.x0 },
-        { label: "Board length", value: pcb.board.y1 - pcb.board.y0 },
+        { key: "L", label: "Radiator (from the gap)", value: a, at: span(0, g / 2, 0, g / 2 + a, h) },
+        { key: "S", label: "Sleeve length (from the gap)", value: b, at: span(-W / 2 + w / 2, -g / 2, -W / 2 + w / 2, -g / 2 - b, h) },
+        { label: "Sleeve width", value: W, at: span(-W / 2, -g / 2 - w / 2, W / 2, -g / 2 - w / 2, h) },
+        { label: "Cable slot width", value: slot, at: span(-W / 2 + w, ys, W / 2 - w, ys, h) },
+        { label: "Centre feed gap", value: g, at: span(0, -g / 2, 0, g / 2, h) },
+        { label: "Trace width", value: w, at: span(-w / 2, g / 2 + a / 2, w / 2, g / 2 + a / 2, h) },
+        { label: "Board width", value: pcb.board.x1 - pcb.board.x0, at: bs.w },
+        { label: "Board length", value: pcb.board.y1 - pcb.board.y0, at: bs.l },
       ],
       tables: [],
       perf: [

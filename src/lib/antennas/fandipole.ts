@@ -89,8 +89,8 @@ export const fandipole: AntennaDef = {
       plates: [],
       feed: { wire: 0, at: "center" },
       dims: [
-        { label: "Centre gap at the feed", value: gap },
-        { label: "Span of the longest element (tip to tip)", value: rows[0][2] as number },
+        { label: "Centre gap at the feed", value: gap, at: [wires[0].a, wires[0].b] },
+        { label: "Span of the longest element (tip to tip)", value: rows[0][2] as number, at: [wires[1].b, wires[2].b], tags: ["E1"] },
       ],
       tables: [{
         title: "Elements",

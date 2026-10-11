@@ -1,4 +1,4 @@
-import type { AntennaDef, Cell, Design, Wire } from "../types";
+import type { AntennaDef, Cell, Design, Vec3, Wire } from "../types";
 import { num, str } from "../types";
 import { endEffect, fmt, wavelength } from "../rf";
 import { v } from "../geom";
@@ -98,8 +98,8 @@ export const yagi: AntennaDef = {
       feedZ0: driven === "folded" ? 200 : 50,
       dims: [
         { label: "Wavelength λ", value: lam },
-        { label: "Boom length (reflector to last director)", value: boomLen },
-        ...(driven === "folded" ? [{ label: "Folded dipole conductor spacing", value: fs }] : []),
+        { label: "Boom length (reflector to last director)", value: boomLen, at: [v(0, 0, bz), v(boomLen, 0, bz)] },
+        ...(driven === "folded" ? [{ label: "Folded dipole conductor spacing", value: fs, at: [wires[feedWire].a, wires[feedWire + 1].a] as [Vec3, Vec3] }] : []),
         ...(bc > 0 ? [{ label: "Boom correction added to parasitic elements", value: bc }] : []),
       ],
       tables: [{

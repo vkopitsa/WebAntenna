@@ -43,12 +43,12 @@ export const discone: AntennaDef = {
       feed: { wire: 0, at: "center" },
       dims: [
         { label: "Wavelength at the cut-off (λ/4) frequency", value: lam },
-        { key: "L", label: "Cone rod length (slant)", value: slant },
-        { label: "Cone base diameter", value: 2 * baseR },
-        { label: "Cone height", value: coneH },
-        { key: "D", label: "Disc diameter (0.7 × λ/4)", value: discD },
-        { label: "Each disc rod", value: discD / 2 },
-        { label: "Gap between disc and cone apex", value: g },
+        { key: "L", label: "Cone rod length (slant)", value: slant, at: [wires[2].a, wires[2].b] },
+        { label: "Cone base diameter", value: 2 * baseR, at: n % 2 ? undefined : [wires[2].b, wires[2 + n].b] },
+        { label: "Cone height", value: coneH, at: [v(0, 0, 0), v(0, 0, -coneH)] },
+        { key: "D", label: "Disc diameter (0.7 × λ/4)", value: discD, at: n % 2 ? undefined : [wires[1].b, wires[1 + n].b] },
+        { label: "Each disc rod", value: discD / 2, at: [wires[1].a, wires[1].b] },
+        { label: "Gap between disc and cone apex", value: g, at: [wires[0].a, wires[0].b] },
       ],
       tables: [],
       perf: [

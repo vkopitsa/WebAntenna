@@ -3,7 +3,7 @@ import { num } from "../types";
 import { fmt, wavelength } from "../rf";
 import { pcbPlates, PCB_PARAMS, PRINTED_TRIM, r } from "../pcb";
 import { band, BANDS } from "./common";
-import { gapPort, groundedBoard } from "./pcbcommon";
+import { gapPort, groundedBoard, span } from "./pcbcommon";
 
 /**
  * εeff of a trace on a substrate with no ground below, fitted to openEMS runs of this monopole
@@ -35,10 +35,10 @@ export const pcbmonopole: AntennaDef = {
       wires: [], plates: pcbPlates(pcb), pcb,
       dims: [
         { label: "Free-space wavelength λ", value: lam },
-        { key: "L", label: "Trace length (from the ground edge gap)", value: L },
-        { label: "Trace width", value: w },
-        { label: "Feed gap to the ground pour", value: g },
-        { label: "Keep-out above the ground pour", value: g + L + 2e-3 },
+        { key: "L", label: "Trace length (from the ground edge gap)", value: L, at: span(0, g, 0, g + L, h) },
+        { label: "Trace width", value: w, at: span(-w / 2, g + L / 2, w / 2, g + L / 2, h) },
+        { label: "Feed gap to the ground pour", value: g, at: span(0, 0, 0, g, h) },
+        { label: "Keep-out above the ground pour", value: g + L + 2e-3, at: span(0, 0, 0, g + L + 2e-3, h) },
       ],
       tables: [],
       perf: [

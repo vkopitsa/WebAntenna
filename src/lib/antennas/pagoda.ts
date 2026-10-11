@@ -1,4 +1,4 @@
-import type { AntennaDef, Design } from "../types";
+import type { AntennaDef, Design, Vec3 } from "../types";
 import { num, str } from "../types";
 import { fmt, wavelength } from "../rf";
 import { pcbPlates, type Pcb, type PcbBox, type PcbLevel, type PcbPoly } from "../pcb";
@@ -140,21 +140,24 @@ export const pagoda: AntennaDef = {
       levels: [lv2, lv3], pec: [shield], coaxFeed: true,
     };
     const lam = wavelength(f);
+    const P = (x: number, y: number, z: number): Vec3 => [x, y, z];
+    const xs = mm((d.coax_r2 + shieldPad) / 2), a1 = rad(lhcp ? 90 + d.track_c1 / 2 : 90 - d.track_c1 / 2); // a spot on both pads and a leg's start angle
+    const leg = (r: number) => P(mm(r * Math.cos(a1)), mm(r * Math.sin(a1)), h);
     const scaled = Math.abs(k - 1) > 1e-9;
     return {
       wires: [], plates: pcbPlates(pcb), pcb, feedZ0: 50,
       dims: [
         { label: "Wavelength λ", value: lam },
-        { key: "D1", label: "D1: board 1 underside to board 2 top", value: mm(d.disk_d1) },
-        { key: "D2", label: "D2: board 2 underside to board 3 top", value: mm(d.disk_d2) - 2 * h },
-        { label: "Board thickness (FR-4)", value: h },
-        { label: "Board 1 and 2 diameter", value: 2 * mm(pcbR) },
-        { label: "Board 3 diameter", value: 2 * mm(pcbR3) },
-        { label: "Leg arc radius (outer)", value: mm(d.track_r1) },
-        { label: "Leg arc radius (inner)", value: mm(d.track_r2) },
-        { label: "Ring, board 1 (outer radius)", value: mm(d.disk_r1) },
-        { label: "Ring, board 2 (outer radius)", value: mm(d.disk_r2) },
-        { label: "Choke disc diameter (board 3)", value: 2 * mm(d.disk_r3) },
+        { key: "D1", label: "D1: board 1 underside to board 2 top", value: mm(d.disk_d1), at: [P(xs, 0, 0), P(xs, 0, -mm(d.disk_d1))] },
+        { key: "D2", label: "D2: board 2 underside to board 3 top", value: mm(d.disk_d2) - 2 * h, at: [P(xs, 0, z2), P(xs, 0, z3 + h)] },
+        { label: "Board thickness (FR-4)", value: h, at: [P(xs, 0, 0), P(xs, 0, h)] },
+        { label: "Board 1 and 2 diameter", value: 2 * mm(pcbR), at: [P(-mm(pcbR), 0, 0), P(mm(pcbR), 0, 0)] },
+        { label: "Board 3 diameter", value: 2 * mm(pcbR3), at: [P(-mm(pcbR3), 0, z3), P(mm(pcbR3), 0, z3)] },
+        { label: "Leg arc radius (outer)", value: mm(d.track_r1), at: [P(0, 0, h), leg(d.track_r1)] },
+        { label: "Leg arc radius (inner)", value: mm(d.track_r2), at: [P(0, 0, h), leg(d.track_r2)] },
+        { label: "Ring, board 1 (outer radius)", value: mm(d.disk_r1), at: [P(0, 0, h), P(mm(d.disk_r1), 0, h)] },
+        { label: "Ring, board 2 (outer radius)", value: mm(d.disk_r2), at: [P(0, 0, z2 + h), P(mm(d.disk_r2), 0, z2 + h)] },
+        { label: "Choke disc diameter (board 3)", value: 2 * mm(d.disk_r3), at: [P(-mm(d.disk_r3), 0, z3), P(mm(d.disk_r3), 0, z3)] },
         { label: "Track width", value: mm(d.track_w) },
         { label: "Coax (semi-rigid RG402) outer diameter", value: mm(2 * d.coax_r3) },
       ],

@@ -20,6 +20,16 @@ const dim = (id: string, label: string, p = {}) => {
 };
 
 describe("registry", () => {
+  it("dimension spans drawn on hover are as long as the value, also after a trim", () => {
+    for (const a of ANTENNAS) {
+      for (const p of [a.defaults, { ...a.defaults, trim: 5 }]) {
+        for (const x of a.build(p).dims) {
+          if (!x.at) continue;
+          expect(Math.abs(dist(x.at[0], x.at[1]) - x.value), `${a.id}: ${x.label}`).toBeLessThanOrEqual(Math.max(1e-4, 0.01 * x.value));
+        }
+      }
+    }
+  });
   it("every antenna builds with its defaults and gives finite, positive geometry", () => {
     for (const a of ANTENNAS) {
       const d = a.build(a.defaults);

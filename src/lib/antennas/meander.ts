@@ -3,7 +3,7 @@ import { num } from "../types";
 import { fmt, wavelength } from "../rf";
 import { pcbPlates, PCB_PARAMS, PRINTED_TRIM, r, type PcbRect } from "../pcb";
 import { band, BANDS } from "./common";
-import { gapPort, groundedBoard } from "./pcbcommon";
+import { gapPort, groundedBoard, span } from "./pcbcommon";
 import { MONO_K, printedEeff } from "./pcbmonopole";
 
 /**
@@ -55,15 +55,16 @@ export const meander: AntennaDef = {
     const x0 = -W / 2;
     const m = meanderRects(total, W, P, w, g, x0);
     const pcb = groundedBoard(p, m.top + 2e-3, m.rects, gapPort(x0, w, g, h));
+    const lead = Math.min(P, total), yr = g + lead, last = m.rects[m.rects.length - 1], xl = (last.x0 + last.x1) / 2;
     return {
       wires: [], plates: pcbPlates(pcb), pcb,
       dims: [
         { label: "Free-space wavelength λ", value: lam },
         { label: "Equivalent straight monopole", value: straight },
         { key: "Lt", label: "Total trace length (along the centre line)", value: total },
-        { key: "W", label: "Meander width", value: W },
-        { key: "P", label: "Meander pitch", value: P },
-        { label: "Antenna height above the ground pour", value: m.top },
+        { key: "W", label: "Meander width", value: W, at: m.runs > 1 ? span(x0, yr, x0 + W, yr, h) : undefined },
+        { key: "P", label: "Meander pitch", value: P, at: m.runs > 1 ? span(x0 + W, yr, x0 + W, yr + P, h) : undefined },
+        { label: "Antenna height above the ground pour", value: m.top, at: span(xl, 0, xl, m.top, h) },
       ],
       tables: [{ title: "Meander", columns: [{ label: "Horizontal runs", kind: "num" }, { label: "Height", kind: "len" }, { label: "Area saved vs straight", kind: "text" }], rows: [[m.runs, m.top, `${Math.round(100 * (1 - m.top / (straight + g)))} %`]] }],
       perf: [

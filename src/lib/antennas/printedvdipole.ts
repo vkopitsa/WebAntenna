@@ -4,6 +4,7 @@ import { deg, fmt, interp, wavelength } from "../rf";
 import { pcbPlates, PCB_PARAMS, PRINTED_TRIM, r, type Pcb, type PcbPoly } from "../pcb";
 import { band, BANDS } from "./common";
 import { printedEeff } from "./pcbmonopole";
+import { boardSpans, span } from "./pcbcommon";
 
 /** Length factor on λ/2 / √εeff(monopole fit), along the arms: the straight printed dipole's 0.855. */
 export const VDIP_K = 0.855;
@@ -55,18 +56,19 @@ export const printedvdipole: AntennaDef = {
       port: { start: [-w / 2, -g / 2, h], stop: [w / 2, g / 2, h], dir: "y", R: 50 },
     };
     const tipY = g / 2 + s / 2 + a * cy, tipX = a * sx;
+    const bs = boardSpans(pcb.board, h);
     return {
       wires: [], plates: pcbPlates(pcb), pcb, feedZ0: 50,
       dims: [
         { label: "Free-space wavelength λ", value: lam },
         { key: "L", label: "Total length (tip to tip, along the arms)", value: L },
         { label: "Each arm (from the gap)", value: arm },
-        { label: "Span between the tips", value: 2 * tipY },
-        { label: "Depth of the V (apex to tips)", value: tipX },
-        { label: "Centre feed gap", value: g },
-        { label: "Trace width", value: w },
-        { label: "Board width", value: pcb.board.x1 - pcb.board.x0 },
-        { label: "Board length", value: pcb.board.y1 - pcb.board.y0 },
+        { label: "Span between the tips", value: 2 * tipY, at: span(tipX, -tipY, tipX, tipY, h) },
+        { label: "Depth of the V (apex to tips)", value: tipX, at: span(0, tipY, tipX, tipY, h) },
+        { label: "Centre feed gap", value: g, at: span(0, -g / 2, 0, g / 2, h) },
+        { label: "Trace width", value: w, at: span(-w / 2, g / 2 + s / 2, w / 2, g / 2 + s / 2, h) },
+        { label: "Board width", value: pcb.board.x1 - pcb.board.x0, at: bs.w },
+        { label: "Board length", value: pcb.board.y1 - pcb.board.y0, at: bs.l },
       ],
       tables: [],
       perf: [

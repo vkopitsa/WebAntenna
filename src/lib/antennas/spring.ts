@@ -103,6 +103,7 @@ export const spring: AntennaDef = {
       const a = (k * Math.PI) / 2 + Math.PI / 4;
       wires.push({ a: v(0, 0, 0), b: v(rad * Math.cos(a), rad * Math.sin(a), 0), r: Math.max(r, 0.5e-3), group: "ground", tag: k === 0 ? "B" : undefined });
     }
+    const radial = wires.length - 4;
     const turns = pieces / SPRING_SEG, H = turns * S;
     const wire = turns * Math.hypot(Math.PI * D, S);
     return {
@@ -112,13 +113,13 @@ export const spring: AntennaDef = {
       feedZ0: 50,
       dims: [
         { label: "Wavelength λ", value: lam },
-        { key: "H", label: "Coil length (axial)", value: H },
-        { label: "Coil diameter (wire centre)", value: D },
-        { label: "Turn spacing (pitch)", value: S },
-        { label: "Straight lead", value: lead },
+        { key: "H", label: "Coil length (axial)", value: H, at: [v(0, 0, lead), v(0, 0, lead + H)] },
+        { label: "Coil diameter (wire centre)", value: D, at: [v(0, 0, lead + S / 2), v(-2 * R, 0, lead + S / 2)] },
+        { label: "Turn spacing (pitch)", value: S, at: [v(0, 0, lead), v(0, 0, lead + S)] },
+        { label: "Straight lead", value: lead, at: lead > 1e-6 ? [wires[0].a, wires[0].b] : undefined },
         { label: "Wire in the coil", value: wire },
-        { label: "Overall height", value: lead + H },
-        { key: "B", label: "Each radial (counterpoise)", value: rad },
+        { label: "Overall height", value: lead + H, at: [v(0, 0, 0), v(0, 0, lead + H)] },
+        { key: "B", label: "Each radial (counterpoise)", value: rad, at: [wires[radial].a, wires[radial].b] },
       ],
       tables: [{
         title: "Coil",

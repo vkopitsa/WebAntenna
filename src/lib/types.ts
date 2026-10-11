@@ -48,8 +48,12 @@ export interface Dim {
   label: string;
   /** Metres. */
   value: number;
-  /** Optional letter shown in the drawing legend ("A", "B", …). */
+  /** Optional letter shown in the drawing legend ("A", "B", …). Wires with the same tag light up when the row is hovered. */
   key?: string;
+  /** The span this value measures, in model coordinates: drawn as a dimension line when the row is hovered. */
+  at?: [Vec3, Vec3];
+  /** Wire tags to light up on hover, when they differ from `key`. */
+  tags?: string[];
 }
 
 export interface Perf {

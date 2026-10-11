@@ -3,7 +3,7 @@ import { num } from "../types";
 import { fmt, wavelength } from "../rf";
 import { pcbPlates, PCB_PARAMS, PRINTED_TRIM, r } from "../pcb";
 import { band, BANDS } from "./common";
-import { gapPort, groundedBoard } from "./pcbcommon";
+import { gapPort, groundedBoard, span } from "./pcbcommon";
 
 /**
  * Printed IFA model fitted to openEMS runs (w = 1 mm, H = 5 / 8 mm on FR-4 1.6 mm, H = 5 mm on RO4003C 0.8 mm;
@@ -52,12 +52,12 @@ export const ifa: AntennaDef = {
       wires: [], plates: pcbPlates(pcb), pcb,
       dims: [
         { label: "Free-space wavelength λ", value: lam },
-        { key: "H", label: "Arm height above the ground edge (centre line)", value: H },
-        { key: "L", label: "Arm length from the short (centre line)", value: La },
-        { key: "S", label: "Feed tap distance from the short", value: S },
+        { key: "H", label: "Arm height above the ground edge (centre line)", value: H, at: span(xs, 0, xs, H, h) },
+        { key: "L", label: "Arm length from the short (centre line)", value: La, at: span(xs, H, xs + La, H, h) },
+        { key: "S", label: "Feed tap distance from the short", value: S, at: span(xs, H / 2, xf, H / 2, h) },
         { label: "Short → open end, total", value: Ltot },
-        { label: "Trace width", value: w },
-        { label: "Feed gap to the ground pour", value: g },
+        { label: "Trace width", value: w, at: span(xf - w / 2, H / 2, xf + w / 2, H / 2, h) },
+        { label: "Feed gap to the ground pour", value: g, at: span(xf, 0, xf, g, h) },
       ],
       tables: [],
       perf: [
