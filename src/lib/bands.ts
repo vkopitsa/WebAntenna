@@ -51,3 +51,16 @@ export const BAND_PRESETS: [string, Band][] = [
   ["Wi-Fi 5 GHz", [5.15e9, 5.85e9]],
   ["FPV 5.8 GHz", [5.645e9, 5.945e9]],
 ];
+
+/** Wide ranges for broadband antennas (discone, helix, LPDA). Same shape as BAND_PRESETS. */
+export const WIDE_PRESETS: [string, Band][] = [
+  ["HF", [3e6, 30e6]],
+  ["VHF", [30e6, 300e6]],
+  ["VHF + UHF ham", [144e6, 440e6]],
+  ["UHF TV", [470e6, 790e6]],
+  ["UHF", [300e6, 3e9]],
+  ["SDR scanner", [25e6, 1.3e9]],
+  ["Wideband SDR", [70e6, 6.4e9]],
+  ["Cellular (LTE)", [700e6, 2.7e9]],
+  ["UWB", [3.1e9, 10.6e9]],
+];

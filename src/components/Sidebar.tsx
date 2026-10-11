@@ -4,11 +4,13 @@ import { get, resetParams, set, setParam, useStore } from "../store";
 import { useT } from "../i18n";
 import { fromUnit, toUnit } from "../format";
 import { FreqInput, Num, Section, Select } from "./inputs";
-import { BAND_PRESETS, formatBands, parseBands, type Band } from "../lib/bands";
+import { BAND_PRESETS, WIDE_PRESETS, formatBands, parseBands, type Band } from "../lib/bands";
 import { fmtHz } from "../lib/units";
 import { affected } from "../lib/affects";
 import { setHover, useHover, type Hover } from "../hover";
 import { useEffect, useRef } from "react";
+
+const ALL_PRESETS = [...BAND_PRESETS, ...WIDE_PRESETS];
 
 /** List of [start, stop] ranges with presets. Stored as the "bands" string param. */
 function BandsInput({ def, value }: { def: ParamDef; value: string }) {
@@ -34,10 +36,14 @@ function BandsInput({ def, value }: { def: ParamDef; value: string }) {
             <FreqInput value={b[1]} min={def.min} max={def.max} onChange={(v) => update(i, 1, v)} ariaLabel="Stop" />
             <button className="small" disabled={bands.length < 2} aria-label={t("Remove band")} title={t("Remove band")} onClick={() => commit(bands.filter((_, k) => k !== i))}>✕</button>
           </div>
-          <select className="band-preset" aria-label={t("Band preset")} value={BAND_PRESETS.find(([, r]) => r[0] === b[0] && r[1] === b[1])?.[0] ?? ""}
-            onChange={(e) => { const hit = BAND_PRESETS.find(([n]) => n === e.target.value); if (hit) commit(bands.map((x, k) => (k === i ? hit[1] : x))); }}>
+          <select className="band-preset" aria-label={t("Band preset")} value={ALL_PRESETS.find(([, r]) => r[0] === b[0] && r[1] === b[1])?.[0] ?? ""}
+            onChange={(e) => { const hit = ALL_PRESETS.find(([n]) => n === e.target.value); if (hit) commit(bands.map((x, k) => (k === i ? hit[1] : x))); }}>
             <option value="">{t("Band preset…")}</option>
-            {BAND_PRESETS.map(([n, [a, c]]) => <option key={n} value={n}>{t(n)} · {fmtHz(a, 3)} – {fmtHz(c, 3)}</option>)}
+            {([[t("Narrow"), BAND_PRESETS], [t("Wide"), WIDE_PRESETS]] as const).map(([g, list]) => (
+              <optgroup key={g} label={g}>
+                {list.map(([n, [a, c]]) => <option key={n} value={n}>{t(n)} · {fmtHz(a, 3)} – {fmtHz(c, 3)}</option>)}
+              </optgroup>
+            ))}
           </select>
         </div>
       ))}

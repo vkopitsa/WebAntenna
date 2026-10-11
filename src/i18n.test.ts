@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { ANTENNAS } from "./lib/antennas";
 import type { AntennaDef, Params } from "./lib/types";
 import { UK } from "./i18n/uk";
-import { BAND_PRESETS } from "./lib/bands";
+import { BAND_PRESETS, WIDE_PRESETS } from "./lib/bands";
 import { SIM_STRINGS } from "./lib/simulate";
 import { BUILD_STRINGS } from "./lib/build";
 import { PRINT_STRINGS } from "./lib/print";
@@ -33,7 +33,7 @@ export function libStrings(): Set<string> {
   const add = (s: string | undefined) => { if (s && /[A-Za-z]/.test(s)) out.add(s); };
   for (const a of ANTENNAS as AntennaDef[]) {
     add(a.name); add(a.summary); add(a.category);
-    BAND_PRESETS.forEach(([n]) => add(n));
+    [...BAND_PRESETS, ...WIDE_PRESETS].forEach(([n]) => add(n));
     SIM_STRINGS.forEach(add);
     BUILD_STRINGS.forEach(add);
     PRINT_STRINGS.forEach(add);
