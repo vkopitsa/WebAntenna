@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ANTENNAS, ANTENNA_BY_ID } from "./antennas";
 import { moxonLambda } from "./antennas/moxon";
 import { patchDesign } from "./antennas/patch";
+import { simulate } from "./simulate";
 import { helixEstimates } from "./antennas/helix";
 import { leafK } from "./antennas/cloverleaf";
 import { springTurns } from "./antennas/spring";
@@ -9,7 +10,7 @@ import { buildMesh, solve } from "./mom";
 import { yagiGainDbi } from "./antennas/yagi";
 import { endEffect, microstripWidth, microstripZ0, wavelength } from "./rf";
 import { dist } from "./geom";
-import { formatBands, parseBands } from "./bands";
+import { bandSweep, formatBands, parseBands } from "./bands";
 import type { Params } from "./types";
 
 const dim = (id: string, label: string, p = {}) => {
@@ -121,6 +122,14 @@ describe("patch (Balanis)", () => {
     expect(q.y0).toBeGreaterThan(0);
     expect(q.y0).toBeLessThan(q.L / 2);
   });
+  it("air dielectric (εr 1) keeps a finite bandwidth, so the impedance sweep stays finite", () => {
+    const q = patchDesign(2.45e9, 1, 3e-3, 50);
+    expect(q.bw).toBeGreaterThan(0);
+    expect(q.bw).toBeCloseTo(patchDesign(2.45e9, 2, 3e-3, 50).bw * (q.W / q.L) / (patchDesign(2.45e9, 2, 3e-3, 50).W / patchDesign(2.45e9, 2, 3e-3, 50).L), 6);
+    const p = { ...ANTENNA_BY_ID.patch.defaults, er: 1 };
+    const r = simulate(ANTENNA_BY_ID.patch, p, ANTENNA_BY_ID.patch.build(p));
+    expect(r.z.every((z) => Number.isFinite(z.r) && Number.isFinite(z.x))).toBe(true);
+  });
   it("microstrip synthesis round-trips through the analysis formula", () => {
     for (const [z, er, h] of [[50, 4.4, 1.6e-3], [50, 3.38, 0.508e-3], [100, 2.2, 0.8e-3], [25, 10.2, 0.635e-3]] as const) {
       expect(microstripZ0(microstripWidth(z, er, h), er, h)).toBeCloseTo(z, -0.3);
@@ -159,6 +168,11 @@ describe("connectivity", () => {
 });
 
 describe("bands", () => {
+  it("sweeps of very wide bands never start at or below 0 Hz; narrow ones keep the ±2 % margin", () => {
+    expect(bandSweep([1e5, 1e11]).start).toBeGreaterThan(0);
+    expect(bandSweep([70e6, 6.4e9]).start).toBeGreaterThan(0);
+    expect(bandSweep([144e6, 146e6]).start).toBeCloseTo(144e6 - 0.02 * 145e6, 0);
+  });
   it("parse, normalise and format", () => {
     expect(parseBands("146e6-144e6;430e6-440e6;bad;5e9")).toEqual([[144e6, 146e6], [430e6, 440e6], [5e9, 5e9]]);
     expect(parseBands(formatBands([[144e6, 146e6], [433.05e6, 434.79e6]]))).toEqual([[144e6, 146e6], [433.05e6, 434.79e6]]);

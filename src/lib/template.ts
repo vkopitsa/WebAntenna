@@ -45,6 +45,13 @@ function pcbDrawing(p: Pcb, layer: "top" | "bottom", mirror: boolean, name: stri
   return { w: W + 2 * P, h: H + 2 * P, prims, caption: `${name} - ${what} - board ${W.toFixed(1)} x ${H.toFixed(1)} mm` };
 }
 
+/**
+ * Most A4 tiles for one 1:1 drawing that is taped together (PCB, helix wrap): a 10-turn 70 cm helix takes 27.
+ * Bigger ones (a VHF printed board, a design typed in at 100 kHz) get no template; the dimensions and cut list do.
+ */
+const MAX_TILES = 30;
+const fitsTiles = (d: Drawing) => Math.min(tiles(d.w, d.h), tiles(d.h, d.w)) <= MAX_TILES;
+
 /** Every board's copper layers (a stacked build: one pair per board, named in the caption). */
 function pcbDrawings(p: Pcb, mirror: boolean, name: string): Drawing[] {
   return boardsOf(p).flatMap(({ label, pcb }) => {
@@ -52,7 +59,7 @@ function pcbDrawings(p: Pcb, mirror: boolean, name: string): Drawing[] {
     const ds = [];
     if (copperBoxes(pcb).some((q) => q.layer === "top")) ds.push(pcbDrawing(pcb, "top", mirror, n));
     if (copperBoxes(pcb).some((q) => q.layer === "bottom")) ds.push(pcbDrawing(pcb, "bottom", mirror, n));
-    return ds;
+    return ds.filter(fitsTiles);
   });
 }
 
@@ -107,6 +114,8 @@ function helixDrawing(def: AntennaDef, d: Design): Drawing | null {
   const w = hw[Math.floor(hw.length / 2)];
   const right = (w.a[0] * w.b[1] - w.a[1] * w.b[0]) * (w.b[2] - w.a[2]) > 0;
   const C = Math.PI * (D - wd) * 1e3, H = Lax * 1e3, s = S * 1e3, P = 10, n = Math.round(Lax / S);
+  // past MAX_TILES (big VHF/HF helices) the cut list is the template
+  if (!fitsTiles({ w: C + 2 * P + 6, h: H + 2 * P + 4, prims: [], caption: "" })) return null;
   const prims: Prim[] = [{ k: "rect", x: P, y: P, w: C, h: H, lw: 0.25 }];
   for (let i = 0; i < n; i++) {
     const y0 = P + H - i * s, y1 = y0 - s;
@@ -122,10 +131,13 @@ function helixDrawing(def: AntennaDef, d: Design): Drawing | null {
 
 interface Mark { s: number; tag: string }
 
+/** Longest boom that gets a paper drilling strip (≈ 14 A4 pages); beyond it the element positions in the dimensions are the template. */
+const MAX_STRIP = 20;
+
 function boomMarks(d: Design): { L: number; marks: Mark[]; dia: number } | null {
   const ps = pieces(d);
   const boom = ps.filter((pc) => pc.mech).sort((a, b) => b.length - a.length)[0];
-  if (!boom || boom.length < 0.1) return null;
+  if (!boom || boom.length < 0.1 || boom.length > MAX_STRIP) return null;
   const bw = d.wires[boom.wires[0]];
   const a = bw.a, b = d.wires[boom.wires[boom.wires.length - 1]].b;
   const L = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
@@ -264,7 +276,7 @@ function inTile(q: Prim, x: number, y: number, w: number, h: number): boolean {
 export type TemplateKind = "pcb" | "wire" | "strip" | "none";
 
 export function templateKind(def: AntennaDef, d: Design): TemplateKind {
-  if (d.pcb) return "pcb";
+  if (d.pcb) return pcbDrawings(d.pcb, false, def.name).length ? "pcb" : "none";
   if (boomMarks(d)) return "strip";
   if (def.id === "helix" && helixDrawing(def, d)) return "wire";
   return wireDrawing(def, d) ? "wire" : "none";

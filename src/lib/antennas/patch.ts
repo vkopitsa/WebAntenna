@@ -24,7 +24,10 @@ export function patchDesign(f: number, er: number, h: number, z0: number) {
   const y0 = Rin > z0 ? (L / Math.PI) * Math.acos(Math.sqrt(z0 / Rin)) : 0;
   const wf = microstripWidth(z0, er, h);
   const eeffLine = microstripEeff(er, wf / h);
-  const bw = ((3.77 * (er - 1)) / (er * er)) * (W / L) * (h / lam);
+  // Jackson–Alexopoulos fit, for εr ≳ 2: its (εr − 1)/εr² peaks at 2 and falls to 0 for air (Q = ∞ → NaN
+  // impedance), while real low-εr patches are wider still. Hold the term at its εr = 2 value below that.
+  const eb = Math.max(er, 2);
+  const bw = ((3.77 * (eb - 1)) / (eb * eb)) * (W / L) * (h / lam);
   return { lam, W, eeff, dL, L, G1, G12, Rin, y0, wf, eeffLine, lamG: lam / Math.sqrt(eeffLine), bw };
 }
 

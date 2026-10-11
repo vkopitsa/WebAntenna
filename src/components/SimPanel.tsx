@@ -21,7 +21,8 @@ const Z0S: [string, string][] = [["50", "50 Ω"], ["75", "75 Ω"], ["140", "140 
 
 function bandSummary(z: ZPoint[], z0: number, bands: [number, number][]) {
   return bands.map(([a, b]) => {
-    const pts = z.filter((p) => p.f >= a && p.f <= b);
+    // a NaN point (solver blow-up, odd .s1p) would make indexOf(min) −1
+    const pts = z.filter((p) => p.f >= a && p.f <= b && Number.isFinite(p.r) && Number.isFinite(p.x));
     if (!pts.length) return null;
     const sw = pts.map((p) => s11(p, z0).swr);
     const best = sw.indexOf(Math.min(...sw));

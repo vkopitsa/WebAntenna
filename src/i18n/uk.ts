@@ -257,6 +257,8 @@ export const UK: Record<string, string> = {
   "Expected performance": "Очікувані характеристики",
   "Build notes": "Поради зі збирання",
   "Reset": "Скинути",
+  "Reset parameters": "Скинути параметри",
+  "This panel failed to render with these parameters.": "Цю панель не вдалося показати з такими параметрами.",
   "Antenna type": "Тип антени",
   "Parameters": "Параметри",
   "English": "English",
@@ -823,6 +825,8 @@ export const UK: Record<string, string> = {
   "Narrow: a few MHz at 433 MHz": "Вузька: кілька МГц на 433 МГц",
   "The radiation resistance is only a few ohms: the feed needs a matching network (an L-match or a tap on the first turn) for 50 Ω, and copper loss eats a large share of the power.": "Опір випромінювання лише кілька омів: для 50 Ом живлення потребує узгоджувального кола (L-ланка або відвід від першого витка), а втрати в міді забирають помітну частку потужності.",
   "The model stands the coil over four λ/4 radials. On a module the board's ground pour is the counterpoise: a smaller one raises the resonance, so stretch or compress the coil to tune.": "У моделі котушка стоїть над чотирма радіалами λ/4. На модулі противагою є полігон землі плати: менший підвищує резонанс, тож розтягуйте чи стискайте котушку для налаштування.",
+  "The coil would need more than 100 turns at this frequency; the model stops at 100, so it resonates above the band. Use a larger coil diameter or a coarser pitch.": "На цій частоті котушці потрібно понад 100 витків; модель обмежена 100 витками, тож резонанс буде вищим за діапазон. Збільште діаметр котушки або крок.",
+  "Outside the fitted range (4–40 turns): the turn count and the radiation resistance are extrapolated. Check them in the Simulation tab.": "Поза діапазоном апроксимації (4–40 витків): кількість витків і опір випромінювання екстрапольовані. Перевірте їх на вкладці «Симуляція».",
   "Stretching the coil (more pitch) raises the resonance and the radiation resistance; adding turns lowers it.": "Розтягування котушки (більший крок) підвищує резонанс і опір випромінювання; додавання витків знижує резонанс.",
   "Spring wire (lead + coil, straightened)": "Дріт пружини (вивід + котушка, у розпрямленому вигляді)",
   // Dual-band printed dipole

@@ -21,10 +21,11 @@ export const centre = ([a, b]: Band) => (a + b) / 2;
 /** Relative width, % of the centre frequency. */
 export const widthPct = ([a, b]: Band) => (200 * (b - a)) / (a + b);
 
-/** NEC sweep over a band with a small margin on each side (±2 % of centre, at least 11 points). */
+/** NEC sweep over a band with a small margin on each side (±2 % of centre, start ≥ half the band edge, at least 11 points). */
 export function bandSweep([a, b]: Band): Sweep {
   const m = 0.02 * centre([a, b]);
-  const start = a - m, stop = b + m;
+  // the margin is relative to the centre, so on a 100:1 band it would reach below 0 Hz
+  const start = Math.max(a - m, a / 2), stop = b + m;
   return { start, stop, steps: Math.max(11, Math.min(41, Math.round((stop - start) / (0.005 * centre([a, b]))) + 1)) };
 }
 

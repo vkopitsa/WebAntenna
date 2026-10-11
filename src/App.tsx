@@ -10,6 +10,7 @@ import { Select } from "./components/inputs";
 import { SimPanel } from "./components/SimPanel";
 import { SynthPanel } from "./components/SynthPanel";
 import { BuildPanel } from "./components/BuildPanel";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 
 export default function App() {
   const t = useT();
@@ -64,6 +65,7 @@ export default function App() {
             <button role="tab" aria-selected={tab === "build"} className={tab === "build" ? "on" : ""} onClick={() => setTab("build")}>{t("Build")}</button>
             <button role="tab" aria-selected={tab === "synth"} className={tab === "synth" ? "on" : ""} onClick={() => setTab("synth")}>{t("Synthesis")}</button>
           </div>
+          <ErrorBoundary key={`${tab}|${type}|${JSON.stringify(params)}`}>
           {tab === "synth" ? <SynthPanel /> : design ? (tab === "design" ? (
             <>
               <Preview design={design} svgRef={svgRef} type={type} params={params} />
@@ -72,6 +74,7 @@ export default function App() {
               <p className="hint disclaimer">{t("Formulas give a starting point. Build slightly long, measure with an antenna analyser or VNA, then trim.")}</p>
             </>
           ) : tab === "build" ? <BuildPanel def={def} params={params} design={design} /> : <SimPanel def={def} params={params} design={design} />) : <div className="box err-text">{error}</div>}
+          </ErrorBoundary>
         </main>
       </div>
     </div>

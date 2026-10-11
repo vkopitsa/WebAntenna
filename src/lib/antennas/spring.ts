@@ -10,6 +10,8 @@ export const SPRING_SEG = 8;
 const SD = [0.15, 0.25, 0.4, 0.6, 1.0];
 const DS = [0.3, 0.5, 0.75];
 const TURNS = [4, 6, 10, 16, 25, 40];
+/** Hard cap on the model: past this the coil is far outside the fit and the mesh only grows (at 100 kHz the fit asks for millions of turns). */
+export const SPRING_MAX_TURNS = 100;
 /**
  * First resonance of a normal-mode helix (coil diameter D at the wire centre, pitch S, wire d, straight lead D)
  * over four horizontal λ/4 radials, from the built-in MoM (docs/ANTENNAS.md): D/λ at resonance and R there (Ω),
@@ -87,7 +89,7 @@ export const spring: AntennaDef = {
     const S = Math.max(num(p, "pitch", 1.2e-3), d / 0.9), lead = Math.max(0, num(p, "lead", 5e-3));
     const lam = wavelength(f), r = d / 2, R = D / 2;
     const fit = springTurns(D / lam, S / D, d / S);
-    const N = Math.max(1, fit.n);
+    const N = Math.min(SPRING_MAX_TURNS, Math.max(1, fit.n));
     const pieces = Math.max(SPRING_SEG, Math.round(N * SPRING_SEG));
     const wires: Wire[] = [];
     if (lead > 1e-6) wires.push({ a: v(0, 0, 0), b: v(0, 0, lead), r, group: "driven" });
@@ -136,6 +138,11 @@ export const spring: AntennaDef = {
         "The radiation resistance is only a few ohms: the feed needs a matching network (an L-match or a tap on the first turn) for 50 Ω, and copper loss eats a large share of the power.",
         "The model stands the coil over four λ/4 radials. On a module the board's ground pour is the counterpoise: a smaller one raises the resonance, so stretch or compress the coil to tune.",
         "Stretching the coil (more pitch) raises the resonance and the radiation resistance; adding turns lowers it.",
+        ...(fit.n > SPRING_MAX_TURNS
+          ? ["The coil would need more than 100 turns at this frequency; the model stops at 100, so it resonates above the band. Use a larger coil diameter or a coarser pitch."]
+          : fit.n < TURNS[0] || fit.n > TURNS[TURNS.length - 1]
+            ? ["Outside the fitted range (4–40 turns): the turn count and the radiation resistance are extrapolated. Check them in the Simulation tab."]
+            : []),
       ],
       necSupported: true,
       f, sweeps,

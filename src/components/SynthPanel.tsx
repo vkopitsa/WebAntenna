@@ -86,10 +86,10 @@ export function SynthPanel() {
           <label>{t("Family")}<Select value={family} onChange={setFamily} options={[["any", "Any"], ["wire", "Wire / rod"], ["printed", "Printed (PCB)"]]} /></label>
           <label>{t("Polarisation")}<Select value={pol} onChange={setPol} options={[["any", "Any"], ["vertical", "Vertical"], ["horizontal", "Horizontal"], ["circular", "Circular"]]} /></label>
           <label>{t("Pattern")}<Select value={pattern} onChange={setPattern} options={[["any", "Any"], ["omni", "Omnidirectional"], ["beam", "Directional (beam)"]]} /></label>
-          <label>{t("Element diameter")} ({unit === "in" ? "in" : "mm"})<Num value={+toUnit(d, unit).toPrecision(6)} min={0.05} onChange={(v) => setD(fromUnit(v, unit))} /></label>
+          <label>{t("Element diameter")} ({unit === "in" ? "in" : "mm"})<Num value={+toUnit(d, unit).toPrecision(6)} min={0.05} max={+toUnit(0.2, unit).toPrecision(6)} onChange={(v) => setD(fromUnit(v, unit))} /></label>
           <label>{t("Substrate εr")}<Num value={er} min={1} max={15} onChange={setEr} /></label>
           <label className="check"><input type="checkbox" checked={useFd} onChange={(e) => setUseFd(e.target.checked)} /> {t("Simulate printed candidates with FDTD (WebGPU)")}</label>
-          <label>{t("Substrate thickness")} ({unit === "in" ? "in" : "mm"})<Num value={+toUnit(h, unit).toPrecision(6)} min={0.05} onChange={(v) => setH(fromUnit(v, unit))} /></label>
+          <label>{t("Substrate thickness")} ({unit === "in" ? "in" : "mm"})<Num value={+toUnit(h, unit).toPrecision(6)} min={0.05} max={+toUnit(0.02, unit).toPrecision(6)} onChange={(v) => setH(fromUnit(v, unit))} /></label>
         </div>
         <div className="row-btns">
           {state.status === "running"
