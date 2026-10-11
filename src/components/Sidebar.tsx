@@ -1,11 +1,14 @@
 import { ANTENNA_BY_ID, ANTENNAS } from "../lib/antennas";
 import type { ParamDef } from "../lib/types";
-import { resetParams, set, setParam, useStore } from "../store";
+import { get, resetParams, set, setParam, useStore } from "../store";
 import { useT } from "../i18n";
 import { fromUnit, toUnit } from "../format";
 import { FreqInput, Num, Section, Select } from "./inputs";
 import { BAND_PRESETS, formatBands, parseBands, type Band } from "../lib/bands";
 import { fmtHz } from "../lib/units";
+import { affected } from "../lib/affects";
+import { setHover, useHover, type Hover } from "../hover";
+import { useEffect, useRef } from "react";
 
 /** List of [start, stop] ranges with presets. Stored as the "bands" string param. */
 function BandsInput({ def, value }: { def: ParamDef; value: string }) {
@@ -76,8 +79,32 @@ export function AntennaPicker({ onPick }: { onPick?: () => void }) {
   );
 }
 
+/** The highlight this module set last, so we only clear our own. */
+let mine: Hover | null = null;
+let current: Hover | null = null;
+let timer: ReturnType<typeof setTimeout> | undefined;
+
+function lightUp(type: string, key: string) {
+  clearTimeout(timer);
+  timer = setTimeout(() => {
+    const st = get();
+    const a = affected(ANTENNA_BY_ID[type], st.params[type], key);
+    if (!a || a.all) return;
+    mine = { tags: [], wires: a.wires, plates: a.plates };
+    setHover(mine);
+  }, 120);
+}
+function lightOff() {
+  clearTimeout(timer);
+  if (mine && current === mine) setHover(null);
+  mine = null;
+}
+
 function ParamField({ def }: { def: ParamDef }) {
   const t = useT();
+  const type = useStore((s) => s.type);
+  const hovered = useRef(false), focused = useRef(false);
+  const upd = () => (hovered.current || focused.current ? lightUp(type, def.key) : lightOff());
   const unit = useStore((s) => s.unit);
   const value = useStore((s) => s.params[s.type][def.key]);
   const id = `p-${def.key}`;
@@ -112,7 +139,11 @@ function ParamField({ def }: { def: ParamDef }) {
       input = <Num id={id} value={n} min={def.min} max={def.max} step={def.step} onChange={(v) => setParam(def.key, v)} />;
   }
   return (
-    <div className="field">
+    <div className="field"
+      onPointerEnter={() => { hovered.current = true; upd(); }}
+      onPointerLeave={() => { hovered.current = false; upd(); }}
+      onFocus={() => { focused.current = true; upd(); }}
+      onBlur={() => { focused.current = false; upd(); }}>
       <label htmlFor={id}>{t(def.label)}</label>
       {input}
       {def.hint && <div className="hint">{t(def.hint)}</div>}
@@ -124,6 +155,8 @@ export function ParamsPanel() {
   const t = useT();
   const type = useStore((s) => s.type);
   const def = ANTENNA_BY_ID[type];
+  const hv = useHover();
+  useEffect(() => { current = hv; }, [hv]);
   return (
     <Section title="Parameters" right={<button className="small" onClick={resetParams}>{t("Reset")}</button>}>
       <p className="hint lead">{t(def.summary)}</p>

@@ -24,7 +24,12 @@ export interface State {
   pcbView: ViewMode;
   yaw: number;
   pitch: number;
+  /** Draw every dimension in the Preview at once (persisted). */
+  showDims: boolean;
 }
+
+/** Default 3D camera angles (degrees). */
+export const DEFAULT_YAW = 120, DEFAULT_PITCH = 25;
 
 const KEY = "antgen.settings.v1";
 const defaults = (): State => ({
@@ -36,8 +41,9 @@ const defaults = (): State => ({
   view: "3d",
   tab: "design",
   pcbView: "top",
-  yaw: 120,
-  pitch: 25,
+  yaw: DEFAULT_YAW,
+  pitch: DEFAULT_PITCH,
+  showDims: false,
 });
 
 function load(): State {
@@ -50,6 +56,7 @@ function load(): State {
       if (o.unit === "mm" || o.unit === "in") s.unit = o.unit;
       if (o.lang === "en" || o.lang === "uk") s.lang = o.lang;
       if (o.theme === "auto" || o.theme === "light" || o.theme === "dark") s.theme = o.theme;
+      if (typeof o.showDims === "boolean") s.showDims = o.showDims;
       if (o.params) for (const id of Object.keys(s.params)) if (o.params[id]) s.params[id] = clean(id, o.params[id]);
     }
   } catch { /* private mode or bad JSON: defaults */ }
@@ -96,8 +103,8 @@ export const get = () => state;
 export function set(patch: Partial<State> | ((s: State) => Partial<State>)) {
   state = { ...state, ...(typeof patch === "function" ? patch(state) : patch) };
   try {
-    const { type, params, unit, lang, theme } = state;
-    localStorage.setItem(KEY, JSON.stringify({ type, params, unit, lang, theme }));
+    const { type, params, unit, lang, theme, showDims } = state;
+    localStorage.setItem(KEY, JSON.stringify({ type, params, unit, lang, theme, showDims }));
   } catch { /* ignore */ }
   subs.forEach((f) => f());
 }

@@ -1,7 +1,7 @@
 // openEMS-style result plots, hand-built SVG: S11 / SWR / Zin vs frequency, Smith chart,
 // polar far-field cuts and a rotatable 3D gain surface. Colours come from CSS tokens (index.css).
 import { useMemo, useRef, useState, type ReactNode } from "react";
-import type { Cut, Pattern, ZPoint } from "../lib/simulate";
+import { interpZ, type Cut, type Pattern, type ZPoint } from "../lib/simulate";
 import { s11 } from "../lib/simulate";
 import { fmtHz, fmtHzShort, niceStep } from "../lib/units";
 import { useT } from "../i18n";
@@ -36,16 +36,20 @@ function Frame({ title, legend, children, tip, foot }: { title: string; legend?:
   );
 }
 
+/** Shared frequency cursor (hover or pinned) driven by SimPanel. */
+export interface FCursor { f: number | null; pinned: boolean; hover: (f: number | null) => void; toggle: () => void }
+
 export interface Series { name: string; cls: string; f: number[]; values: number[] }
 
 /** Value vs frequency with crosshair tooltip. One y-axis only. */
-export function FreqChart({ title, unit, series, bands, yMin, yMax, refLine, digits = 1 }: {
+export function FreqChart({ title, unit, series, bands, yMin, yMax, refLine, digits = 1, cursor }: {
   title: string; unit: string; series: Series[]; bands: [number, number][];
-  yMin?: number; yMax?: number; refLine?: number; digits?: number;
+  yMin?: number; yMax?: number; refLine?: number; digits?: number; cursor?: FCursor;
 }) {
   const t = useT();
   const W = 400, H = 240, L = 44, R = 10, T = 10, B = 30;
-  const [hover, setHover] = useState<number | null>(null); // hovered frequency
+  const [localHover, setHover] = useState<number | null>(null); // hovered frequency (when not linked)
+  const hover = cursor ? cursor.f : localHover;
   const allF = series.flatMap((x) => x.f);
   const f0 = Math.min(...allF), f1 = Math.max(...allF);
   const all = series.flatMap((s) => s.values).filter(Number.isFinite);
@@ -74,18 +78,20 @@ export function FreqChart({ title, unit, series, bands, yMin, yMax, refLine, dig
     const r = e.currentTarget.getBoundingClientRect();
     const fx = f0 + (((e.clientX - r.left) / r.width) * W - L) / (W - L - R) * (f1 - f0);
     const s0 = series[0], i = near(s0, fx);
-    setHover(i != null ? s0.f[i] : fx);
+    const f = i != null ? s0.f[i] : fx;
+    if (cursor) cursor.hover(f); else setHover(f);
   };
-  const tip = hover == null ? null : {
+  const onLeave = () => { if (cursor) cursor.hover(null); else setHover(null); };
+  const tip = hover == null || hover < f0 || hover > f1 ? null : {
     x: (X(hover) / W) * 100, y: 4,
     rows: <>
-      <div className="tip-h">{fmtHz(hover, 3)}</div>
+      <div className="tip-h">{fmtHz(hover, 3)}{cursor?.pinned ? ` · ${t("Pinned")}` : ""}</div>
       {series.map((s) => { const i = near(s, hover); return i == null ? null : <div key={s.name} className="tip-r"><span className={`key ${s.cls}`} /><b>{fmt(s.values[i], digits)} {unit}</b> <span className="muted">{t(s.name)}</span></div>; })}
     </>,
   };
   return (
     <Frame title={title} legend={series.map(({ name, cls }) => ({ name, cls }))} tip={tip}>
-      <svg viewBox={`0 0 ${W} ${H}`} className="plot" onPointerMove={onMove} onPointerLeave={() => setHover(null)} role="img" aria-label={t(title)}>
+      <svg viewBox={`0 0 ${W} ${H}`} className={"plot" + (cursor ? " linked" : "")} onPointerMove={onMove} onPointerLeave={onLeave} onClick={cursor?.toggle} role="img" aria-label={t(title)}>
         {bands.map(([a, b], i) => b >= f0 && a <= f1 && (
           <rect key={i} className="band-fill" x={X(Math.max(a, f0))} y={T} width={Math.max(1, X(Math.min(b, f1)) - X(Math.max(a, f0)))} height={H - T - B} />
         ))}
@@ -96,18 +102,18 @@ export function FreqChart({ title, unit, series, bands, yMin, yMax, refLine, dig
         <text className="axis-label" x={6} y={T + 4}>{unit}</text>
         {refLine != null && refLine > lo && refLine < hi && <line className="ref" x1={L} x2={W - R} y1={Y(refLine)} y2={Y(refLine)} />}
         {series.map((s) => <path key={s.name} className={`line ${s.cls}`} d={path(s)} />)}
-        {hover != null && <line className="crosshair" x1={X(hover)} x2={X(hover)} y1={T} y2={H - B} />}
-        {hover != null && series.map((s) => { const i = near(s, hover); return i != null && Number.isFinite(s.values[i]) && <circle key={s.name} className={`dot ${s.cls}`} cx={X(s.f[i])} cy={Y(s.values[i])} r={4} />; })}
+        {hover != null && hover >= f0 && hover <= f1 && <line className={"crosshair" + (cursor?.pinned ? " pinned" : "")} x1={X(hover)} x2={X(hover)} y1={T} y2={H - B} />}
+        {hover != null && hover >= f0 && hover <= f1 && series.map((s) => { const i = near(s, hover); return i != null && Number.isFinite(s.values[i]) && <circle key={s.name} className={`dot ${s.cls}`} cx={X(s.f[i])} cy={Y(s.values[i])} r={4} />; })}
       </svg>
     </Frame>
   );
 }
 
 /** Smith chart of the input impedance, normalised to z0, with the SWR 2 circle. */
-export function SmithChart({ z, z0, bands, overlay }: { z: ZPoint[]; z0: number; bands: [number, number][]; overlay?: { name: string; z: ZPoint[] } }) {
+export function SmithChart({ z, z0, bands, overlay, cursor }: { z: ZPoint[]; z0: number; bands: [number, number][]; overlay?: { name: string; z: ZPoint[] }; cursor?: FCursor }) {
   const t = useT();
   const S = 300, c = S / 2, Rr = S / 2 - 14;
-  const [hover, setHover] = useState<number | null>(null);
+  const [localHover, setHover] = useState<number | null>(null);
   const P = (gr: number, gi: number) => [c + gr * Rr, c - gi * Rr] as const;
   const g = z.map((p) => s11(p, z0));
   const inBand = (f: number) => bands.some(([a, b]) => f >= a && f <= b);
@@ -117,20 +123,23 @@ export function SmithChart({ z, z0, bands, overlay }: { z: ZPoint[]; z0: number;
     const x = ((e.clientX - r.left) / r.width) * S, y = ((e.clientY - r.top) / r.height) * S;
     let best = -1, bd = Infinity;
     g.forEach((s, i) => { const [px, py] = P(s.gr, s.gi); const d = (px - x) ** 2 + (py - y) ** 2; if (d < bd) { bd = d; best = i; } });
-    setHover(bd < 900 ? best : null);
+    if (cursor) { if (bd < 900) cursor.hover(z[best].f); else cursor.hover(null); } else setHover(bd < 900 ? best : null);
   };
-  const tip = hover == null ? null : (() => {
-    const [px, py] = P(g[hover].gr, g[hover].gi);
-    const p = z[hover];
+  const onLeave = () => { if (cursor) cursor.hover(null); else setHover(null); };
+  const cz = cursor ? (cursor.f != null ? interpZ(z, cursor.f) : null) : localHover != null ? z[localHover] : null;
+  const co = cursor && cursor.f != null && overlay ? interpZ(overlay.z, cursor.f) : null;
+  const mark = (p: ZPoint) => { const q = s11(p, z0); return P(q.gr, q.gi); };
+  const tip = !cz ? null : (() => {
+    const [px, py] = mark(cz);
     return { x: (px / S) * 100, y: (py / S) * 100, rows: <>
-      <div className="tip-h">{fmtHz(p.f, 3)}</div>
-      <div className="tip-r"><b>{fmt(p.r)} {p.x >= 0 ? "+" : "−"} j{fmt(Math.abs(p.x))} Ω</b></div>
-      <div className="tip-r"><b>{fmt(g[hover].swr, 2)}</b> <span className="muted">SWR</span></div>
+      <div className="tip-h">{fmtHz(cz.f, 3)}{cursor?.pinned ? ` · ${t("Pinned")}` : ""}</div>
+      <div className="tip-r"><b>{fmt(cz.r)} {cz.x >= 0 ? "+" : "−"} j{fmt(Math.abs(cz.x))} Ω</b></div>
+      <div className="tip-r"><b>{fmt(s11(cz, z0).swr, 2)}</b> <span className="muted">SWR</span></div>
     </> };
   })();
   return (
     <Frame title="Smith chart" tip={tip} foot={`Z0 = ${z0} Ω`} legend={overlay ? [{ name: z.length ? "Simulated" : overlay.name, cls: "s1" }, { name: overlay.name, cls: "s2" }] : undefined}>
-      <svg viewBox={`0 0 ${S} ${S}`} className="plot smith" onPointerMove={onMove} onPointerLeave={() => setHover(null)} role="img" aria-label={t("Smith chart")}>
+      <svg viewBox={`0 0 ${S} ${S}`} className={"plot smith" + (cursor ? " linked" : "")} onPointerMove={onMove} onPointerLeave={onLeave} onClick={cursor?.toggle} role="img" aria-label={t("Smith chart")}>
         <defs><clipPath id="smith-clip"><circle cx={c} cy={c} r={Rr} /></clipPath></defs>
         <circle className="axis" cx={c} cy={c} r={Rr} fill="none" />
         <g clipPath="url(#smith-clip)">
@@ -143,7 +152,8 @@ export function SmithChart({ z, z0, bands, overlay }: { z: ZPoint[]; z0: number;
         <polyline className="line s1" points={pts} fill="none" />
         {overlay && <polyline className="line s2" fill="none" points={overlay.z.map((p) => { const q = s11(p, z0); return P(q.gr, q.gi).join(","); }).join(" ")} />}
         {g.map((s, i) => inBand(z[i].f) && <circle key={i} className="dot s1 small" cx={P(s.gr, s.gi)[0]} cy={P(s.gr, s.gi)[1]} r={2.2} />)}
-        {hover != null && <circle className="dot s1" cx={P(g[hover].gr, g[hover].gi)[0]} cy={P(g[hover].gr, g[hover].gi)[1]} r={5} />}
+        {co && <circle className="dot s2" cx={mark(co)[0]} cy={mark(co)[1]} r={5} />}
+        {cz && <circle className={"dot s1" + (cursor?.pinned ? " pinned" : "")} cx={mark(cz)[0]} cy={mark(cz)[1]} r={5} />}
       </svg>
     </Frame>
   );

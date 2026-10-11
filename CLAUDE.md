@@ -63,6 +63,9 @@ src/fdtdJob.ts           runFdtd / tuneFdtd → SimResult; src/fdtd.worker.ts + 
 src/print.worker.ts      loads manifold.wasm and builds the parts; a fresh worker per build (manifold leaks ~1 MB/build inside
                          its bindings, terminating frees it); usePrintParts.ts, PrintPanel.tsx, MeshView.tsx
 src/sim.worker.ts        runs simulate() and synthesize() off the main thread; useSimulation.ts / useSynthesis.ts
+src/hover.ts             shared highlight (hover ?? pinned): Dimensions/Elements rows, wires, sidebar params → Preview
+src/components/dims.ts   Preview helpers: dimension-line layout (Dim.at spans, "Dimensions" toggle), zoom/pan math
+src/lib/affects.ts       which wires/plates a parameter moves (rebuild with the param nudged, diff), for the sidebar highlight
 src/store.ts             state via useSyncExternalStore; localStorage "antgen.settings.v1"; share hash #t=…&bands=…
 src/components/          Sidebar (picker, params, band editor), Preview (SVG 3D), Results, Exports, BuildPanel,
                          SimPanel (+ measured-vs-model advice) + Charts (FreqChart, SmithChart, PolarChart, Pattern3D)

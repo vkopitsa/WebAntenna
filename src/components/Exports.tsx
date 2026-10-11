@@ -13,8 +13,10 @@ function svgText(svg: SVGSVGElement): string {
   src.forEach((el, i) => {
     const cs = getComputedStyle(el);
     const d = dst[i] as SVGElement;
-    for (const p of ["fill", "stroke", "stroke-width", "stroke-opacity", "fill-opacity", "font-size", "font-family", "font-weight"]) d.style.setProperty(p, cs.getPropertyValue(p));
+    for (const p of ["fill", "stroke", "stroke-width", "stroke-opacity", "fill-opacity", "font-size", "font-family", "font-weight", "paint-order", "stroke-dasharray", "stroke-linecap", "opacity"]) d.style.setProperty(p, cs.getPropertyValue(p));
   });
+  // interaction-only elements (hover hit areas) stay out of the file
+  clone.querySelectorAll(".ui").forEach((el) => el.remove());
   // the Radiation view clears the background on screen; files always get it
   const bg = clone.querySelector(".svg-bg") as SVGElement | null;
   if (bg) bg.style.setProperty("fill", getComputedStyle(document.documentElement).getPropertyValue("--chart-bg").trim());

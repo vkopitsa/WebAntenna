@@ -227,3 +227,14 @@ export const SIM_STRINGS = [
   "Printed antenna on a dielectric: the wire solver cannot model it. Export the openEMS script, run it, and load its results file here.",
   "Small loop: analytic model (matched with Cs + Cp at the design frequency; magnetic-dipole pattern, efficiency included).",
 ];
+
+/** Impedance at frequency f, linearly interpolated between samples (null outside the sweep). */
+export function interpZ(z: ZPoint[], f: number): ZPoint | null {
+  if (z.length < 2) return null;
+  const tol = (z[z.length - 1].f - z[0].f) * 0.002;
+  if (f < z[0].f - tol || f > z[z.length - 1].f + tol) return null;
+  let i = 1;
+  while (i < z.length - 1 && z[i].f < f) i++;
+  const a = z[i - 1], b = z[i], u = Math.max(0, Math.min(1, (f - a.f) / (b.f - a.f || 1)));
+  return { f, r: a.r + (b.r - a.r) * u, x: a.x + (b.x - a.x) * u };
+}

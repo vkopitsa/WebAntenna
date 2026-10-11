@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { AntennaDef, Design, Params } from "../lib/types";
 import { patternChoices, s11, toS1P, type SimResult, type ZPoint } from "../lib/simulate";
 import { parseBands } from "../lib/bands";
@@ -6,7 +6,8 @@ import { parseOpenEMS, parseTouchstone, type Imported } from "../lib/importers";
 import { fmtHz } from "../lib/units";
 import { useT } from "../i18n";
 import { useSimulation } from "../useSimulation";
-import { FreqChart, Pattern3D, PolarChart, SmithChart, type Series } from "./Charts";
+import { CursorReadout } from "./CursorReadout";
+import { FreqChart, Pattern3D, PolarChart, SmithChart, type FCursor, type Series } from "./Charts";
 import { Select } from "./inputs";
 import { download } from "../download";
 import { useFdtd } from "../useFdtd";
@@ -76,6 +77,20 @@ export function SimPanel({ def, params, design }: { def: AntennaDef; params: Par
       setImp(/\.json$/i.test(file.name) ? parseOpenEMS(JSON.parse(text), name, design.f) : parseTouchstone(text, name));
     } catch (e) { setImpErr(String(e instanceof Error ? e.message : e)); }
   };
+
+  const [curF, setCurF] = useState<number | null>(null);
+  const [pinned, setPinned] = useState(false);
+  const cursor: FCursor = {
+    f: curF, pinned,
+    hover: (f) => { if (!pinned) setCurF(f); },
+    toggle: () => { if (pinned) setPinned(false); else if (curF != null) setPinned(true); },
+  };
+  useEffect(() => {
+    if (!pinned) return;
+    const k = (e: KeyboardEvent) => { if (e.key === "Escape") { setPinned(false); setCurF(null); } };
+    window.addEventListener("keydown", k);
+    return () => window.removeEventListener("keydown", k);
+  }, [pinned]);
 
   const summary = primaryZ.length ? bandSummary(primaryZ, z0, bands) : [];
   const unit = useStore((s) => s.unit);
@@ -167,12 +182,13 @@ export function SimPanel({ def, params, design }: { def: AntennaDef; params: Par
       )}
       <div className="chart-grid">
         {zMain && <>
-          <FreqChart title="Return loss S11" unit="dB" bands={bands} yMax={0} refLine={-9.54} series={ser((p) => s11(p, z0).db)} />
+          <FreqChart title="Return loss S11" unit="dB" bands={bands} yMax={0} refLine={-9.54} series={ser((p) => s11(p, z0).db)} cursor={cursor} />
           <FreqChart title="Input impedance" unit="Ω" bands={bands} refLine={0} series={[
             { name: "Re Zin", cls: "s1", f: zMain.z.map((p) => p.f), values: zMain.z.map((p) => p.r) },
-            { name: "Im Zin", cls: "s2", f: zMain.z.map((p) => p.f), values: zMain.z.map((p) => p.x) }]} />
-          <FreqChart title="SWR" unit="" bands={bands} yMin={1} refLine={2} digits={2} series={ser((p) => Math.min(s11(p, z0).swr, 20))} />
-          <SmithChart z={zMain.z} z0={z0} bands={bands} overlay={curves[1] ? { name: curves[1].name, z: curves[1].z } : undefined} />
+            { name: "Im Zin", cls: "s2", f: zMain.z.map((p) => p.f), values: zMain.z.map((p) => p.x) }]} cursor={cursor} />
+          <FreqChart title="SWR" unit="" bands={bands} yMin={1} refLine={2} digits={2} series={ser((p) => Math.min(s11(p, z0).swr, 20))} cursor={cursor} />
+          <SmithChart z={zMain.z} z0={z0} bands={bands} overlay={curves[1] ? { name: curves[1].name, z: curves[1].z } : undefined} cursor={cursor} />
+          <CursorReadout curves={curves} z0={z0} cursor={cursor} pattern={pat} />
         </>}
         {pat && pat.cuts.map((c) => <PolarChart key={c.id} cut={c} top={Math.max(pat.max.dbi, patOverlay?.max.dbi ?? -Infinity)}
           overlay={patOverlay?.cuts.find((x) => x.id === c.id)} names={patOverlay ? ["Simulated", imp!.name] : undefined} />)}
