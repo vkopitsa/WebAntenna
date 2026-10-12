@@ -35,7 +35,10 @@ processes with `NUMBA_NUM_THREADS=1` each; single-design scripts use numba threa
 | `family5.py` | v4 with stricter sky targets (polishing; not used for the final designs). |
 | `family6.py` | **800 MHz – 6.4 GHz**, size budget from `SIZE` (m): **design B**. Edit `FS_MAIN` / `FS_LOW` for another band. |
 | `family7.py` | v6 + cables of 5–40 cm **without** ferrite as a hard requirement (design C). |
+| `family8.py` | v6 with cables scored through a **6-bead ferrite sleeve**, lowest frequency from `FLO`: compact designs S73 / S68 (960 MHz – 6.4 GHz, `FLO=912e6 SIZE=0.075`). |
 | `opt.py` | Differential evolution, 8 processes: `SIZE=0.12 FAMILY=family6 X0=seed.json python opt.py <tag> <generations> <seed>`. Progress: `opt_<tag>.jsonl` (one JSON line per generation: time, cost, parameters, size). `LO` / `HI` (JSON lists) narrow the bounds, `POP` sets the population factor (default 12 × parameters). |
+| `shells.py` | FDTD plastic shells (cover, solid cup, handle) from a design by `print_parts.py`'s rules, rows kept clear of the coax: `python shells.py family8 designs/S73.json 0.3 130 > shells.json`, then `SHELLS="$(cat shells.json)" F_LO=912e6 MARGIN=0.15 python fdtd_verify.py family8 designs/S73.json 0.03 out.json` |
+| `compact_check.py` | Compact-variant table: SWR, cable SWR with no ferrite / 1 bead / sleeve, sky gain; `file:scale` rescales a design: `F_LO=960e6 python compact_check.py designs/S73.json designs/B_simple.json:0.708` |
 | `report.py` | Text report of one design: no-cable sweep with gains at 0–70° elevation, then cable ± ferrite cases. `python report.py family6 "$(cat designs/B_simple.json)" 16 34 800e6` |
 | `final_report.py` | Dense sweep (λ/24, 140 points), drone-band table, cable table, `sweep.csv`, `summary.json` and the PNG charts used in the doc: `python final_report.py family6 "$(cat designs/B_simple.json)" outdir 800e6 6.4e9` |
 | `tolerance.py` | Monte Carlo build tolerance: `F_LO=800e6 python tolerance.py family6 "$(cat designs/B_simple.json)" 48 1.0 0.3 1.5` (lengths ±1 mm, gap ±0.3 mm, angles ±1.5°). |

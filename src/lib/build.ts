@@ -111,6 +111,7 @@ const NOT_TRIMMED: Record<string, string> = {
   biquad: "The biquad is broadband (roughly 10 %): check the SWR across the band. The spacing to the reflector sets the match.",
   pagoda: "Not tuned by trimming: the board spacing sets the centre frequency (Baert's table: D1 grows about 0.15 mm and D2 about 0.24 mm per 100 MHz lower). Check the SWR across the band.",
   pcbloop: "Tune the small loop with the capacitors: Cs sets the resonance, Cp the match. A trimmer capacitor for Cs makes this easy.",
+  skycone7: "Broadband: not tuned by trimming. The pin gap sets the top of the band and the rim height the bottom; check the SWR across the band.",
   skycone8: "Broadband: not tuned by trimming. The pin gap sets the top of the band and the rim height the bottom; check the SWR across the band.",
   skycone21: "Broadband: not tuned by trimming. The pin gap sets the top of the band and the rim height the bottom; check the SWR across the band.",
 };
@@ -318,7 +319,8 @@ export function bom(def: AntennaDef, d: Design, cuts: CutRow[]): BomRow[] {
       rows.push({ item: M("Brass or copper sheet 0.3–0.5 mm, about {0} × {1}", { len: side }, { len: side }), qty: M("{0} pc", 1), note: M("Cut the flat patterns from the 1:1 template") });
       for (const x of d.sheets) rows.push({ item: x.kind === "sector" ? M("{0}: annular sector R {1} – {2}, {3}°", x.label, { len: x.r0 }, { len: x.r1 }, +x.angle.toFixed(1)) : x.kind === "strip" ? M("{0}: strip {1} × {2}", x.label, { len: x.w }, { len: x.h }) : M("{0}: disc Ø{1}, hole Ø{2}", x.label, { len: x.d }, { len: x.hole }), qty: M("{0} pc", 1) });
       rows.push({ item: M("Semi-rigid coax UT-141 / RG-402 (Ø3.6 mm) with an SMA plug"), qty: M("{0} pc", 1), note: M("The jacket is soldered into the ground cone apex") });
-      rows.push({ item: M("Clip-on ferrite for the coax (about 150 Ω at the lowest band)"), qty: M("{0} pc", 1) });
+      if (def.id === "skycone7") rows.push({ item: M("Ferrite beads for the coax (material 43 or 61, inner Ø ≥ 3.7 mm)"), qty: M("{0} pc", 6), note: M("Stacked on the first 11 cm of coax below the ground cone (ferrite sleeve)") });
+      else rows.push({ item: M("Clip-on ferrite for the coax (about 150 Ω at the lowest band)"), qty: M("{0} pc", 1) });
     }
     for (const pl of d.plates.filter((x) => x.material === "metal" && x.sheet == null)) {
       const s = plateSize(pl.pts);
@@ -479,6 +481,8 @@ export const BUILD_STRINGS = [
   "{0}: annular sector R {1} – {2}, {3}°", "{0}: strip {1} × {2}", "{0}: disc Ø{1}, hole Ø{2}",
   "Semi-rigid coax UT-141 / RG-402 (Ø3.6 mm) with an SMA plug", "The jacket is soldered into the ground cone apex",
   "Clip-on ferrite for the coax (about 150 Ω at the lowest band)",
+  "Ferrite beads for the coax (material 43 or 61, inner Ø ≥ 3.7 mm)",
+  "Stacked on the first 11 cm of coax below the ground cone (ferrite sleeve)",
   "Print the 1:1 flat patterns, glue them onto the sheet and cut the parts out (tin snips, then file the edges).",
   "Roll each sector into its cone and each strip into its ring over a former, overlap or butt the seam and solder it along its length.",
   "Solder the hot element together (washer, cones, rim, lid) and the ground cone with its skirt. Solder the coax jacket into the ground cone apex and the centre pin into the washer, keeping the listed gap.",

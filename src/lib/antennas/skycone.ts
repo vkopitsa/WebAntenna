@@ -8,7 +8,7 @@ import type { IdealCurrents } from "../idealcurrents";
 import { fmt, wavelength } from "../rf";
 import { v } from "../geom";
 import { band, BANDS } from "./common";
-import { SKYCONE_21, SKYCONE_8 } from "./skycone.data";
+import { SKYCONE_21, SKYCONE_7, SKYCONE_8 } from "./skycone.data";
 
 export interface SkyconeTable {
   /** Design band (Hz) the profile and the table belong to. */
@@ -132,7 +132,8 @@ export function skyconeCurrents(defId: string, d: Design): IdealCurrents | null 
 /** Frequency range the table covers (Hz) for a design starting at fLow. */
 export const skyconeRange = (t: SkyconeTable, fLow: number): [number, number] => [t.f[0] * fLow, t.f[t.f.length - 1] * fLow];
 
-function build(t: SkyconeTable, bandsP: Parameters<typeof band>[0]): Design {
+/** `sleeve`: the compact shape couples to the coax so strongly that one ferrite bead is not enough. */
+function build(t: SkyconeTable, bandsP: Parameters<typeof band>[0], sleeve = false): Design {
   const { bands } = band(bandsP);
   const fLow = Math.min(...bands.map((b) => b[0])), fHigh = Math.max(...bands.map((b) => b[1]));
   const ratio = t.fHi / t.fLo, fTop = fLow * ratio;
@@ -208,7 +209,9 @@ function build(t: SkyconeTable, bandsP: Parameters<typeof band>[0]): Design {
       "Hot element (cones, rim, lid) on the coax centre pin, ground cone on the coax jacket. Hold it by the coax with the cones up: the beam is tilted toward the sky (15–50° elevation).",
       "The shape is fixed (it was optimised as a whole); all dimensions scale with your lowest frequency. The Simulation tab shows the precomputed body-of-revolution MoM sweep of this shape, scaled to your size.",
       "Feed through UT-141 (RG-402) semi-rigid coax: solder the jacket into the ground cone apex and the centre pin into the washer. Keep the pin gap as listed: it sets the top of the band.",
-      "Clip a ferrite (about 150 Ω) onto the coax just below the ground cone: at the bottom of the band the cable otherwise carries current and the SWR depends on its length.",
+      sleeve
+        ? "Ferrite sleeve required: stack about 6 ferrite beads (material 43 or 61, about 150 Ω each) on the first 11 cm of coax below the ground cone. This small antenna couples strongly to the cable: with one bead a 15–35 cm cable still lifts the SWR to 2.7 at the bottom of the band, with the sleeve it stays below 1.9."
+        : "Clip a ferrite (about 150 Ω) onto the coax just below the ground cone: at the bottom of the band the cable otherwise carries current and the SWR depends on its length.",
       ...(fHigh > fTop * 1.001 ? ["Warning: your highest band is above this shape's range; the SWR there is not computed. Lower the bands or use the 21:1 version."] : []),
       "Full study, build steps, tolerances and solver checks: docs/FPV-DETECTOR-ANTENNA.md in the project repository.",
     ],
@@ -219,6 +222,18 @@ function build(t: SkyconeTable, bandsP: Parameters<typeof band>[0]): Design {
 }
 
 const PARAMS = [{ ...BANDS, label: "Frequency bands (all must fit in the range)" }];
+
+export const skycone7: AntennaDef = {
+  id: "skycone7",
+  name: "Sky-tilted capped bicone, compact (6.7:1)",
+  category: "Broadband",
+  traits: { pol: "vertical", pattern: "omni" },
+  summary: "The 8:1 shape re-optimised smaller: 960 MHz–6.4 GHz at Ø73 × 71 mm, beam tilted up. Needs a ferrite sleeve (6 beads) on the coax.",
+  multiband: "broadband",
+  params: PARAMS,
+  defaults: { bands: "960e6-6400e6" },
+  build: (p) => build(SKYCONE_7, p, true),
+};
 
 export const skycone8: AntennaDef = {
   id: "skycone8",
@@ -245,4 +260,4 @@ export const skycone21: AntennaDef = {
 };
 
 /** Tabulated results per type id (simulate.ts). */
-export const SKYCONE_TABLES: Record<string, SkyconeTable> = { skycone8: SKYCONE_8, skycone21: SKYCONE_21 };
+export const SKYCONE_TABLES: Record<string, SkyconeTable> = { skycone7: SKYCONE_7, skycone8: SKYCONE_8, skycone21: SKYCONE_21 };

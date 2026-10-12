@@ -78,7 +78,7 @@ docs/FPV-DETECTOR-BUILD.md    home build guide for it; STL jigs/cover/cup in doc
                          in the app: print/families/skycone.ts (same kit from the design's sheet facets; cover split
                          into glued sectors/rings when > 180 mm); Radiation view = tabulated BoR surface currents
                          (skyconeCurrents, 12 elements per ring)
-                         in the app as skycone8 / skycone21 (antennas/skycone.ts): fixed profile scaled by the band,
+                         in the app as skycone7 (compact S73, ferrite sleeve) / skycone8 / skycone21 (antennas/skycone.ts): fixed profile scaled by the band,
                          Simulation = tabulated BoR-MoM results (skycone.data.ts, regenerate with the tools' export_app_table.py
                          + to_ts.py); `Design.sheets` = flat patterns (BOM rows + 1:1 template)
 tools/wideband-antenna/  Python (numba) body-of-revolution MoM + FDTD, DE optimiser, tolerance/report scripts;

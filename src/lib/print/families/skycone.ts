@@ -25,6 +25,7 @@ export const SKYCONE_STRINGS = [
   "Flat pattern of one sheet part at 1:1, 1.2 mm thick: scribe round it on the sheet. The strip beyond the groove is the lap for the seam.",
   "Flat pattern of one sheet part at 1:1, in {0} pieces that butt together (too long for one piece): tape them edge to edge, then scribe round them.",
   "Covers the antenna: a 1.2 mm tube from the ground rim to the lid, closed on top, printed in {0} pieces that glue together on their laps (too large for one piece). Its top is glued to the lid and its lower edge to the cup or the ground rim.",
+  "Tube for the coax under the cup, with a 12 cm pocket inside for the ferrite sleeve (6 beads up to Ø11 mm).",
 ];
 
 /** Cutting-template titles by sheet label (the labels come from antennas/skycone.ts). */
@@ -50,6 +51,11 @@ export const SKYCONE_HOWTO = {
     "Print it standing, narrow bore up.",
     "Slide the ferrite bead(s) onto the coax, thread the cut end up through the handle from below and on through the cup.",
     "Push the handle into the cup's socket; fix the bead in its pocket with a drop of silicone at the end.",
+  ],
+  handleSleeve: [
+    "Print it standing, narrow bore up.",
+    "Slide the 6 ferrite beads onto the coax, thread the cut end up through the handle from below and on through the cup.",
+    "Push the handle into the cup's socket; the beads fill the pocket from the top. Fix the lowest one with a drop of silicone at the end.",
   ],
   stand: [
     "Print it flat side down.",
@@ -197,8 +203,8 @@ function coverPieces(M: ManifoldToplevel, rin: number, z0: number, zInTop: numbe
   return out;
 }
 
-/** Every printed part of the kit; `sheetT` is the sheet thickness (mm). */
-export function skyconeParts(d: Design, sheetT = 0.3): PartSpec[] {
+/** Every printed part of the kit; `sheetT` is the sheet thickness (mm); `sleeve`: a long handle for a 6-bead ferrite sleeve. */
+export function skyconeParts(d: Design, sheetT = 0.3, sleeve = false): PartSpec[] {
   const g = skyconeProfile(d);
   const L = (x: number) => ({ len: x / 1000 });
   const rin = Math.max(g.Ru, g.Rg) + 2 + sheetT;           // cover inside radius: 2 mm outside the widest rim
@@ -227,8 +233,13 @@ export function skyconeParts(d: Design, sheetT = 0.3): PartSpec[] {
     },
   });
   parts.push({
-    id: "skycone-handle", title: SKYCONE_STRINGS[4], use: "holder", qty: 1, purpose: msg(SKYCONE_STRINGS[5]), howTo: SKYCONE_HOWTO.handle.map((s) => msg(s)),
-    build: (M) => { tooSmall(); return [revolve(M, [[FERRITE_D / 2, 0], [HANDLE_D / 2, 0], [HANDLE_D / 2, 90], [rBore, 90], [rBore, 84], [FERRITE_D / 2, 84]])]; },
+    id: "skycone-handle", title: SKYCONE_STRINGS[4], use: "holder", qty: 1, purpose: msg(SKYCONE_STRINGS[sleeve ? 18 : 5]),
+    howTo: (sleeve ? SKYCONE_HOWTO.handleSleeve : SKYCONE_HOWTO.handle).map((s) => msg(s)),
+    build: (M) => {
+      tooSmall();
+      const h = sleeve ? 130 : 90;                                      // the sleeve: 6 beads over the first 11 cm of coax
+      return [revolve(M, [[FERRITE_D / 2, 0], [HANDLE_D / 2, 0], [HANDLE_D / 2, h], [rBore, h], [rBore, h - 6], [FERRITE_D / 2, h - 6]])];
+    },
   });
   parts.push({
     id: "skycone-stand", title: SKYCONE_STRINGS[6], use: "jig", qty: 1, purpose: msg(SKYCONE_STRINGS[7]), howTo: SKYCONE_HOWTO.stand.map((s) => msg(s)),

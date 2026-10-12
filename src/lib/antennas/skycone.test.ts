@@ -23,6 +23,18 @@ describe("sky-tilted capped bicones", () => {
     expect(dim("skycone21", "300e6-6400e6", "Hot element diameter") * 1e3).toBeCloseTo(274.7, 1);
   });
 
+  it("compact 6.7:1 at 960 MHz is design S73: Ø73 × 71 mm, SWR < 2, a ferrite sleeve", () => {
+    const def = ANTENNA_BY_ID.skycone7, p = { bands: "960e6-6400e6" }, d = def.build(p);
+    expect(dim("skycone7", "960e6-6400e6", "Overall height") * 1e3).toBeCloseTo(71.0, 0);
+    expect(dim("skycone7", "960e6-6400e6", "Hot element diameter") * 1e3).toBeCloseTo(73.1, 0);
+    const r = simulate(def, p, d);
+    expect(Math.max(...r.z.filter((q) => q.f >= 960e6 && q.f <= 6.4e9).map((q) => s11(q, 50).swr))).toBeLessThan(2);
+    expect(d.notes.some((n) => n.startsWith("Ferrite sleeve required"))).toBe(true);
+    const parts = partsFor("skycone7", def.defaults, d);
+    expect(parts.map((q) => q.id)).toEqual(expect.arrayContaining(["shell", "skycone-cup", "skycone-handle", "skycone-former", "skycone-tpl-1"]));
+    expect(parts.find((q) => q.id === "skycone-handle")!.purpose.s).toContain("ferrite sleeve");
+  });
+
   it("the tabulated sweep: SWR ≤ 1.4 over 800 MHz – 6.4 GHz, beam above the horizon", () => {
     const def = ANTENNA_BY_ID.skycone8, p = { bands: "800e6-6400e6" };
     const r = simulate(def, p, def.build(p));

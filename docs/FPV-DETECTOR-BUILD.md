@@ -19,7 +19,7 @@ plus about 150 g of printed parts.
 ![Printed parts in place](fpv-detector/print/assembly.png)
 
 STL files: [`fpv-detector/print/`](fpv-detector/print/) (millimetres, already oriented for printing). The
-same parts, for whatever band you set, are in the app: open "Sky-tilted capped bicone (8:1)" (or 21:1),
+same parts, for whatever band you set, are in the app: open "Sky-tilted capped bicone (8:1)" (or 21:1, or the compact 6.7:1),
 **Build → 3D-printed parts** (each part's STL, or all of them as a zip, with these how-to steps).
 For the 21:1 version the cover comes in glued pieces, and the parts that do not fit a 180 mm bed
 (cup, former, main-cone template) are left out: use the paper templates and rigid foam for those.
@@ -202,6 +202,15 @@ handle were then checked together, also with 15 cm of cable
 
 The cup sits under the ground cone, where the fields are weak, and it slightly helps at the bottom of
 the band.
+
+Re-run with `shells.py` (the cup's rows kept 1.6 mm clear of the coax; the first shells file also
+painted PETG into the coax PTFE under the ground cone): worst SWR again **1.61**
+(`results/fdtd_B_simple_cover_cup_v2_cable15cm.txt`), so that slip did not matter.
+
+**Compact version (S73, Ø73 × 71 mm, 960 MHz – 6.4 GHz):** same steps and the same kit from the app
+("Sky-tilted capped bicone, compact (6.7:1)"), with two differences: stack **6 ferrite beads** on the
+coax (the handle is 130 mm long, its pocket holds them) and expect the plastic to cost a little more
+(worst SWR 1.91 → 2.00 in FDTD). See the S73 section of the study.
 
 Keep any other plastic out of the feed region: the first ~15 mm round the coax end, between the two
 cones. A plastic plug there was not simulated, and the pin gap is the most sensitive dimension of the

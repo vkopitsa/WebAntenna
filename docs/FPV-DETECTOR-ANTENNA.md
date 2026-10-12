@@ -20,6 +20,8 @@ underneath it. Fed by 0.141″ semi-rigid / hand-formable coax.
 
 A larger variant **A** (Ø275 × 294 mm) covers **300 MHz – 6.4 GHz** (433 MHz too) with SWR ≤ 1.58 (≤ 1.76 with 35 cm of cable, MoM and FDTD; needs a ferrite);
 see [Variant A](#variant-a-full-range-300-mhz--64-ghz).
+A compact variant **S73** (Ø73 × 71 mm) covers **960 MHz – 6.4 GHz** with SWR ≤ 1.97 (≤ 1.80 with any cable; needs a 6-bead ferrite sleeve; FDTD with the plastic kit ≤ 2.00);
+see [Smaller: compact variants](#smaller-compact-variants-from-960-mhz).
 
 ![Cross-section of design B](fpv-detector/profile.png)
 
@@ -27,8 +29,8 @@ see [Variant A](#variant-a-full-range-300-mhz--64-ghz).
 
 ![Sections of designs B and A at the same scale](fpv-detector/A_B_section.png)
 
-**In the app:** both designs are antenna types in the Broadband group, **"Sky-tilted capped bicone (8:1)"** (B)
-and **"(21:1)"** (A). The band editor scales the shape (e.g. 1–8 GHz); Simulation shows this study's
+**In the app:** the designs are antenna types in the Broadband group, **"Sky-tilted capped bicone (8:1)"** (B),
+**"(21:1)"** (A) and **"compact (6.7:1)"** (S73). The band editor scales the shape (e.g. 1–8 GHz); Simulation shows this study's
 tabulated MoM sweep and elevation pattern, scaled to the size; Build lists the flat patterns and
 prints them at 1:1 (`src/lib/antennas/skycone.ts`). The name: an *asymmetric bicone*, or an *inverted
 discone* (cone on top as the hot element, a shallow ground cone below), with a capped top (rim + lid).
@@ -247,6 +249,70 @@ app: "Sky-tilted capped bicone (21:1)".
 ![SWR of design A](fpv-detector/A_swr.png)
 
 ![Gain of design A versus elevation](fpv-detector/A_gain_elev.png)
+
+## Smaller: compact variants from 960 MHz
+
+The size is set by the lowest frequency (the shape scales with 1/f_low) and, once the antenna gets
+small, by the feed cable: the shorter ground cone hands more of the bottom-band current to the coax
+shield, and a single bead no longer stops it (a 15–35 cm cable resonates by itself past one bead).
+A **ferrite sleeve** — about 6 beads (material 43/61, inner Ø ≥ 3.7 mm) stacked on the first ~11 cm
+of coax under the ground cone, inside the handle — fixes that. Model: 6 × 150 Ω series loss at
+1, 3 … 11 cm. Over 960 MHz – 6.4 GHz (MoM, worst SWR over cables of 5 cm – 1 m):
+
+| Design | Size | SWR, no cable | Cable, no ferrite | 1 bead | 6-bead sleeve | Gain 15–50°: avg / worst freq |
+|---|---|---|---|---|---|---|
+| B rescaled to 960 MHz | Ø94 × 92 mm | 1.38 | — | 1.66 | 1.35 | +2.1 / +0.7 dBi |
+| B × 0.75 | Ø85 × 82 mm | 1.59 | — | 2.12 | 1.58 | +1.9 / +0.5 dBi |
+| **B × 0.708** | **Ø80 × 78 mm** | 1.81 | 4.87 | 2.57 | **1.79** | +1.9 / +0.5 dBi |
+| **S73** (re-optimised, ≤ 75 mm, built simplified) | **Ø73 × 71 mm** | 1.97 | 7.94 | 2.93 | **1.80** | +1.8 / +0.4 dBi |
+| S68 (re-optimised, ≤ 68 mm) | Ø68 × 67 mm | 2.36 | 8.77 | 3.29 | 2.38 | +1.7 / +0.3 dBi |
+
+- Rescaling alone gets to Ø80 mm with SWR ≤ 2; re-optimising the shape buys ~7 mm more (S73).
+  Below ~70 mm the bottom of the band goes over SWR 2 whatever the shape.
+- The pattern barely changes (only the lowest frequencies get electrically small); sky gain drops
+  by ~0.3 dB.
+- Receive-only: mismatch loss is 0.5 dB at SWR 2, 0.9 dB at 2.5, 1.25 dB at 3, so S68 (or B × 0.6,
+  Ø68 mm, SWR 2.8–3.1) still works for a detector at ~1 dB cost near 1 GHz.
+- **The ferrite sleeve is mandatory** for every compact variant: without ferrite a 10 cm cable gives
+  SWR 5–9 at 960 MHz.
+- S73 straight out of the optimiser had a Ø14 mm hole in the lid and a 1.1 mm skirt; the built
+  version closes the lid and drops the skirt (`designs/S73.json`; the raw result is `S73_raw.json`).
+  No-cable SWR 1.92 → 1.97, with the sleeve 1.84 → 1.80.
+- In the app: **"Sky-tilted capped bicone, compact (6.7:1)"** (Simulation = this table, Build = cut
+  list, 1:1 templates, the 6 beads in the BOM and the printed kit with a 130 mm handle whose pocket
+  holds the sleeve). "Sky-tilted capped bicone (8:1)" with the band `960e6-6400e6` is the Ø94 × 92 mm
+  rescale.
+
+### Design S73: cut list and checks
+
+z = 0 at the coax end; top z = 57.8 mm, bottom z = −13.2 mm.
+
+| Part | Shape | Flat pattern |
+|---|---|---|
+| Washer (pin) | flat annulus Ø0.9 → Ø5.6 mm at z = 2.65 mm | disc Ø5.6, hole Ø0.9 |
+| Hot feed cone | 38.1°, Ø5.6 → Ø20.3 mm, height 9.4 mm | sector R 4.5 – 16.4 mm, 222.4° |
+| Hot main cone | 31.3°, Ø20.3 → Ø73.1 mm, height 43.4 mm | sector R 19.5 – 70.3 mm, 187.0° |
+| Rim | cylinder Ø73.1 × 2.4 mm | strip 229.6 × 2.4 mm |
+| Lid | flat disc Ø73.1 mm at z = 57.8 mm | disc Ø73.1 (Ø2 centring hole) |
+| Ground inner cone | 67.3°, Ø3.0 → Ø19.0 mm, height 3.4 mm | sector R 1.6 – 10.3 mm, 332.1° |
+| Ground outer cone | 69.3°, Ø19.0 → Ø70.9 mm, height 9.8 mm | sector R 10.2 – 37.9 mm, 336.7° |
+
+The pin gap (2.65 mm) is again the top-of-band knob. Build it like B
+([FPV-DETECTOR-BUILD.md](FPV-DETECTOR-BUILD.md)) with the parts from the app, and put the 6 beads
+on the coax before it goes through the handle.
+
+FDTD check (independent axisymmetric solver, 3 cm of cable; the FDTD has no ferrite model, so the
+short cable stands in for the sleeve), `results/fdtd_S73_*cable3cm.txt`:
+
+| | Bare | Cover + solid cup + 130 mm handle (PETG) |
+|---|---|---|
+| Worst SWR, 960 MHz – 6.4 GHz (FDTD) | 1.91 (MoM 1.90) | 2.00 |
+| Patterns vs MoM / vs bare | within 0.3 dB | within 0.5 dB at 15–30°; 5.8 GHz at 50°: −1.8 dB |
+
+The 2.00 is a narrow feature at 1.6–1.8 GHz that comes from the short cable (MoM shows it too, and it
+is absent without a cable); elsewhere the plastic moves the SWR by ≤ 0.2 (top of the band
+1.60 → 1.79). The cover sits 2 mm outside the rim, as for B, which is relatively closer on this
+smaller antenna.
 
 ## How it was found
 
