@@ -31,8 +31,10 @@ export const SKYCONE_STRINGS = [
   "Its conical top carries the ground frames: one groove per frame sets their angle and spacing. The cover slides over its wall; the handle plugs into its socket.",
   "Frame bending jig",
   "Grooves with the exact shape of one hot frame and one ground frame: press the wire into a groove and bend it at the corners, so that every frame comes out the same.",
-  "Frame spacing ring",
-  "Holds the hot frames at equal angles round the rim while you solder the hoops: one notch per frame. It lifts off upward when the cage is done.",
+  "Hot cage cradle",
+  "Holds the hot side while you solder it: a pocket for the washer, one groove per frame up the cones and a slot under them for each cone hoop, so the frames come out at equal angles with the hoops at their bends. The finished cage lifts off upward.",
+  "Hoop mandrel",
+  "Bends every hoop to its size: one step per hoop diameter in the Hoops table ({0} steps, the largest at the bottom). Wrap the wire round its step and solder the ends over the slot.",
 ];
 
 /** Cutting-template titles by sheet label (the labels come from antennas/skycone.ts). */
@@ -91,17 +93,23 @@ export const SKYCONE_HOWTO = {
   cupCage: [
     "Print it on its flat bottom, cradle up, 3 walls and 15–20 % infill.",
     "Thread the coax up through the cup, solder the collar onto its jacket at the listed height, lay the ground frames in the grooves with their inner ends on the collar and solder them to it.",
-    "Solder the ground hoops round the frames at their bends, then fix the frames in the grooves with a few dots of silicone and glue the handle into the socket.",
+    "Lay the ground hoops on the frames at their bends and solder them at every crossing, then fix the frames in the grooves with a few dots of silicone and glue the handle into the socket.",
   ],
   jig: [
     "Print it flat, grooves up, with 100 % infill.",
     "Press a straight piece of wire (cut length from the list) into a groove from one end and bend it at each corner with flat-nose pliers, so that it lies flat in the groove all along.",
     "Make all the frames of a side in the same groove and check each one against it before you solder.",
   ],
-  ring: [
-    "Print it flat.",
-    "Solder the hot frames to the washer at equal angles, put the ring over the cage at the rim and click each frame into its notch.",
-    "Solder the hoops at every bend, then lift the ring off upward.",
+  hoops: [
+    "Print it standing on its largest step, with 3 walls and 15–20 % infill.",
+    "Cut each hoop wire to its length in the cut list, wrap it tightly round the step of the same diameter and butt the ends over the slot.",
+    "Solder the ends over the slot, so the solder never touches the plastic, and slide the hoop off upward.",
+  ],
+  cradle: [
+    "Print it standing on its flat base, with 3 walls and 15 % infill.",
+    "Put the hot washer in the centre pocket and drop the cone hoops into their slots, then lay the hot frames in their grooves with their inner ends on the washer.",
+    "Solder every frame to the washer and to each hoop it crosses, then solder the rim and lid hoops round the frames above the cradle.",
+    "Lift the finished hot cage off upward.",
   ],
   template: [
     "Print it flat (1.2 mm, 100 % infill).",
@@ -261,10 +269,13 @@ export function skyconeParts(d: Design, sheetT = 0.3, sleeve = false): PartSpec[
   const cage = d.frames, wireD = cage ? mm(2 * d.wires[1].r) : 0;
   if (cage) sheetT = wireD / 2;
   const L = (x: number) => ({ len: x / 1000 });
-  const rin = Math.max(g.Ru, g.Rg) + 2 + sheetT;           // cover inside radius: 2 mm outside the widest rim
-  const zInTop = g.zLid + sheetT + 0.1, zCov0 = g.zGrim - 8;
+  // a cage's hoops (mm) sit against the frames on the outside: the cover and the cup wall clear them too
+  const hoops = cage ? { hot: cage.hoops.hot.map(([r, z]): Pt => [mm(r), mm(z)]), ground: cage.hoops.ground.map(([r, z]): Pt => [mm(r), mm(z)]) } : { hot: [], ground: [] };
+  const hoopR = (pts: Pt[]) => Math.max(0, ...pts.map((q) => q[0] + wireD / 2));
+  const rin = Math.max(Math.max(g.Ru, g.Rg) + 2 + sheetT, hoopR([...hoops.hot, ...hoops.ground]) + 0.5);   // cover inside radius: 2 mm outside the widest rim
+  const zInTop = Math.max(g.zLid + sheetT, ...hoops.hot.map((q) => q[1] + wireD / 2)) + 0.1, zCov0 = g.zGrim - 8;
   const rBore = JACKET / 2 + 0.15, rSock = HANDLE_D / 2 + SLIDE, zCup0 = zCov0 - 2;
-  const rWallI = g.Rg + sheetT + 0.4, rWallO = rin - SLIDE;
+  const rWallI = Math.max(g.Rg + sheetT, hoopR(hoops.ground)) + 0.4, rWallO = rin - SLIDE;
   const tooSmall = () => { if (rWallI < rSock + 3 || g.Ru < rSock + 3) throw new PartError(msg(FAIL.radome)); };
   const revolve = (M: ManifoldToplevel, pts: Pt[]) => M.Manifold.revolve(new M.CrossSection([pts]), SEG);
   const parts: PartSpec[] = [];
@@ -326,16 +337,39 @@ export function skyconeParts(d: Design, sheetT = 0.3, sleeve = false): PartSpec[
         return [M.Manifold.cube([W, H, T]).translate([0, 0, -T]).subtract(M.Manifold.union([...groove(hot), ...groove(gnd)]))];
       },
     });
-    if (2 * (g.Ru + 8) <= MAX_SIZE) parts.push({
-      id: "skycone-ring", title: SKYCONE_STRINGS[23], use: "jig", qty: 1, purpose: msg(SKYCONE_STRINGS[24]), howTo: SKYCONE_HOWTO.ring.map((s) => msg(s)),
+    if (2 * (g.Ru + 5) <= MAX_SIZE) parts.push({
+      id: "skycone-cradle", title: SKYCONE_STRINGS[23], use: "jig", qty: 1, purpose: msg(SKYCONE_STRINGS[24]), howTo: SKYCONE_HOWTO.cradle.map((s) => msg(s)),
       build: (M) => {
-        const h = 5, rIn = g.Ru, rOut = g.Ru + 6;
-        const ring = M.Manifold.cylinder(h, rOut, rOut, SEG).subtract(M.Manifold.cylinder(h + 2, rIn, rIn, SEG).translate([0, 0, -1]));
-        const notches = Array.from({ length: cage.n }, (_, k) => {
-          const t = (2 * Math.PI * k) / cage.n;
-          return M.Manifold.cylinder(h + 2, (wireD + CLEAR) / 2, (wireD + CLEAR) / 2, 16).translate([rIn * Math.cos(t), rIn * Math.sin(t), -1]);
-        });
-        return [ring.subtract(M.Manifold.union(notches))];
+        // solid under the hot cones (the frames half sunk in their grooves), hollowed from below, standing on a flat base
+        const z0 = g.cones[0][1], zTop = g.cones[g.cones.length - 1][1], Rout = g.Ru + 5, zb = z0 - 4, T = 6;
+        const surf: Pt[] = [[0, z0], ...g.cones].map(([r, z]): Pt => [r, z - 0.1]);
+        let body = revolve(M, [[0, zb], [Rout, zb], [Rout, zTop - 0.1], ...surf.slice().reverse()]);
+        const rc0 = Math.max(6, g.cones[0][0] + 3), rc1 = g.Ru - 1, top = (r: number) => interp(g.cones, r) - 0.1 - T;
+        if (rc1 > rc0 + 3 && top(rc0) > zb) {
+          const mid = g.cones.filter((q) => q[0] > rc0 && q[0] < rc1).map(([r]): Pt => [r, top(r)]).reverse();
+          body = body.subtract(revolve(M, [[rc0, zb - 1], [rc1, zb - 1], [rc1, top(rc1)], ...mid, [rc0, top(rc0)]]));
+        }
+        // each hoop under the cones: a round-bottomed slot open upward, so the soldered cage lifts straight out
+        const w = (wireD + CLEAR) / 2;
+        const slots = hoops.hot.filter((q) => q[1] < zTop + wireD).map(([r, z]) => revolve(M, [
+          ...Array.from({ length: 13 }, (_, j): Pt => [r + w * Math.cos(Math.PI + (Math.PI * j) / 12), z + w * Math.sin(Math.PI + (Math.PI * j) / 12)]),
+          [r + w, zTop + 10], [r - w, zTop + 10],
+        ]));
+        const washer = M.Manifold.cylinder(10, g.walk[0][0] + CLEAR, g.walk[0][0] + CLEAR, 48).translate([0, 0, z0 - wireD / 2 - 0.8]);
+        const pin = M.Manifold.cylinder(zTop, 0.8, 0.8, 16).translate([0, 0, zb - 1]);
+        return [centre(body.subtract(M.Manifold.union([frameGrooves(M, g.cones, cage.n, wireD), ...slots, washer, pin])))];
+      },
+    });
+    // one step per hoop size (centre-line radius r: the step is r - wire/2), the largest at the bottom
+    const steps = [...hoops.hot, ...hoops.ground].map((q) => q[0]).sort((a, b) => b - a).filter((r, i, a) => i === 0 || a[i - 1] - r > 0.02);
+    if (steps.length && 2 * steps[0] <= MAX_SIZE) parts.push({
+      id: "skycone-hoops", title: SKYCONE_STRINGS[25], use: "jig", qty: 1, purpose: msg(SKYCONE_STRINGS[26], steps.length), howTo: SKYCONE_HOWTO.hoops.map((s) => msg(s)),
+      build: (M) => {
+        const h = Math.max(4, 3 * wireD);
+        const rs = steps.map((r) => r - wireD / 2);
+        const body = M.Manifold.union(rs.map((q, i) => M.Manifold.cylinder((i + 1) * h, q, q, SEG)));
+        // the solder slot of each step, cut after the union so the next step up can't fill it
+        return [body.subtract(M.Manifold.union(rs.map((q, i) => { const dep = Math.min(1.5, q / 3); return M.Manifold.cube([dep + 1, 3, h + 0.02]).translate([q - dep, -1.5, i * h]); })))];
       },
     });
     return parts;

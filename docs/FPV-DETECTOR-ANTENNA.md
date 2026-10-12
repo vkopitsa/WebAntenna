@@ -353,16 +353,24 @@ W16 (`designs/W16.json`), z = 0 at the coax end, Ø1 mm wire:
 |---|---|---|
 | Hot frame | 16 | washer edge (ρ 3.2, z 2.6) → (14.1, 18.9) → (35.7, 59.9) → (35.7, 61.4) → (16.8, 61.4); 86.4 mm of wire, 3 bends |
 | Ground frame | 16 | collar (ρ 3.0, z −0.7) → (10.3, −2.6) → (34.5, −11.5) → (34.5, −13.3); 35.1 mm, 2 bends |
-| Hot hoops | 4 | Ø28.2 at z 18.9; Ø71.5 at z 59.9 and 61.4; Ø33.6 at z 61.4 (the lid edge: the lid is an open ring) |
-| Ground hoops | 3 | Ø20.6 at z −2.6; Ø69.0 at z −11.5 and −13.3 |
+| Hot hoops | 4 | Ø30.0 at z 18.3; Ø73.4 at z 59.6; Ø72.9 at z 62.1; Ø33.6 at z 62.4 (the lid edge: the lid is an open ring) |
+| Ground hoops | 3 | Ø21.2 at z −1.6; Ø70.6 at z −10.9; Ø71.0 at z −13.3 |
 | Hot washer | 1 | Ø6.4 on the centre pin, 2.6 mm above the coax end |
 | Ground collar | 1 | Ø6.0 on the coax jacket, 0.7 mm below its end |
+
+The hoop sizes are where the hoops really sit: against the outside of the frames (under the hot cones, over the
+ground cone, outside the rims, over the lid), centre 1 mm from the frame's centre line (on the mitre of a bend toward the hoop, on the bisector
+at the corner of a bend away from it).
+The NEC model puts them through the bend points (Ø28.2 / 71.5 / 33.6 hot, Ø20.6 / 69.0 ground); 1 mm is λ/50 at
+6.4 GHz.
 
 In the app: **"Sky-tilted capped bicone, wire cage (6.7:1)"**. Simulation is the NEC-2 table
 (`export_cage_table.py`, 64 frequencies, gain = mean over φ). Build has the cut list, a 1:1 frame
 template and the printed kit: the cover, a cup with one groove per ground frame, the 130 mm sleeve
-handle, the stand, the gap fork, a frame bending jig and a spacing ring for the hot frames. The ring
-lifts off upward; a mandrel would be trapped by the lid hoops. NEC-2 export is enabled.
+handle, the stand, the gap fork, a frame bending jig, a stepped hoop mandrel (one step per hoop
+size, a slot for the solder joint) and a cradle for the hot side (washer pocket, a groove per frame up the
+cones, a slot for each cone hoop under them). The hot cage lifts off the cradle upward; a mandrel inside it
+would be trapped by the lid hoops. NEC-2 export is enabled.
 
 ## How it was found
 

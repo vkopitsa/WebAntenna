@@ -89,7 +89,7 @@ export interface Design {
    *  `what` and `note` are English strings that also appear in the design's tables. */
   cuts?: { what: string; qty: number; length: number; dia: number; note?: string }[];
   /** Wire cage: one frame of each side as a (ρ, z) polyline in metres, for the bending template and the printed jigs. */
-  frames?: { hot: [number, number][]; ground: [number, number][]; n: number };
+  frames?: { hot: [number, number][]; ground: [number, number][]; n: number; hoops: { hot: [number, number][]; ground: [number, number][] } };
   /** false when a wire model would be meaningless (patch, coaxial collinear). */
   necSupported: boolean;
   /** Natural feed impedance the design is meant for (balun / transformer to 50 Ω assumed), default 50 Ω. */

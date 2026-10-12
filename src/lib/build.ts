@@ -382,8 +382,8 @@ export function steps(d: Design, hasBoom: boolean, tunable: boolean): Msg[] {
     s.push(M("Solder the hot element together (washer, cones, rim, lid) and the ground cone with its skirt. Solder the coax jacket into the ground cone apex and the centre pin into the washer, keeping the listed gap."));
   } else if (d.frames) {
     s.push(M("Print the 1:1 frame template (or the bending jig) and bend every frame over it with flat-nose pliers: all frames of a side must be identical."));
-    s.push(M("Solder the washer onto the coax centre pin at the listed gap and the collar onto the coax jacket. Stand the frames round them at equal angles (the printed former and cup have one groove per frame) and solder each frame end to the washer or collar."));
-    s.push(M("Bend each hoop into a ring of the listed diameter and solder it round the frames at its bend, at every crossing. Keep the frames in their grooves while you do it."));
+    s.push(M("Solder the hot frames to the washer in the printed cradle and the ground frames to the collar on the coax jacket in the cup: one groove per frame keeps them at equal angles. Then solder the washer onto the coax centre pin at the listed gap."));
+    s.push(M("Bend each hoop on its step of the printed hoop mandrel (or into a ring of the listed diameter) and solder it against the outside of the frames at its bend, at every crossing. Keep the frames in their grooves while you do it."));
   } else {
     s.push(M("Cut every part to the cut length in the list. Driven parts are cut long so you can trim them."));
     if (hasBoom) s.push(M("Tape the 1:1 drilling strip to the boom, mark the element positions, then drill and fit the elements."));
@@ -497,8 +497,8 @@ export const BUILD_STRINGS = [
   "Stacked on the first 11 cm of coax below the ground cone (ferrite sleeve)",
   "Brass or copper, 0.3–0.5 mm: the frames are soldered round its edge", "The ground collar is soldered onto its jacket", "Bends: see the template", "Bend into a ring and solder the ends",
   "Print the 1:1 frame template (or the bending jig) and bend every frame over it with flat-nose pliers: all frames of a side must be identical.",
-  "Solder the washer onto the coax centre pin at the listed gap and the collar onto the coax jacket. Stand the frames round them at equal angles (the printed former and cup have one groove per frame) and solder each frame end to the washer or collar.",
-  "Bend each hoop into a ring of the listed diameter and solder it round the frames at its bend, at every crossing. Keep the frames in their grooves while you do it.",
+  "Solder the hot frames to the washer in the printed cradle and the ground frames to the collar on the coax jacket in the cup: one groove per frame keeps them at equal angles. Then solder the washer onto the coax centre pin at the listed gap.",
+  "Bend each hoop on its step of the printed hoop mandrel (or into a ring of the listed diameter) and solder it against the outside of the frames at its bend, at every crossing. Keep the frames in their grooves while you do it.",
   "Print the 1:1 flat patterns, glue them onto the sheet and cut the parts out (tin snips, then file the edges).",
   "Roll each sector into its cone and each strip into its ring over a former, overlap or butt the seam and solder it along its length.",
   "Solder the hot element together (washer, cones, rim, lid) and the ground cone with its skirt. Solder the coax jacket into the ground cone apex and the centre pin into the washer, keeping the listed gap.",

@@ -263,6 +263,20 @@ export function cageFrames(t: SkyconeTable, s: number): { hot: P2[]; ground: P2[
 /** Hoops: every frame point at ρ ≥ 4 mm (scaled) and the hub rings. */
 const hoopsOf = (path: P2[], s: number) => path.filter((q) => q[0] >= 4e-3 * s);
 
+/** Where each of those hoops really sits: against the frames on the outside of the cage (under the hot cones, over the
+ *  ground cone, outside the rims, over the lid), its centre one wire diameter D off the frame's centre line. The NEC
+ *  model keeps them at the bend points. side 1: hot, -1: ground. */
+const hoopSeats = (path: P2[], s: number, D: number, side: 1 | -1): P2[] => path.flatMap((q, i): P2[] => {
+  if (q[0] < 4e-3 * s) return [];
+  const nrm = (a: P2, b: P2): P2 => { const l = Math.hypot(b[0] - a[0], b[1] - a[1]); return [(side * (b[1] - a[1])) / l, (-side * (b[0] - a[0])) / l]; };
+  const ns = [...(i > 0 ? [nrm(path[i - 1], q)] : []), ...(i + 1 < path.length ? [nrm(q, path[i + 1])] : [])];
+  const [a, b] = ns.length === 2 ? ns : [ns[0], ns[0]];
+  // a bend toward the hoop side: on the mitre, touching both legs; a bend away from it: touching the corner itself
+  const inside = side * (a[0] * b[1] - a[1] * b[0]) < 0;
+  const k = inside ? D / (1 + a[0] * b[0] + a[1] * b[1]) : D / Math.hypot(a[0] + b[0], a[1] + b[1]);
+  return [[q[0] + k * (a[0] + b[0]), q[1] + k * (a[1] + b[1])]];
+});
+
 const pathLen = (p: P2[]) => p.slice(1).reduce((a, q, i) => a + Math.hypot(q[0] - p[i][0], q[1] - p[i][1]), 0);
 const bendsOf = (p: P2[]) => p.slice(1, -1).filter((q, i) => {
   const a = p[i], b = p[i + 2];
@@ -302,7 +316,8 @@ function buildCage(t: SkyconeTable, bandsP: Parameters<typeof band>[0]): Design 
   // physical frames start at the washer edge: drop a stub shorter than 0.5 mm next to the hub ring
   const trim = (p: P2[]) => (p.length > 2 && Math.hypot(p[1][0] - p[0][0], p[1][1] - p[0][1]) < 0.5e-3 * s ? p.slice(1) : p);
   const hotF = trim(fr.hot), gndF = trim(fr.ground);
-  const hoops = [...hoopsOf(fr.hot, s).map((q) => ({ q, what: "Hoop, hot side" })), ...hoopsOf(fr.ground, s).map((q) => ({ q, what: "Hoop, ground side" }))];
+  const seats = { hot: hoopSeats(fr.hot, s, 2 * r, 1), ground: hoopSeats(fr.ground, s, 2 * r, -1) };
+  const hoops = [...seats.hot.map((q) => ({ q, what: "Hoop, hot side" })), ...seats.ground.map((q) => ({ q, what: "Hoop, ground side" }))];
   const hubHot = fr.hubs.find((h) => h[0][1] > 0), hubGnd = fr.hubs.find((h) => h[0][1] <= 0);
   const washerD = 2 * Math.max(hubHot ? hubHot[1][0] : 0, hotF[0][0]);
   const cuts: NonNullable<Design["cuts"]> = [
@@ -333,7 +348,7 @@ function buildCage(t: SkyconeTable, bandsP: Parameters<typeof band>[0]): Design 
   const f = Math.sqrt(fLow * Math.min(fHigh, fTop));
   return {
     wires, plates: [], cuts,
-    frames: { hot: hotF, ground: gndF, n },
+    frames: { hot: hotF, ground: gndF, n, hoops: seats },
     feed: { wire: 0, at: "center" },
     dims: [
       { label: "Wavelength at the lowest frequency", value: wavelength(fLow) },

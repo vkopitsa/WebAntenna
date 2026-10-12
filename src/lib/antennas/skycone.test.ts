@@ -50,8 +50,17 @@ describe("sky-tilted capped bicones", () => {
     expect(d.cuts!.find((c) => c.what.startsWith("Hot frame"))).toMatchObject({ qty: 16 });
     expect(d.cuts!.find((c) => c.what.startsWith("Hot frame"))!.length * 1e3).toBeCloseTo(86.4, 0);
     const parts = partsFor("skyconecage", def.defaults, d).map((q) => q.id);
-    expect(parts).toEqual(expect.arrayContaining(["shell", "skycone-cup", "skycone-handle", "skycone-bend", "skycone-ring"]));
-    expect(parts).not.toContain("skycone-former");                  // trapped inside the cage by the lid hoops
+    expect(parts).toEqual(expect.arrayContaining(["shell", "skycone-cup", "skycone-handle", "skycone-bend", "skycone-cradle", "skycone-hoops"]));
+    expect(parts).not.toContain("skycone-former");
+    // the hoops sit against the frames on the outside: centre one wire diameter (1 mm) from the frame's centre line
+    const dist = (q: [number, number], p: [number, number][]) => Math.min(...p.slice(1).map((b, i) => {
+      const a = p[i], ab = [b[0] - a[0], b[1] - a[1]], t = Math.max(0, Math.min(1, ((q[0] - a[0]) * ab[0] + (q[1] - a[1]) * ab[1]) / (ab[0] ** 2 + ab[1] ** 2)));
+      return Math.hypot(q[0] - a[0] - t * ab[0], q[1] - a[1] - t * ab[1]);
+    }));
+    const fr = d.frames!;
+    expect([...fr.hoops.hot.map((q) => dist(q, fr.hot)), ...fr.hoops.ground.map((q) => dist(q, fr.ground))].map((x) => +(x * 1e3).toFixed(3))).toEqual(Array(7).fill(1));
+    expect(fr.hoops.hot.every((q) => q[0] > 0 && q[1] < 0.0624)).toBe(true);
+    expect(partsFor("skyconecage", def.defaults, d).find((q) => q.id === "skycone-hoops")!.purpose.a).toEqual([7]);   // every hoop has its own size                  // trapped inside the cage by the lid hoops
     expect(templatePages(def, d, false).length).toBe(1);
     // Radiation view: the current sits on the 16 frames
     expect(skyconeCurrents("skyconecage", d)!.els.length).toBe(16 * SKYCONE_W16.cur.seg.length);

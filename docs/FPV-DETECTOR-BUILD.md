@@ -214,10 +214,12 @@ coax (the handle is 130 mm long, its pocket holds them) and expect the plastic t
 
 **Wire-cage version (W16, Ø71.5 × 74.7 mm, 960 MHz – 6.4 GHz, Ø1 mm copper or brass wire):** the
 app's "Sky-tilted capped bicone, wire cage (6.7:1)" lists the frames, hoops and hub washers and prints
-a 1:1 frame template. Order of work: bend 16 hot and 16 ground frames on the printed bending jig;
-solder the collar onto the coax jacket and the ground frames into the cup's grooves round it, then the
-3 ground hoops; solder the washer onto the centre pin with the gap fork, stand the 16 hot frames on
-its edge, hold them in the spacing ring at the rim and solder the 4 hot hoops; lift the ring off. The
+a 1:1 frame template. Order of work: bend 16 hot and 16 ground frames on the printed bending jig and
+the 7 hoops on the printed hoop mandrel (wrap, solder the ends over the slot, slide off); solder the
+collar onto the coax jacket and the ground frames into the cup's grooves round it, then lay the 3 ground
+hoops on the frames and solder them; in the printed cradle, put the washer in its pocket and the 2 cone
+hoops in their slots, lay the 16 hot frames in their grooves and solder everything, then the rim and lid
+hoops; lift the hot cage off and solder the washer onto the centre pin with the gap fork. The
 6-bead ferrite sleeve and the 130 mm handle are the same as for S73. See "Wire-cage version" in the study.
 
 Keep any other plastic out of the feed region: the first ~15 mm round the coax end, between the two
