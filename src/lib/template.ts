@@ -101,6 +101,51 @@ function wireDrawing(def: AntennaDef, d: Design): Drawing | null {
   return { w: eu + 2 * P, h: ev + 2 * P, prims, caption: `${def.name} - flat view, 1:1 - ${eu.toFixed(1)} x ${ev.toFixed(1)} mm` };
 }
 
+// ---------------------------------------------------------------- sheet-metal flat patterns
+
+/** Overlap flap drawn dashed along one straight edge of a sector, for a soldered lap seam (mm). */
+const LAP = 5;
+
+/** One drawing per formed sheet part: annular sectors (cones), strips (rims, skirts) and discs, at 1:1. */
+function sheetDrawings(def: AntennaDef, d: Design): Drawing[] {
+  const P = 8;
+  return (d.sheets ?? []).map((sh): Drawing => {
+    const prims: Prim[] = [];
+    if (sh.kind === "strip") {
+      const w = sh.w * 1e3, h = sh.h * 1e3;
+      prims.push({ k: "rect", x: P, y: P, w, h, lw: 0.3 }, { k: "line", x1: P + w, y1: P, x2: P + w + LAP, y2: P, w: 0.2, dash: true }, { k: "line", x1: P + w + LAP, y1: P, x2: P + w + LAP, y2: P + h, w: 0.2, dash: true }, { k: "line", x1: P + w, y1: P + h, x2: P + w + LAP, y2: P + h, w: 0.2, dash: true });
+      prims.push({ k: "text", x: P + w / 2, y: P + h / 2 + 1, s: sh.label, size: Math.min(3, h / 3), anchor: "middle", grey: true });
+      return { w: w + LAP + 2 * P, h: h + 2 * P, prims, caption: `${def.name} - ${sh.label}: strip ${w.toFixed(1)} x ${h.toFixed(1)} mm (roll it into a ring of ${(w / Math.PI).toFixed(1)} mm diameter)` };
+    }
+    if (sh.kind === "disc") {
+      const R = (sh.d * 1e3) / 2, c = P + R;
+      prims.push({ k: "circle", cx: c, cy: c, r: R, lw: 0.3 });
+      if (sh.hole > 0) prims.push({ k: "circle", cx: c, cy: c, r: (sh.hole * 1e3) / 2, lw: 0.3 });
+      prims.push({ k: "line", x1: c - 3, y1: c, x2: c + 3, y2: c, w: 0.15, grey: true }, { k: "line", x1: c, y1: c - 3, x2: c, y2: c + 3, w: 0.15, grey: true });
+      if (R > 12) prims.push({ k: "text", x: c, y: c + R / 2, s: sh.label, size: 2.6, anchor: "middle", grey: true });
+      return { w: 2 * R + 2 * P, h: 2 * R + 2 * P, prims, caption: `${def.name} - ${sh.label}: disc ${(2 * R).toFixed(1)} mm, hole ${(sh.hole * 1e3).toFixed(1)} mm` };
+    }
+    // annular sector, apex at the origin, from angle 0 (the lap edge) to `angle`
+    const r0 = sh.r0 * 1e3, r1 = sh.r1 * 1e3, A = (sh.angle * Math.PI) / 180;
+    const n = Math.max(8, Math.ceil(sh.angle / 2));
+    const arc = (r: number) => Array.from({ length: n + 1 }, (_, i) => [r * Math.cos((A * i) / n), r * Math.sin((A * i) / n)] as [number, number]);
+    const outline = [...arc(r1), ...arc(r0).reverse()];
+    // lap flap: the edge at angle 0 shifted outward (toward negative angles) by LAP
+    const flap: [number, number][] = [[r0, 0], [r0, -LAP], [r1, -LAP], [r1, 0]];
+    const all = [...outline, ...flap];
+    const x0 = Math.min(...all.map((q) => q[0])), y0 = Math.min(...all.map((q) => q[1]));
+    const x1 = Math.max(...all.map((q) => q[0])), y1 = Math.max(...all.map((q) => q[1]));
+    const T = (q: [number, number]): [number, number] => [P + q[0] - x0, P + (y1 - q[1])];
+    prims.push({ k: "poly", pts: outline.map(T), closed: true, lw: 0.3 });
+    for (let i = 0; i < 3; i++) { const a = T(flap[i]), b = T(flap[i + 1]); prims.push({ k: "line", x1: a[0], y1: a[1], x2: b[0], y2: b[1], w: 0.2, dash: true }); }
+    const apex = T([0, 0]);
+    prims.push({ k: "circle", cx: apex[0], cy: apex[1], r: 0.6, fill: true });
+    const mid = T([((r0 + r1) / 2) * Math.cos(A / 2), ((r0 + r1) / 2) * Math.sin(A / 2)]);
+    prims.push({ k: "text", x: mid[0], y: mid[1], s: sh.label, size: Math.min(3, Math.max(1.6, (r1 - r0) / 5)), anchor: "middle", grey: true });
+    return { w: x1 - x0 + 2 * P, h: y1 - y0 + 2 * P, prims, caption: `${def.name} - ${sh.label}: sector R ${r0.toFixed(1)} - ${r1.toFixed(1)} mm, ${sh.angle.toFixed(1)} degrees (dot = cone apex; dashed = ${LAP} mm lap for the seam)` };
+  }).filter(fitsTiles);
+}
+
 // ---------------------------------------------------------------- helix winding wrap
 
 /** Paper you wrap round the former (printed side out): wind the wire along the lines. */
@@ -273,11 +318,12 @@ function inTile(q: Prim, x: number, y: number, w: number, h: number): boolean {
 
 // ---------------------------------------------------------------- public API
 
-export type TemplateKind = "pcb" | "wire" | "strip" | "none";
+export type TemplateKind = "pcb" | "wire" | "strip" | "sheet" | "none";
 
 export function templateKind(def: AntennaDef, d: Design): TemplateKind {
   if (d.pcb) return pcbDrawings(d.pcb, false, def.name).length ? "pcb" : "none";
   if (boomMarks(d)) return "strip";
+  if (d.sheets?.length) return sheetDrawings(def, d).length ? "sheet" : "none";
   if (def.id === "helix" && helixDrawing(def, d)) return "wire";
   return wireDrawing(def, d) ? "wire" : "none";
 }
@@ -289,6 +335,10 @@ export function templatePages(def: AntennaDef, d: Design, mirror: boolean): Page
   }
   const bm = boomMarks(d);
   if (bm) return stripPages(`${name}: boom drilling strip`, bm.L, bm.marks);
+  if (d.sheets?.length) {
+    const sd = sheetDrawings(def, d);
+    return sd.length ? layout(sd, `${name}: 1:1 flat patterns`, "Glue the patterns onto 0.3-0.5 mm brass or copper sheet and cut along the solid lines. Dashed: optional lap for the soldered seam.") : [];
+  }
   const hx = def.id === "helix" ? helixDrawing(def, d) : null;
   if (hx) return layout([hx], `${name}: 1:1 winding template`, "Cut it out, tape the tiles together, wrap it round the former printed side out and wind the wire along the lines.");
   const w = wireDrawing(def, d);
@@ -308,6 +358,8 @@ export function templateSVG(def: AntennaDef, d: Design, mirror: boolean): string
       for (let mm = 0; mm <= L; mm += 10) prims.push({ k: "line", x1: 10, y1: 10 + mm, x2: 10 + (mm % 50 ? 2 : 4), y2: 10 + mm, w: 0.15 });
       for (const m of bm.marks) prims.push({ k: "line", x1: 10, y1: 10 + m.s * 1e3, x2: 10 + SW, y2: 10 + m.s * 1e3, w: 0.5 }, { k: "circle", cx: 10 + SW / 2, cy: 10 + m.s * 1e3, r: 0.9, fill: true }, { k: "text", x: 10 + SW + 2, y: 11 + m.s * 1e3, s: `${m.tag}  ${(m.s * 1e3).toFixed(1)} mm`, size: 3 });
       ds.push({ w: SW + 60, h: L + 20, prims, caption: `${def.name} - boom drilling strip, 1:1, mm from the boom start` });
+    } else if (d.sheets?.length) {
+      ds.push(...sheetDrawings(def, d));
     } else {
       const w = (def.id === "helix" && helixDrawing(def, d)) || wireDrawing(def, d);
       if (w) ds.push(w);

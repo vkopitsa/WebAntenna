@@ -24,9 +24,13 @@ It is a static React + TypeScript site and runs entirely in the browser.
 
 **Antennas:** half-wave dipole / inverted V, fan (parallel) multi-band dipole, quarter-wave ground plane, spring (normal-mode helix), J-pole, coaxial collinear (COCO),
 Yagi-Uda (DL6WU style, 3–40 elements), Moxon rectangle, 2-element cubical quad, biquad with reflector,
-axial-mode helix (RHCP/LHCP), FPV cloverleaf (3 or 4 leaves, RHCP/LHCP), rectangular microstrip patch (inset or probe feed), discone.
+axial-mode helix (RHCP/LHCP), FPV cloverleaf (3 or 4 leaves, RHCP/LHCP), rectangular microstrip patch (inset or probe feed), discone, sky-tilted capped bicone (8:1 and 21:1, solid sheet metal, for FPV / drone detectors).
 
 Formulas, sources and NEC-2 checks: [docs/ANTENNAS.md](docs/ANTENNAS.md).
+
+Wideband (800 MHz – 6.4 GHz) omni antenna for a handheld FPV / drone detector, a simulation study with
+build instructions: [docs/FPV-DETECTOR-ANTENNA.md](docs/FPV-DETECTOR-ANTENNA.md), home build guide with 3D-printed jigs, cover and cup:
+[docs/FPV-DETECTOR-BUILD.md](docs/FPV-DETECTOR-BUILD.md) (tools in `tools/wideband-antenna/`).
 
 ## Features
 

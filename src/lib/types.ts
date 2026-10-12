@@ -24,7 +24,18 @@ export interface Plate {
   thickness: number;
   material: "metal" | "dielectric";
   label: string;
+  /** Facet of a formed sheet-metal part: index into `Design.sheets` (the BOM lists the part once, not every facet). */
+  sheet?: number;
 }
+
+/**
+ * A sheet-metal part cut flat and then formed (metres, degrees): a cone (frustum) is cut as an annular sector
+ * of radii r0..r1 and `angle`, a cylinder as a strip w × h, a flat ring as a disc of diameter d with a hole.
+ */
+export type Sheet =
+  | { kind: "sector"; label: string; r0: number; r1: number; angle: number }
+  | { kind: "strip"; label: string; w: number; h: number }
+  | { kind: "disc"; label: string; d: number; hole: number };
 
 export interface Feed {
   wire: number;
@@ -72,6 +83,8 @@ export interface Design {
   feed?: Feed;
   /** Printed antennas: board, copper and feed port (drawing plates are derived from it; openEMS export). */
   pcb?: import("./pcb").Pcb;
+  /** Sheet-metal parts with their flat patterns (solid cones); the 1:1 template draws them. */
+  sheets?: Sheet[];
   /** false when a wire model would be meaningless (patch, coaxial collinear). */
   necSupported: boolean;
   /** Natural feed impedance the design is meant for (balun / transformer to 50 Ω assumed), default 50 Ω. */

@@ -26,6 +26,7 @@ const VARIANTS: Record<string, Params[]> = {
   pagoda: [{ bands: "2.4e9-2.5e9", version: "3B", hand: "lhcp" }],
   biquad: [{ bands: "2e9-3e9" }],
   spring: [{ bands: "1e6-1e6" }, { D: 0.05 }],
+  skycone8: [{ bands: "800e6-8000e6" }],
 };
 
 /** Every English string the lib can show (labels, notes, word-only values). */

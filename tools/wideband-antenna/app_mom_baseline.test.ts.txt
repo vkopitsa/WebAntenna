@@ -1,0 +1,34 @@
+// TEMPORARY scratch for the FPV-detector antenna search: delete after use.
+import { it } from "vitest";
+import { writeFileSync } from "node:fs";
+import { ANTENNA_BY_ID } from "./antennas";
+import { buildMesh, gainFn, solve } from "./mom";
+import { wavelength } from "./rf";
+import { s11 } from "./simulate";
+import { toNEC } from "./export";
+
+const OUT = process.env.FPV_OUT ?? "/tmp";
+const logf = (n: number, a = 300e6, b = 6.4e9) => Array.from({ length: n }, (_, i) => a * (b / a) ** (i / (n - 1)));
+
+function sweep(id: string, extra: Record<string, unknown>, fs: number[], per: number, cap: number, file: string) {
+  const def = ANTENNA_BY_ID[id], p = { ...def.defaults, ...extra } as never, d = def.build(p);
+  writeFileSync(`${OUT}/${file}.nec`, toNEC(def, p, d));
+  const rows: string[] = ["f_MHz,R,X,SWR,N,g_el0,g_el15,g_el30,g_el50"];
+  for (const f of fs) {
+    const m = buildMesh(d, wavelength(f), per, cap), s = m && solve(m, f);
+    if (!s) continue;
+    const sw = s11({ f, r: s.z[0], x: s.z[1] }, d.feedZ0 ?? 50).swr, g = gainFn(s);
+    const el = (e: number) => g(Math.PI / 2 - (e * Math.PI) / 180, 0).toFixed(2);
+    rows.push(`${(f / 1e6).toFixed(1)},${s.z[0].toFixed(2)},${s.z[1].toFixed(2)},${sw.toFixed(2)},${m!.unknowns.length},${el(0)},${el(15)},${el(30)},${el(50)}`);
+  }
+  writeFileSync(`${OUT}/${file}.csv`, rows.join("\n") + "\n");
+}
+
+it("cloverleaf baseline", () => {
+  sweep("cloverleaf", {}, logf(41), 40, 1500, "cloverleaf_wide");
+  sweep("cloverleaf", {}, Array.from({ length: 61 }, (_, i) => 4.5e9 + i * 0.04e9), 40, 1500, "cloverleaf_fine");
+}, 600_000);
+
+it("stock discone sized for 300 MHz", () => {
+  sweep("discone", { bands: "300e6-6.4e9" }, logf(36), 20, 3000, "discone_stock");
+}, 3_600_000);

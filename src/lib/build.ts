@@ -111,6 +111,8 @@ const NOT_TRIMMED: Record<string, string> = {
   biquad: "The biquad is broadband (roughly 10 %): check the SWR across the band. The spacing to the reflector sets the match.",
   pagoda: "Not tuned by trimming: the board spacing sets the centre frequency (Baert's table: D1 grows about 0.15 mm and D2 about 0.24 mm per 100 MHz lower). Check the SWR across the band.",
   pcbloop: "Tune the small loop with the capacitors: Cs sets the resonance, Cp the match. A trimmer capacitor for Cs makes this easy.",
+  skycone8: "Broadband: not tuned by trimming. The pin gap sets the top of the band and the rim height the bottom; check the SWR across the band.",
+  skycone21: "Broadband: not tuned by trimming. The pin gap sets the top of the band and the rim height the bottom; check the SWR across the band.",
 };
 
 const NICE = [0.25e-3, 0.5e-3, 1e-3, 2e-3, 3e-3, 5e-3, 10e-3, 20e-3, 30e-3, 50e-3, 100e-3, 200e-3];
@@ -309,11 +311,20 @@ export function bom(def: AntennaDef, d: Design, cuts: CutRow[]): BomRow[] {
       const elems = cuts.filter((x) => x.what.s !== "Boom or support" && !x.what.s.startsWith("Matching")).reduce((s, x) => s + x.qty, 0);
       if (elems) rows.push({ item: M("Element mounts (insulators or boom clamps)"), qty: M("{0} pc", elems) });
     }
-    for (const pl of d.plates.filter((x) => x.material === "metal")) {
+    if (d.sheets?.length) {
+      // formed parts: the flat patterns' bounding rectangles, laid side by side, give the sheet to buy
+      const area = d.sheets.reduce((a, x) => a + (x.kind === "sector" ? (x.angle >= 180 ? 4 * x.r1 * x.r1 : 2 * x.r1 * x.r1 * Math.max(Math.sin((x.angle * Math.PI) / 360), 0.5)) : x.kind === "strip" ? x.w * x.h : x.d * x.d), 0);
+      const side = Math.sqrt(area * 1.3);
+      rows.push({ item: M("Brass or copper sheet 0.3–0.5 mm, about {0} × {1}", { len: side }, { len: side }), qty: M("{0} pc", 1), note: M("Cut the flat patterns from the 1:1 template") });
+      for (const x of d.sheets) rows.push({ item: x.kind === "sector" ? M("{0}: annular sector R {1} – {2}, {3}°", x.label, { len: x.r0 }, { len: x.r1 }, +x.angle.toFixed(1)) : x.kind === "strip" ? M("{0}: strip {1} × {2}", x.label, { len: x.w }, { len: x.h }) : M("{0}: disc Ø{1}, hole Ø{2}", x.label, { len: x.d }, { len: x.hole }), qty: M("{0} pc", 1) });
+      rows.push({ item: M("Semi-rigid coax UT-141 / RG-402 (Ø3.6 mm) with an SMA plug"), qty: M("{0} pc", 1), note: M("The jacket is soldered into the ground cone apex") });
+      rows.push({ item: M("Clip-on ferrite for the coax (about 150 Ω at the lowest band)"), qty: M("{0} pc", 1) });
+    }
+    for (const pl of d.plates.filter((x) => x.material === "metal" && x.sheet == null)) {
       const s = plateSize(pl.pts);
       rows.push({ item: s.disc ? M("Metal disc Ø{0}", { len: s.a }) : M("Metal plate {0} × {1}", { len: s.a }, { len: s.b }), qty: M("{0} pc", 1), note: M(pl.label) });
     }
-    rows.push({ item: connector(d.f, false, false), qty: M("{0} pc", 1) });
+    if (!d.sheets?.length) rows.push({ item: connector(d.f, false, false), qty: M("{0} pc", 1) });
   }
   const fm = feedMatch(def, d);
   if (fm) rows.push({ item: fm, qty: M("{0} pc", 1) });
@@ -355,6 +366,10 @@ export function steps(d: Design, hasBoom: boolean, tunable: boolean): Msg[] {
     else s.push(M("Solder the connector at the feed port and keep the joint short."));
     const grounds = d.pcb.rects.filter((q) => /Ground/.test(q.label));
     if (new Set(grounds.map((q) => q.layer)).size > 1) s.push(M("Stitch the top and bottom ground pours with vias along their edges (usual practice; not part of the model)."));
+  } else if (d.sheets?.length) {
+    s.push(M("Print the 1:1 flat patterns, glue them onto the sheet and cut the parts out (tin snips, then file the edges)."));
+    s.push(M("Roll each sector into its cone and each strip into its ring over a former, overlap or butt the seam and solder it along its length."));
+    s.push(M("Solder the hot element together (washer, cones, rim, lid) and the ground cone with its skirt. Solder the coax jacket into the ground cone apex and the centre pin into the washer, keeping the listed gap."));
   } else {
     s.push(M("Cut every part to the cut length in the list. Driven parts are cut long so you can trim them."));
     if (hasBoom) s.push(M("Tape the 1:1 drilling strip to the boom, mark the element positions, then drill and fit the elements."));
@@ -460,6 +475,13 @@ export const BUILD_STRINGS = [
   "Measure again inside the final enclosure: plastic close to the antenna lowers the resonance.",
   "Load the measured .s1p in the Simulation tab to compare it with the model and get a trim suggestion.",
   "Seal the feed point against water (self-amalgamating tape) if the antenna goes outdoors.",
+  "Brass or copper sheet 0.3–0.5 mm, about {0} × {1}", "Cut the flat patterns from the 1:1 template",
+  "{0}: annular sector R {1} – {2}, {3}°", "{0}: strip {1} × {2}", "{0}: disc Ø{1}, hole Ø{2}",
+  "Semi-rigid coax UT-141 / RG-402 (Ø3.6 mm) with an SMA plug", "The jacket is soldered into the ground cone apex",
+  "Clip-on ferrite for the coax (about 150 Ω at the lowest band)",
+  "Print the 1:1 flat patterns, glue them onto the sheet and cut the parts out (tin snips, then file the edges).",
+  "Roll each sector into its cone and each strip into its ring over a former, overlap or butt the seam and solder it along its length.",
+  "Solder the hot element together (washer, cones, rim, lid) and the ground cone with its skirt. Solder the coax jacket into the ground cone apex and the centre pin into the washer, keeping the listed gap.",
 ];
 
 

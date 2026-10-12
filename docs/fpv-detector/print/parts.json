@@ -1,0 +1,90 @@
+{
+ "cover": {
+  "size_mm": [
+   120.0,
+   120.0,
+   119.8
+  ],
+  "volume_cm3": 66.7
+ },
+ "cup": {
+  "size_mm": [
+   117.2,
+   117.2,
+   30.5
+  ],
+  "volume_cm3": 173.7
+ },
+ "handle": {
+  "size_mm": [
+   16.0,
+   16.0,
+   90.0
+  ],
+  "volume_cm3": 9.7
+ },
+ "stand": {
+  "size_mm": [
+   110.0,
+   110.0,
+   34.0
+  ],
+  "volume_cm3": 42.7
+ },
+ "hot_former": {
+  "size_mm": [
+   110.9,
+   111.0,
+   87.2
+  ],
+  "volume_cm3": 434.7
+ },
+ "support_wedge (print 3)": {
+  "size_mm": [
+   18.3,
+   60.5,
+   10.0
+  ],
+  "volume_cm3": 8.0
+ },
+ "gap_fork (1.90 mm)": {
+  "size_mm": [
+   40.0,
+   14.0,
+   4.0
+  ],
+  "volume_cm3": 1.6
+ },
+ "tpl_hot_cone1": {
+  "size_mm": [
+   37.3,
+   37.3,
+   1.2
+  ],
+  "volume_cm3": 1.1
+ },
+ "tpl_hot_cone2": {
+  "size_mm": [
+   196.0,
+   137.7,
+   1.2
+  ],
+  "volume_cm3": 19.5
+ },
+ "tpl_lid": {
+  "size_mm": [
+   111.0,
+   111.0,
+   1.2
+  ],
+  "volume_cm3": 11.6
+ },
+ "tpl_gnd_cone1": {
+  "size_mm": [
+   121.0,
+   121.0,
+   1.2
+  ],
+  "volume_cm3": 13.2
+ }
+}

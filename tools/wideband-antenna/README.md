@@ -1,0 +1,99 @@
+# Wideband rotationally symmetric antennas: solvers, optimiser, checks
+
+Python tools used to find the FPV-detector antenna in
+[docs/FPV-DETECTOR-ANTENNA.md](../../docs/FPV-DETECTOR-ANTENNA.md). They are separate from the web app
+(nothing in `src/` imports them; `npm test` does not run them). They work for any antenna that is a
+**body of revolution fed on its axis by a coax**: discones, bicones, conical / teardrop monopoles,
+skirted and sleeve monopoles, cups, caps — any profile you can draw as polylines in the (ρ, z)
+half-plane.
+
+## Setup
+
+```bash
+cd tools/wideband-antenna
+python3 -m venv --system-site-packages .venv
+.venv/bin/pip install numpy scipy matplotlib numba manifold3d PyNEC   # PyNEC (nec2++) only for val_dipole.py / val_discone.py
+```
+
+Run every script from this directory (they import each other by module name). Numba compiles the
+kernels on first use (`cache=True`, a few seconds once). Scripts that run several designs use 8
+processes with `NUMBA_NUM_THREADS=1` each; single-design scripts use numba threads.
+
+## Files
+
+| File | What it does |
+|---|---|
+| `bor.py` | **Body-of-revolution MoM** (EFIE, m = 0, PEC, free space). Unknown = total axial current (triangles, Galerkin); exact ring kernel (static part via the complete elliptic integral, log singularity integrated analytically, the rest by Gauss and a midpoint rule in φ). Coax "frill" feed on the aperture annulus or a delta gap; junctions of ≥ 3 sheets; lumped series loads (ferrite). `run(geo, freqs)` → Z, SWR, gain at chosen elevations, peak gain; `prad_check(sol)` = energy check (must be 1.000). |
+| `fdtd_bor.py` | **Axisymmetric FDTD** (E_ρ, E_z, H_φ): graded mesh, CPML, staircased PEC sheets, dielectrics, physical PTFE coax with a soft TEM source and a matched lossy termination, V/I de-embedded to the coax end, NF2FF box → elevation pattern. Shares no code with `bor.py`. |
+| `fdtd_run.py` | Builds an FDTD model from a family design (`build(p, cable, shells=...)`). |
+| `fdtd_verify.py` | FDTD vs MoM for one design: Z sweep + patterns. `F_LO=760e6 MARGIN=0.15 [SHELLS='<json>'] python fdtd_verify.py family6 designs/B_simple.json 0.15 out.json` (≈ 2–4 min for B, 15 min for A). |
+| `designs.py` | Geometry helpers. **Feed constants: UT-141 / RG-402** (centre Ø0.92 mm, PTFE Ø2.98 mm). Classic discone, cone-over-ground, `evaluate()`, log sweeps. |
+| `family.py` | Family v1 (one-angle hot cone + cylinder + cap over a cone + skirt) and the cost functions `cost_of` (weighted), `cost_of2` (SWR floor 1.85 + sky-gain deficit), `cost_of3` (stricter sky). Frequencies for 300 MHz – 6.4 GHz. |
+| `family2.py` | Family v2: two-angle hot cone (feed taper + flare) and two-angle ground; `profile()`, `geometry()`, `size()`. All later families reuse it. |
+| `family3.py` | v2 with a flat 13 mm SMA flange at the feed — **rejected** (6 GHz SWR 3.3). |
+| `family4.py` | v2 with build limits (gap ≥ 0.8 mm, washer ≥ Ø4 mm) and the sky cost: **design A** (300 MHz – 6.4 GHz, ≤ 300 mm). |
+| `family5.py` | v4 with stricter sky targets (polishing; not used for the final designs). |
+| `family6.py` | **800 MHz – 6.4 GHz**, size budget from `SIZE` (m): **design B**. Edit `FS_MAIN` / `FS_LOW` for another band. |
+| `family7.py` | v6 + cables of 5–40 cm **without** ferrite as a hard requirement (design C). |
+| `opt.py` | Differential evolution, 8 processes: `SIZE=0.12 FAMILY=family6 X0=seed.json python opt.py <tag> <generations> <seed>`. Progress: `opt_<tag>.jsonl` (one JSON line per generation: time, cost, parameters, size). `LO` / `HI` (JSON lists) narrow the bounds, `POP` sets the population factor (default 12 × parameters). |
+| `report.py` | Text report of one design: no-cable sweep with gains at 0–70° elevation, then cable ± ferrite cases. `python report.py family6 "$(cat designs/B_simple.json)" 16 34 800e6` |
+| `final_report.py` | Dense sweep (λ/24, 140 points), drone-band table, cable table, `sweep.csv`, `summary.json` and the PNG charts used in the doc: `python final_report.py family6 "$(cat designs/B_simple.json)" outdir 800e6 6.4e9` |
+| `tolerance.py` | Monte Carlo build tolerance: `F_LO=800e6 python tolerance.py family6 "$(cat designs/B_simple.json)" 48 1.0 0.3 1.5` (lengths ±1 mm, gap ±0.3 mm, angles ±1.5°). |
+| `sens.py` | One-at-a-time sensitivity (which dimension moves which end of the band): `python sens.py family6 designs/B_simple.json 800e6` |
+| `simplify.py` | Tests build simplifications (closed lid, one ground angle, rounding) of a design. |
+| `cutlist.py` | Sheet-metal flat patterns (annular sectors, strips, discs): `python cutlist.py family6 "$(cat designs/B_simple.json)"` |
+| `export_app_table.py`, `to_ts.py` | Tables for the web app's "Sky-tilted capped bicone" types: `python export_app_table.py family6 designs/B_simple.json 800e6 6.4e9 64 app_B.json` (and `family4 designs/A.json 300e6 6.4e9 90 app_A.json`), then `python to_ts.py app_B.json app_A.json > ../../src/lib/antennas/skycone.data.ts`. Profile, R/X and gain every 5° of elevation; the app scales them with the band. |
+| `print_parts.py`, `render_parts.py` | 3D-printable cover, cup, handle, bench stand, hot-element former, support wedges, pin-gap fork and flat-pattern cutting templates (STL, mm) + an assembly section: `python print_parts.py family6 designs/B_simple.json out/`. Needs `pip install manifold3d`. Used by [docs/FPV-DETECTOR-BUILD.md](../../docs/FPV-DETECTOR-BUILD.md). |
+| `render3d.py`, `section.py` | Same-scale 3D render and axial cross-section of designs: `python render3d.py out.png "family6:designs/B_simple.json:B" "family4:designs/A.json:A"`. |
+| `make_s1p.py` | Touchstone `.s1p` from a `sweep.csv` (import it in the app's Simulation tab to compare with a measurement). |
+| `val_kernel.py`, `val_dipole.py`, `val_discone.py`, `check_convergence.py`, `check_cable.py` | Solver checks: ring kernel vs quadrature, tube dipole vs NEC-2, discone vs NEC-2 rod cage (the rod model is the unreliable one: 64 rods meet at the apex), mesh convergence, cable effect on discones. `check_cable.py` / `check_convergence.py` use the current (UT-141) feed constants, the doc's early numbers used SMA-sized ones (0.635 / 2.05 mm). |
+| `app_mom_baseline.test.ts.txt` | The scratch vitest used for the cloverleaf / stock-discone baseline with the app's own MoM. Copy to `src/lib/<name>.test.ts`, run `npx vitest run src/lib/<name>.test.ts`, delete afterwards. |
+| `designs/*.json` | Final designs (metres, degrees): `A.json`, `B.json` (as optimised), `B_simple.json` (**build this**), `B_cover_shells.json` (the PETG cover used in the FDTD check), `C.json` if present. |
+| `results/` | Optimiser histories (`opt_run*.jsonl`), FDTD-vs-MoM outputs, the B sweep (`.csv`, `.s1p`, `summary.json`). |
+
+Design parameters (family2 and later): `g` pin gap from the coax end to the washer; `r0u` washer
+radius; `au1`, `L1` feed-cone half-angle (from +z) and slant; `au2` main-cone half-angle; `Ru` hot
+radius; `Hcu` rim height; `capu` lid closure (1 = closed); `al1`, `Ll1`, `al2` ground-cone half-angles
+(from −z, 90 = flat) and the first section's slant; `Rl` ground radius; `Sl` ground skirt length.
+
+## Workflow that worked (repeat it for a new requirement)
+
+1. **Baseline the obvious candidates** with the app's own MoM (`app_mom_baseline.test.ts.txt`):
+   it showed in minutes that the cloverleaf is a ~30 % antenna and that a rod discone fails above 1 GHz.
+2. **Validate the solver on things with known answers** before trusting it: `val_kernel.py`,
+   `val_dipole.py` (vs NEC-2), `bor.prad_check()` = 1.000, `check_convergence.py` (Z must not move by
+   more than a few ohms from 12 to 40 segments/λ and from 0.3 to 0.1 mm feed cells).
+3. **Model the cable.** At the bottom of the band a small antenna drives current onto its feed cable.
+   Score the low band with a cable tube hanging below (`cable=`) of several lengths, with and without
+   a ferrite (`choke=(distance_m, ohms)`), and put the worst case into the cost.
+4. **Write the cost as "satisfice SWR, then optimise the pattern"** (`cost_of2` / `family6.cost_of`):
+   SWR below the floor (1.85 = margin for model error) earns nothing, so the optimiser spends its
+   effort on gain where it is needed (15–50° elevation). A plain weighted sum let it trade the pattern
+   for SWR (beam tilted down, −6 dBi at 50°).
+5. **Run DE on a broad family, then on a richer or buildable one seeded with the best** (`X0`).
+   Scaling a good design to a new band (all lengths × f_old/f_new, feed details kept) is an excellent
+   seed: design A × ⅜ was already within spec at 800 MHz.
+6. **Verify the winner**: `final_report.py` (fine mesh, 140 points), `simplify.py` (make it easy to
+   build, re-check), `tolerance.py`, `sens.py` (tuning hints), `fdtd_verify.py` (independent solver,
+   with and without the plastic cover). Design for MoM SWR ≤ 1.85: MoM and FDTD differ by up to ≈ 0.1–0.3
+   in SWR at the top of the band.
+
+Timing (8-core desktop): one design with all cable cases ≈ 3–5 s, a DE generation ≈ 1.5–3 min,
+an FDTD verification 2–15 min. Don't run FDTD while the optimiser uses all cores (both slow down 2×).
+Stop an optimiser by PID (`ps -eo pid,comm,args | awk '$2 ~ /python/ && /opt.py <tag>/ {print $1}' | xargs kill`),
+not `pkill -f`, which also matches your own shell command line.
+
+## Lessons (numbers in the doc)
+
+- Resonant shapes (cloverleaf, dipoles, loops) cover tens of percent; 8:1 or 21:1 needs a shape
+  defined by angles (cones) and solid sheet.
+- Rod-built discones stop working above ~1 GHz (16 rods).
+- A discone's beam tilts toward its narrower element at high frequencies; the classic one looks at
+  the ground. Hot cone on top, ground below = beam tilted to the sky.
+- The feed decides 3–6.4 GHz: pin gap, washer radius and the ground within ~10 mm of the axis.
+  A flat SMA flange at the apex costs SWR 2 → 3.3 at 6 GHz; feed through .141 semi-rigid.
+- The optimiser exploits whatever the cost does not see: first the pattern (beam tilted down), then the
+  cable (designs fine with a ferrite but resonant with 10 cm of bare cable). Put every real use case
+  in the score.
+- At 800 MHz, ~110 mm is the practical minimum for SWR ≤ 2 with sky gain (λ/4 = 94 mm); ≤ 95 mm did
+  not get below SWR ≈ 3 in a short run.

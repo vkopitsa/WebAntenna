@@ -4,6 +4,7 @@ import type { AntennaDef, Design, Params } from "./types";
 import { buildMesh, gainFn, solve } from "./mom";
 import { patchDesign } from "./antennas/patch";
 import { loopModel, loopZin } from "./antennas/pcbloop";
+import { SKYCONE_TABLES, skyconeGain, skyconeRange, skyconeZ } from "./antennas/skycone";
 import { num } from "./types";
 import { C0, wavelength } from "./rf";
 import { centre, parseBands } from "./bands";
@@ -147,6 +148,22 @@ function loopSim(params: Params, d: Design, freqs: number[], fPat: number): SimR
   };
 }
 
+/** Sky-tilted bicones: the study's body-of-revolution MoM sweep, scaled to the design's lowest frequency. */
+function skyconeSim(defId: string, d: Design, fPat: number): SimResult {
+  const t = SKYCONE_TABLES[defId], s = d.sweeps[0];
+  const [lo, hi] = skyconeRange(t, s.start);
+  const z: ZPoint[] = [];
+  // every table row inside the sweep (log-spaced, about 25 per octave), plus the sweep ends
+  const fs = [s.start, ...t.f.map((u) => u * s.start).filter((f) => f > s.start && f < s.stop), s.stop].filter((f) => f >= lo && f <= hi);
+  for (const f of fs) { const q = skyconeZ(t, s.start, f); if (q) z.push({ f, ...q }); }
+  const fp = Math.min(Math.max(fPat, lo), hi);
+  const g = skyconeGain(t, s.start, fp);
+  return {
+    method: "analytic", z, pattern: samplePattern(fp, (th) => g(th)),
+    notes: ["Sky-tilted bicone: precomputed body-of-revolution MoM sweep of this shape (solid sheet metal, free space, no cable), scaled to your size. The thin-wire solver cannot model solid cones."],
+  };
+}
+
 /** True when the wire MoM solver models this design (the `method: "mom"` path of simulate()). */
 export function momEligible(defId: string, d: Design): boolean {
   return defId !== "patch" && defId !== "collinear" && defId !== "pcbloop" && !d.pcb && !!d.necSupported && !!d.feed;
@@ -174,6 +191,7 @@ export function simulate(def: AntennaDef, params: Params, d: Design, opt: SimOpt
   if (def.id === "patch") return patchSim(params, d, freqs, fPat);
   if (def.id === "collinear") return collinearSim(params, fPat);
   if (def.id === "pcbloop") return loopSim(params, d, sweepFreqs(d, 101, true), fPat);
+  if (SKYCONE_TABLES[def.id]) return skyconeSim(def.id, d, fPat);
   if (d.pcb) return { method: "openems", z: [], pattern: null, notes: ["Printed antenna on a dielectric: the wire solver cannot model it. Export the openEMS script, run it, and load its results file here."] };
   if (!d.necSupported) return { method: "none", z: [], pattern: null, notes: [] };
   const z: ZPoint[] = [];
@@ -226,6 +244,7 @@ export const SIM_STRINGS = [
   "Thin-wire Method of Moments (MININEC formulation), free space, perfect conductors. Checked against NEC-2 on converged models.",
   "Printed antenna on a dielectric: the wire solver cannot model it. Export the openEMS script, run it, and load its results file here.",
   "Small loop: analytic model (matched with Cs + Cp at the design frequency; magnetic-dipole pattern, efficiency included).",
+  "Sky-tilted bicone: precomputed body-of-revolution MoM sweep of this shape (solid sheet metal, free space, no cable), scaled to your size. The thin-wire solver cannot model solid cones.",
 ];
 
 /** Impedance at frequency f, linearly interpolated between samples (null outside the sweep). */

@@ -73,6 +73,13 @@ src/components/          Sidebar (picker, params, band editor), Preview (SVG 3D)
                          the field is solved in sim.worker.ts via useNearField.ts
 src/msg.ts               formats a lib Msg {s, a: [{len}|{hz}|{pct}|…]} for the UI (translation + mm/in)
 docs/ANTENNAS.md         every formula, its source, and the NEC-2 / MoM verification numbers
+docs/FPV-DETECTOR-ANTENNA.md  wideband FPV-detector antenna study (sky-tilted cone, 800 MHz – 6.4 GHz)
+docs/FPV-DETECTOR-BUILD.md    home build guide for it; STL jigs/cover/cup in docs/fpv-detector/print (tools print_parts.py)
+                         in the app as skycone8 / skycone21 (antennas/skycone.ts): fixed profile scaled by the band,
+                         Simulation = tabulated BoR-MoM results (skycone.data.ts, regenerate with the tools' export_app_table.py
+                         + to_ts.py); `Design.sheets` = flat patterns (BOM rows + 1:1 template)
+tools/wideband-antenna/  Python (numba) body-of-revolution MoM + FDTD, DE optimiser, tolerance/report scripts;
+                         NOT part of the app; README.md there has setup, workflow and lessons
 ```
 
 ## Conventions
