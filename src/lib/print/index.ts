@@ -29,6 +29,7 @@ const FAMILIES: Record<string, (p: Params, d: Design) => PartSpec[]> = {
   jpole: (_p, d) => jpoleParts(d),
   collinear: collinearParts,
   skycone7: (_p, d) => skyconeParts(d, 0.3, true),
+  skyconecage: (_p, d) => skyconeParts(d, 0, true),
   skycone8: (_p, d) => skyconeParts(d),
   skycone21: (_p, d) => skyconeParts(d),
 };

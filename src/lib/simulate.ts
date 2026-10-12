@@ -160,7 +160,9 @@ function skyconeSim(defId: string, d: Design, fPat: number): SimResult {
   const g = skyconeGain(t, s.start, fp);
   return {
     method: "analytic", z, pattern: samplePattern(fp, (th) => g(th)),
-    notes: ["Sky-tilted bicone: precomputed body-of-revolution MoM sweep of this shape (solid sheet metal, free space, no cable), scaled to your size. The thin-wire solver cannot model solid cones."],
+    notes: [t.cage
+      ? "Sky-tilted bicone, wire cage: precomputed NEC-2 sweep of this cage (free space, no cable), scaled to your size. The built-in solver's segment limit is too coarse for this much wire at the top of the band."
+      : "Sky-tilted bicone: precomputed body-of-revolution MoM sweep of this shape (solid sheet metal, free space, no cable), scaled to your size. The thin-wire solver cannot model solid cones."],
   };
 }
 
@@ -245,6 +247,7 @@ export const SIM_STRINGS = [
   "Printed antenna on a dielectric: the wire solver cannot model it. Export the openEMS script, run it, and load its results file here.",
   "Small loop: analytic model (matched with Cs + Cp at the design frequency; magnetic-dipole pattern, efficiency included).",
   "Sky-tilted bicone: precomputed body-of-revolution MoM sweep of this shape (solid sheet metal, free space, no cable), scaled to your size. The thin-wire solver cannot model solid cones.",
+  "Sky-tilted bicone, wire cage: precomputed NEC-2 sweep of this cage (free space, no cable), scaled to your size. The built-in solver's segment limit is too coarse for this much wire at the top of the band.",
 ];
 
 /** Impedance at frequency f, linearly interpolated between samples (null outside the sweep). */

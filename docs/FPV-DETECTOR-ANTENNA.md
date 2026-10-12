@@ -22,6 +22,8 @@ A larger variant **A** (Ø275 × 294 mm) covers **300 MHz – 6.4 GHz** (433 MHz
 see [Variant A](#variant-a-full-range-300-mhz--64-ghz).
 A compact variant **S73** (Ø73 × 71 mm) covers **960 MHz – 6.4 GHz** with SWR ≤ 1.97 (≤ 1.80 with any cable; needs a 6-bead ferrite sleeve; FDTD with the plastic kit ≤ 2.00);
 see [Smaller: compact variants](#smaller-compact-variants-from-960-mhz).
+The same compact size can be bent from **Ø1 mm wire**: 16 frames per side plus hoops (design **W16**, Ø71.5 × 74.7 mm,
+NEC-2 SWR ≤ 1.97 over 960 MHz – 6.4 GHz); see [Wire-cage version](#wire-cage-version-w16).
 
 ![Cross-section of design B](fpv-detector/profile.png)
 
@@ -30,7 +32,7 @@ see [Smaller: compact variants](#smaller-compact-variants-from-960-mhz).
 ![Sections of designs B and A at the same scale](fpv-detector/A_B_section.png)
 
 **In the app:** the designs are antenna types in the Broadband group, **"Sky-tilted capped bicone (8:1)"** (B),
-**"(21:1)"** (A) and **"compact (6.7:1)"** (S73). The band editor scales the shape (e.g. 1–8 GHz); Simulation shows this study's
+**"(21:1)"** (A), **"compact (6.7:1)"** (S73) and **"wire cage (6.7:1)"** (W16). The band editor scales the shape (e.g. 1–8 GHz); Simulation shows this study's
 tabulated MoM sweep and elevation pattern, scaled to the size; Build lists the flat patterns and
 prints them at 1:1 (`src/lib/antennas/skycone.ts`). The name: an *asymmetric bicone*, or an *inverted
 discone* (cone on top as the hot element, a shallow ground cone below), with a capped top (rim + lid).
@@ -313,6 +315,54 @@ The 2.00 is a narrow feature at 1.6–1.8 GHz that comes from the short cable (M
 is absent without a cable); elsewhere the plastic moves the SWR by ≤ 0.2 (top of the band
 1.60 → 1.79). The cover sits 2 mm outside the rim, as for B, which is relatively closer on this
 smaller antenna.
+
+### Wire-cage version (W16)
+
+The compact antenna built from wire instead of sheet: each cone, the rim and the lid become N
+radial wire **frames** that follow the (ρ, z) profile, with a wire **hoop** soldered round them at
+every bend. The frames meet the axis on a Ø6 mm washer on the centre pin (hot) and a Ø6 mm collar on
+the coax jacket (ground). It is modelled in NEC-2 (PyNEC) by `wirecage.py`, and the shape was
+re-optimised for the cage with `family9.py` (DE, 20 generations, no cable model).
+
+| Ø1 mm wire, 960 MHz – 6.4 GHz, free space | Size | Worst SWR | Gain at 15–50°, mean (worst f) |
+|---|---|---|---|
+| Solid S73 (BoR MoM) | Ø73 × 71 mm | 1.97 | +1.8 dBi |
+| S73 shape as a 16-frame cage | Ø73 × 71 mm | 2.09 | |
+| **W16**: 16 frames, re-optimised | **Ø71.5 × 74.7 mm** | **1.95** (1.97 in the app table) | **+1.9 dBi (−0.2)** |
+| W12: 12 frames, re-optimised | Ø66 × 75 mm | 2.51 at 6.4 GHz (2.15 up to 6 GHz) | +0.4 dBi (−0.9) |
+
+- **16 frames is the practical number.** Fewer frames lose the top of the band (the cage stops
+  looking like a surface); more do not fit: NEC rejects more than about 16 Ø1 mm wires meeting the
+  Ø6 mm hub, and the real washer has the same problem.
+- Extra hoops between the bends make it worse (S73 cage: 2.36 with hoops every 15 mm, 3.22 every 8 mm).
+- Segment convergence: λ/20 vs λ/40 moves the SWR by ≤ 0.04. The feed model matters more: the pin
+  gap as 1, 3 or 5 segments (source in the middle) moves it by up to 0.2. The app's NEC-2 export
+  cuts the wires at λ/80 of 6.4 GHz (0.6 mm, shorter than the wire diameter, outside the thin-wire
+  kernel's range): it gives 1.56 / 1.99 / 1.45 at 1 / 3.5 / 6 GHz, the same as `wirecage.py` with
+  the same segments, against 1.72 / 1.91 / 1.64 in the table (λ/30, one-segment gap).
+- **The ferrite sleeve is still required.** The cage model has no cable, but it is the same size as
+  S73, which couples to the cable just as strongly.
+- **Not smaller than the sheet version.** Wire buys lightness and less wind load, not size, and it
+  costs 32 bent frames, 7 hoops and about 150 solder joints (every hoop crosses every frame).
+- No FDTD check of the cage (the axisymmetric FDTD cannot model frames). The cover is the same
+  1.2 mm PETG tube 2 mm outside the wires; expect a shift of about 0.1 in SWR, as with S73.
+
+W16 (`designs/W16.json`), z = 0 at the coax end, Ø1 mm wire:
+
+| Part | Qty | Shape |
+|---|---|---|
+| Hot frame | 16 | washer edge (ρ 3.2, z 2.6) → (14.1, 18.9) → (35.7, 59.9) → (35.7, 61.4) → (16.8, 61.4); 86.4 mm of wire, 3 bends |
+| Ground frame | 16 | collar (ρ 3.0, z −0.7) → (10.3, −2.6) → (34.5, −11.5) → (34.5, −13.3); 35.1 mm, 2 bends |
+| Hot hoops | 4 | Ø28.2 at z 18.9; Ø71.5 at z 59.9 and 61.4; Ø33.6 at z 61.4 (the lid edge: the lid is an open ring) |
+| Ground hoops | 3 | Ø20.6 at z −2.6; Ø69.0 at z −11.5 and −13.3 |
+| Hot washer | 1 | Ø6.4 on the centre pin, 2.6 mm above the coax end |
+| Ground collar | 1 | Ø6.0 on the coax jacket, 0.7 mm below its end |
+
+In the app: **"Sky-tilted capped bicone, wire cage (6.7:1)"**. Simulation is the NEC-2 table
+(`export_cage_table.py`, 64 frequencies, gain = mean over φ). Build has the cut list, a 1:1 frame
+template and the printed kit: the cover, a cup with one groove per ground frame, the 130 mm sleeve
+handle, the stand, the gap fork, a frame bending jig and a spacing ring for the hot frames. The ring
+lifts off upward; a mandrel would be trapped by the lid hoops. NEC-2 export is enabled.
 
 ## How it was found
 

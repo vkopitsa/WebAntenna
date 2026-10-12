@@ -27,7 +27,7 @@ def nec_discone(f, n=64, r=0.8e-3, per=30):
     c.geometry_complete(0)
     c.ex_card(0, 1, 2, 0, 1.0, 0, 0, 0, 0, 0)
     c.fr_card(0, 1, f / 1e6, 0)
-    c.rp_card(0, 19, 1, 0, 0, 0, 0, 0, 10, 0, 0, 0, 0)
+    c.rp_card(0, 19, 1, 0, 0, 0, 0, 0, 0, 10, 0, 0, 0)     # PyNEC order: theta0, phi0, dtheta, dphi
     z = c.get_input_parameters(0).get_impedance()[0]
     gg = np.array(c.get_radiation_pattern(0).get_gain()).ravel()
     return z, gg

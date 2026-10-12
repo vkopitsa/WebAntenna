@@ -101,6 +101,35 @@ function wireDrawing(def: AntennaDef, d: Design): Drawing | null {
   return { w: eu + 2 * P, h: ev + 2 * P, prims, caption: `${def.name} - flat view, 1:1 - ${eu.toFixed(1)} x ${ev.toFixed(1)} mm` };
 }
 
+// ---------------------------------------------------------------- wire-cage frames
+
+/** One hot frame and one ground frame of a wire cage at 1:1, side by side, with the hoop positions at the bends. */
+function frameDrawing(def: AntennaDef, d: Design): Drawing | null {
+  const f = d.frames;
+  if (!f) return null;
+  const wd = Math.max(2 * d.wires[1].r * 1e3, 0.4), P = 12;
+  const mmP = (q: [number, number]): [number, number] => [q[0] * 1e3, q[1] * 1e3];
+  const hot = f.hot.map(mmP), gnd = f.ground.map(mmP);
+  const all = [...hot, ...gnd], zTop = Math.max(...all.map((q) => q[1]));
+  const hx0 = Math.min(...hot.map((q) => q[0])), gx0 = Math.min(...gnd.map((q) => q[0]));
+  const hotW = Math.max(...hot.map((q) => q[0])) - hx0, gndW = Math.max(...gnd.map((q) => q[0])) - gx0;
+  const dxG = P + hotW + 25 - gx0;
+  const prims: Prim[] = [];
+  const draw = (pts: [number, number][], dx: number, name: string, endName: string) => {
+    const X = (q: [number, number]) => dx + q[0], Y = (q: [number, number]) => P + 6 + zTop - q[1];
+    pts.slice(1).forEach((q, i) => prims.push({ k: "line", x1: X(pts[i]), y1: Y(pts[i]), x2: X(q), y2: Y(q), w: wd }));
+    for (const q of pts.slice(1)) prims.push({ k: "circle", cx: X(q), cy: Y(q), r: wd / 2 + 1.2, lw: 0.25 });   // every bend carries a hoop
+    prims.push({ k: "text", x: X(pts[0]) - 1, y: Y(pts[0]) + 4, s: endName, size: 2.2, bold: true, grey: true });
+    const xs = pts.map(X), ys = pts.map(Y);
+    prims.push({ k: "text", x: (Math.min(...xs) + Math.max(...xs)) / 2, y: Math.max(...ys) + 9, s: name, size: 2.8, bold: true, anchor: "middle" });
+  };
+  draw(hot, P - hx0, `HOT FRAME x ${f.n}`, "WASHER");
+  draw(gnd, dxG, `GROUND FRAME x ${f.n}`, "COLLAR");
+  const w = dxG + gx0 + gndW + P, h = zTop - Math.min(...all.map((q) => q[1])) + 2 * P + 18;
+  const out: Drawing = { w, h, prims, caption: `${def.name} - frames, 1:1 (circles: hoops at the bends; the axis is to the left of each frame)` };
+  return fitsTiles(out) ? out : null;
+}
+
 // ---------------------------------------------------------------- sheet-metal flat patterns
 
 /** Overlap flap drawn dashed along one straight edge of a sector, for a soldered lap seam (mm). */
@@ -325,6 +354,7 @@ export function templateKind(def: AntennaDef, d: Design): TemplateKind {
   if (boomMarks(d)) return "strip";
   if (d.sheets?.length) return sheetDrawings(def, d).length ? "sheet" : "none";
   if (def.id === "helix" && helixDrawing(def, d)) return "wire";
+  if (frameDrawing(def, d)) return "wire";
   return wireDrawing(def, d) ? "wire" : "none";
 }
 
@@ -341,6 +371,8 @@ export function templatePages(def: AntennaDef, d: Design, mirror: boolean): Page
   }
   const hx = def.id === "helix" ? helixDrawing(def, d) : null;
   if (hx) return layout([hx], `${name}: 1:1 winding template`, "Cut it out, tape the tiles together, wrap it round the former printed side out and wind the wire along the lines.");
+  const fd = frameDrawing(def, d);
+  if (fd) return layout([fd], `${name}: 1:1 frame template`, "Bend every frame over its drawing: all frames of a side must match it. Lines are drawn at the wire diameter.");
   const w = wireDrawing(def, d);
   return w ? layout([w], `${name}: 1:1 template`, "Bend the wire over the drawing. Lines are drawn at the wire diameter; FEED marks the feed point.") : [];
 }
@@ -361,7 +393,7 @@ export function templateSVG(def: AntennaDef, d: Design, mirror: boolean): string
     } else if (d.sheets?.length) {
       ds.push(...sheetDrawings(def, d));
     } else {
-      const w = (def.id === "helix" && helixDrawing(def, d)) || wireDrawing(def, d);
+      const w = (def.id === "helix" && helixDrawing(def, d)) || frameDrawing(def, d) || wireDrawing(def, d);
       if (w) ds.push(w);
     }
   }

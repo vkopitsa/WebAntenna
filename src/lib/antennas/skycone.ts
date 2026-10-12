@@ -8,7 +8,7 @@ import type { IdealCurrents } from "../idealcurrents";
 import { fmt, wavelength } from "../rf";
 import { v } from "../geom";
 import { band, BANDS } from "./common";
-import { SKYCONE_21, SKYCONE_7, SKYCONE_8 } from "./skycone.data";
+import { SKYCONE_21, SKYCONE_7, SKYCONE_8, SKYCONE_W16 } from "./skycone.data";
 
 export interface SkyconeTable {
   /** Design band (Hz) the profile and the table belong to. */
@@ -29,6 +29,8 @@ export interface SkyconeTable {
   /** Surface currents for the Radiation view: segments (ρ0, z0, ρ1, z1) in metres and, per frequency (ratio to fLo),
    *  the total axial current at each segment's middle as re, im pairs (V = 1 at the port). */
   cur: { seg: number[][]; f: number[]; i: number[][] };
+  /** Wire cage (NEC-2 table): n frames of wire radius r, hub rings of radius hub where the frames meet the axis (m). */
+  cage?: { n: number; r: number; hub: number };
 }
 
 /** Facets round the axis for the drawing and CAD (each facet is a planar trapezoid). */
@@ -71,6 +73,30 @@ function sheetOf(q: ReturnType<typeof segments>[number]): Sheet {
 }
 
 const at = (r: number, z: number, ph: number): Vec3 => v(r * Math.cos(ph), r * Math.sin(ph), z);
+
+/** Performance over the user's bands, from the table. */
+function tablePerf(t: SkyconeTable, bands: [number, number][], fLow: number, swrLabel: string) {
+  let worst = 0, gMin = Infinity, gSum = 0, gN = 0;
+  for (const [a, b] of bands) {
+    for (let i = 0; i <= 40; i++) {
+      const f = a * (b / a) ** (i / 40);
+      const z = skyconeZ(t, fLow, f);
+      if (!z) continue;
+      const gm = Math.hypot(z.r - 50, z.x) / Math.hypot(z.r + 50, z.x);
+      worst = Math.max(worst, (1 + gm) / (1 - gm));
+      const gf = skyconeGain(t, fLow, f);
+      for (let el = 15; el <= 50; el += 5) { const x = gf(((90 - el) * Math.PI) / 180); gMin = Math.min(gMin, x); gSum += 10 ** (x / 10); gN++; }
+    }
+  }
+  const fTop = fLow * (t.fHi / t.fLo);
+  return [
+    { label: swrLabel, value: worst > 0 ? fmt(worst, 2) : "—" },
+    { label: "Gain at 15–50° elevation (mean / lowest)", value: gN ? `${fmt(10 * Math.log10(gSum / gN), 1)} / ${fmt(gMin, 1)} dBi` : "—" },
+    { label: "Design range (SWR ≤ 2 by the model)", value: `${fmt(fLow / 1e6, 0)}–${fmt(fTop / 1e6, 0)} MHz` },
+    { label: "Pattern", value: "Omni, beam tilted up" },
+    { label: "Polarisation", value: "Vertical" },
+  ];
+}
 
 /** Linear interpolation in log f between the table rows; values outside the table are clamped to its ends. */
 function bracket(t: SkyconeTable, u: number): [number, number, number] {
@@ -116,12 +142,13 @@ export function skyconeCurrents(defId: string, d: Design): IdealCurrents | null 
   let k = 0;
   t.cur.f.forEach((x, i) => { if (Math.abs(Math.log(x / u)) < Math.abs(Math.log(t.cur.f[k] / u))) k = i; });
   const I = t.cur.i[k], els: CurrentElement[] = [], segs: number[] = [], ir: number[] = [], ii: number[] = [];
+  const ring = t.cage?.n ?? RING;                     // a wire cage: on its frames
   t.cur.seg.forEach(([r0, z0, r1, z1], j) => {
-    for (let m = 0; m < RING; m++) {
-      const ph = (2 * Math.PI * m) / RING, c = Math.cos(ph), sn = Math.sin(ph);
+    for (let m = 0; m < ring; m++) {
+      const ph = (2 * Math.PI * m) / ring, c = Math.cos(ph), sn = Math.sin(ph);
       const p: Vec3 = [r0 * s * c, r0 * s * sn, z0 * s], q: Vec3 = [r1 * s * c, r1 * s * sn, z1 * s];
-      const cr = I[2 * j] / RING, ci = I[2 * j + 1] / RING;
-      els.push({ dl: [q[0] - p[0], q[1] - p[1], q[2] - p[2]], mid: [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2, (p[2] + q[2]) / 2], cr, ci, r: 0.5e-3 * s });
+      const cr = I[2 * j] / ring, ci = I[2 * j + 1] / ring;
+      els.push({ dl: [q[0] - p[0], q[1] - p[1], q[2] - p[2]], mid: [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2, (p[2] + q[2]) / 2], cr, ci, r: (t.cage?.r ?? 0.5e-3) * s });
       segs.push(...p, ...q);
       ir.push(cr); ii.push(ci);
     }
@@ -171,19 +198,6 @@ function build(t: SkyconeTable, bandsP: Parameters<typeof band>[0], sleeve = fal
   if (strips.length) tables.push({ title: "Strips (roll into a cylinder)", columns: [{ label: "Part", kind: "text" }, { label: "Length (round)", kind: "len" }, { label: "Width", kind: "len" }], rows: strips.map((x) => x.kind === "strip" ? [x.label, x.w, x.h] : []) });
   const discs = sheets.filter((x) => x.kind === "disc");
   if (discs.length) tables.push({ title: "Discs and rings", columns: [{ label: "Part", kind: "text" }, { label: "Outer diameter", kind: "len" }, { label: "Hole diameter", kind: "len" }], rows: discs.map((x) => x.kind === "disc" ? [x.label, x.d, x.hole] : []) });
-  // performance over the user's bands, from the table
-  let worst = 0, gMin = Infinity, gSum = 0, gN = 0;
-  for (const [a, b] of bands) {
-    for (let i = 0; i <= 40; i++) {
-      const f = a * (b / a) ** (i / 40);
-      const z = skyconeZ(t, fLow, f);
-      if (!z) continue;
-      const gm = Math.hypot(z.r - 50, z.x) / Math.hypot(z.r + 50, z.x);
-      worst = Math.max(worst, (1 + gm) / (1 - gm));
-      const gf = skyconeGain(t, fLow, f);
-      for (let el = 15; el <= 50; el += 5) { const x = gf(((90 - el) * Math.PI) / 180); gMin = Math.min(gMin, x); gSum += 10 ** (x / 10); gN++; }
-    }
-  }
   const f = Math.sqrt(fLow * Math.min(fHigh, fTop));
   return {
     wires, plates, sheets,
@@ -198,13 +212,7 @@ function build(t: SkyconeTable, bandsP: Parameters<typeof band>[0], sleeve = fal
       ...(skirt ? [{ key: "S", label: "Ground skirt length", value: Math.abs(skirt.b[1] - skirt.a[1]), at: [v(skirt.a[0], 0, skirt.a[1]), v(skirt.b[0], 0, skirt.b[1])] as [Vec3, Vec3] }] : []),
     ],
     tables,
-    perf: [
-      { label: "Worst SWR in your bands (precomputed MoM, no cable)", value: worst > 0 ? fmt(worst, 2) : "—" },
-      { label: "Gain at 15–50° elevation (mean / lowest)", value: gN ? `${fmt(10 * Math.log10(gSum / gN), 1)} / ${fmt(gMin, 1)} dBi` : "—" },
-      { label: "Design range (SWR ≤ 2 by the model)", value: `${fmt(fLow / 1e6, 0)}–${fmt(fTop / 1e6, 0)} MHz` },
-      { label: "Pattern", value: "Omni, beam tilted up" },
-      { label: "Polarisation", value: "Vertical" },
-    ],
+    perf: tablePerf(t, bands, fLow, "Worst SWR in your bands (precomputed MoM, no cable)"),
     notes: [
       "Hot element (cones, rim, lid) on the coax centre pin, ground cone on the coax jacket. Hold it by the coax with the cones up: the beam is tilted toward the sky (15–50° elevation).",
       "The shape is fixed (it was optimised as a whole); all dimensions scale with your lowest frequency. The Simulation tab shows the precomputed body-of-revolution MoM sweep of this shape, scaled to your size.",
@@ -216,6 +224,139 @@ function build(t: SkyconeTable, bandsP: Parameters<typeof band>[0], sleeve = fal
       "Full study, build steps, tolerances and solver checks: docs/FPV-DETECTOR-ANTENNA.md in the project repository.",
     ],
     necSupported: false,
+    f,
+    sweeps: [{ start: fLow, stop: Math.max(fHigh, fLow * 1.5), steps: 101 }],
+  };
+}
+
+// ---------------------------------------------------------------- wire cage
+
+type P2 = [number, number];
+
+/** Frame paths (ρ, z) of the cage, as tools/wideband-antenna/wirecage.py builds them: the hot frame from the axis at
+ *  the washer height along the washer, cones, rim and lid; the ground frame from the axis at the coax end along the
+ *  ground cone and skirt (points inside 2.5 mm are the coax). Then each end on the axis moves out to the hub ring. */
+export function cageFrames(t: SkyconeTable, s: number): { hot: P2[]; ground: P2[]; hubs: [P2, P2][] } {
+  const push = (out: P2[], q: P2) => { const l = out[out.length - 1]; if (Math.hypot(q[0] - l[0], q[1] - l[1]) > 1e-5 * s) out.push(q); };
+  const hot: P2[] = [[0, t.gap * s]];
+  for (const pl of t.upper.length > 1 ? t.upper.slice(1) : t.upper) for (const q of pl) push(hot, [q[0] * s, q[1] * s]);
+  if (hot[hot.length - 1][0] < 1.5e-3 * s) hot[hot.length - 1] = [0, hot[hot.length - 1][1]];     // a closed lid ends on the axis
+  const ground: P2[] = [[0, 0]];
+  for (const pl of t.lower) for (const q of pl) if (q[0] > 2.5e-3) push(ground, [q[0] * s, q[1] * s]);
+  const R = t.cage!.hub * s, hubs: [P2, P2][] = [];
+  const hubbed = (path: P2[]): P2[] => {
+    let out = path.slice();
+    for (const first of [true, false]) {
+      const i = first ? 0 : out.length - 1, q = out[i];
+      if (q[0] > 1e-12) continue;
+      const nb = first ? out[1] : out[out.length - 2];
+      let ring: P2;
+      if (nb[0] > R) { ring = [R, q[1] + (R / nb[0]) * (nb[1] - q[1])]; out[i] = ring; }
+      else { out = first ? out.slice(1) : out.slice(0, -1); ring = first ? out[0] : out[out.length - 1]; }
+      hubs.push([[0, q[1]], ring]);
+    }
+    return out;
+  };
+  return { hot: hubbed(hot), ground: hubbed(ground), hubs };
+}
+
+/** Hoops: every frame point at ρ ≥ 4 mm (scaled) and the hub rings. */
+const hoopsOf = (path: P2[], s: number) => path.filter((q) => q[0] >= 4e-3 * s);
+
+const pathLen = (p: P2[]) => p.slice(1).reduce((a, q, i) => a + Math.hypot(q[0] - p[i][0], q[1] - p[i][1]), 0);
+const bendsOf = (p: P2[]) => p.slice(1, -1).filter((q, i) => {
+  const a = p[i], b = p[i + 2];
+  const u = [q[0] - a[0], q[1] - a[1]], w = [b[0] - q[0], b[1] - q[1]];
+  return Math.abs(u[0] * w[1] - u[1] * w[0]) > 0.017 * Math.hypot(...u) * Math.hypot(...w);
+}).length;
+
+/** The wire cage: the compact shape as n bent wire frames per side, hoops at the kinks, hub washers at the axis. */
+function buildCage(t: SkyconeTable, bandsP: Parameters<typeof band>[0]): Design {
+  const { bands } = band(bandsP);
+  const fLow = Math.min(...bands.map((b) => b[0])), fHigh = Math.max(...bands.map((b) => b[1]));
+  const fTop = fLow * (t.fHi / t.fLo), s = t.fLo / fLow;
+  const { n, r: r0 } = t.cage!, r = r0 * s, g = t.gap * s;
+  const fr = cageFrames(t, s);
+  const ang = Array.from({ length: n }, (_, k) => (2 * Math.PI * k) / n);
+  const wires: Wire[] = [
+    { a: v(0, 0, 0), b: v(0, 0, g), r: 0.46e-3, group: "feed" },                       // pin gap
+  ];
+  const sides = [{ path: fr.hot, group: "driven" as const, tag: "H" }, { path: fr.ground, group: "ground" as const, tag: "G" }];
+  for (const { path, group, tag } of sides) {
+    ang.forEach((ph, k) => path.slice(1).forEach((q, i) => wires.push({ a: at(path[i][0], path[i][1], ph), b: at(q[0], q[1], ph), r, group, tag: k === 0 && i === 0 ? tag : undefined })));
+    const hub = fr.hubs.find((h) => path.some((q) => q === h[1]));
+    for (const q of [...hoopsOf(path, s), ...(hub ? [hub[1]] : [])]) {
+      const rr = Math.min(r, (2 * q[0] * Math.sin(Math.PI / n)) / 4);
+      ang.forEach((ph, k) => wires.push({ a: at(q[0], q[1], ph), b: at(q[0], q[1], ang[(k + 1) % n]), r: rr, group }));
+    }
+  }
+  for (const [axis, ring] of fr.hubs) {
+    const group = axis[1] > 0 ? "driven" as const : "ground" as const;
+    for (let k = 0; k < n; k += Math.max(1, Math.floor(n / 4))) wires.push({ a: v(0, 0, axis[1]), b: at(ring[0], ring[1], ang[k]), r: Math.min(r, 0.5e-3 * s), group });
+  }
+  if (fr.hot[fr.hot.length - 1][0] < 1e-12) wires.push({ a: v(0, 0, g), b: v(0, 0, fr.hot[fr.hot.length - 1][1]), r, group: "driven" });
+  const all = [...fr.hot, ...fr.ground];
+  const zTop = Math.max(...all.map((q) => q[1])), zBot = Math.min(...all.map((q) => q[1]));
+  const rHot = Math.max(...fr.hot.map((q) => q[0])), rGnd = Math.max(...fr.ground.map((q) => q[0]));
+  wires.push({ a: v(0, 0, 0), b: v(0, 0, zBot - 5e-3), r: COAX_R, group: "feed", drawOnly: true });   // coax jacket
+  // physical frames start at the washer edge: drop a stub shorter than 0.5 mm next to the hub ring
+  const trim = (p: P2[]) => (p.length > 2 && Math.hypot(p[1][0] - p[0][0], p[1][1] - p[0][1]) < 0.5e-3 * s ? p.slice(1) : p);
+  const hotF = trim(fr.hot), gndF = trim(fr.ground);
+  const hoops = [...hoopsOf(fr.hot, s).map((q) => ({ q, what: "Hoop, hot side" })), ...hoopsOf(fr.ground, s).map((q) => ({ q, what: "Hoop, ground side" }))];
+  const hubHot = fr.hubs.find((h) => h[0][1] > 0), hubGnd = fr.hubs.find((h) => h[0][1] <= 0);
+  const washerD = 2 * Math.max(hubHot ? hubHot[1][0] : 0, hotF[0][0]);
+  const cuts: NonNullable<Design["cuts"]> = [
+    { what: "Hot frame (bend over the template)", qty: n, length: pathLen(hotF), dia: 2 * r, note: "Bends: see the template" },
+    { what: "Ground frame (bend over the template)", qty: n, length: pathLen(gndF), dia: 2 * r, note: "Bends: see the template" },
+    ...hoops.map(({ q, what }) => ({ what, qty: 1, length: 2 * Math.PI * q[0], dia: 2 * r, note: "Bend into a ring and solder the ends" })),
+  ];
+  const tables: Table[] = [
+    {
+      title: "Wire frames (bend over the 1:1 template)",
+      columns: [{ label: "Part", kind: "text" }, { label: "Quantity", kind: "num" }, { label: "Wire length", kind: "len" }, { label: "Bends", kind: "num" }, { label: "Wire diameter", kind: "len" }],
+      rows: [["Hot frame (bend over the template)", n, pathLen(hotF), bendsOf(hotF), 2 * r], ["Ground frame (bend over the template)", n, pathLen(gndF), bendsOf(gndF), 2 * r]],
+    },
+    {
+      title: "Hoops (soldered round the frames at every bend)",
+      columns: [{ label: "Part", kind: "text" }, { label: "Diameter", kind: "len" }, { label: "Height above the coax end", kind: "len" }, { label: "Wire length", kind: "len" }],
+      rows: hoops.map(({ q, what }) => [what, 2 * q[0], q[1], 2 * Math.PI * q[0]]),
+    },
+    {
+      title: "Hub washers (where the frames meet the axis)",
+      columns: [{ label: "Part", kind: "text" }, { label: "Outer diameter", kind: "len" }, { label: "Hole diameter", kind: "len" }, { label: "Height above the coax end", kind: "len" }],
+      rows: [
+        ...(hubHot ? [["Hot washer (on the centre pin)", washerD, 1.0e-3, g]] : []),
+        ...(hubGnd ? [["Ground collar (on the coax jacket)", 2 * hubGnd[1][0], 2 * COAX_R + 0.1e-3, hubGnd[1][1]]] : []),
+      ],
+    },
+  ];
+  const f = Math.sqrt(fLow * Math.min(fHigh, fTop));
+  return {
+    wires, plates: [], cuts,
+    frames: { hot: hotF, ground: gndF, n },
+    feed: { wire: 0, at: "center" },
+    dims: [
+      { label: "Wavelength at the lowest frequency", value: wavelength(fLow) },
+      { key: "H", label: "Overall height", value: zTop - zBot, at: [v(-rGnd, 0, zBot), v(-rGnd, 0, zTop)] },
+      { key: "D", label: "Hot element diameter", value: 2 * rHot, at: [v(-rHot, 0, zTop), v(rHot, 0, zTop)] },
+      { key: "G", label: "Ground cone diameter", value: 2 * rGnd, at: [v(-rGnd, 0, zBot), v(rGnd, 0, zBot)] },
+      { key: "g", label: "Gap: coax end to the washer", value: g, at: [v(0, 0, 0), v(0, 0, g)] },
+      { label: "Wire diameter", value: 2 * r },
+    ],
+    tables,
+    perf: [
+      ...tablePerf(t, bands, fLow, "Worst SWR in your bands (precomputed NEC-2, no cable)"),
+      { label: "Wire frames (hot + ground)", value: `${n} + ${n}` },
+    ],
+    notes: [
+      "The compact sky-tilted bicone built from wire: 16 bent frames per side follow the solid shape, with a wire hoop soldered round them at every bend. With 16 frames it matches the solid version (fewer frames lose the top of the band). Hold it by the coax with the cones up: the beam is tilted toward the sky (15–50° elevation).",
+      "The shape is fixed (it was optimised as a whole); all dimensions scale with your lowest frequency, the wire diameter too. The Simulation tab shows the precomputed NEC-2 sweep of this cage (Ø1 mm wire at 960 MHz), scaled to your size.",
+      "Feed through UT-141 (RG-402) semi-rigid coax: the hot frames are soldered round a washer on the centre pin (keep the listed gap above the coax end), the ground frames round a collar on the coax jacket.",
+      "Ferrite sleeve required: stack about 6 ferrite beads (material 43 or 61, about 150 Ω each) on the first 11 cm of coax below the ground cone. This small antenna couples strongly to the cable: with one bead a 15–35 cm cable still lifts the SWR to 2.7 at the bottom of the band, with the sleeve it stays below 1.9.",
+      ...(fHigh > fTop * 1.001 ? ["Warning: your highest band is above this shape's range; the SWR there is not computed. Lower the bands or use the 21:1 version."] : []),
+      "Full study, build steps, tolerances and solver checks: docs/FPV-DETECTOR-ANTENNA.md in the project repository.",
+    ],
+    necSupported: true,
     f,
     sweeps: [{ start: fLow, stop: Math.max(fHigh, fLow * 1.5), steps: 101 }],
   };
@@ -259,5 +400,17 @@ export const skycone21: AntennaDef = {
   build: (p) => build(SKYCONE_21, p),
 };
 
+export const skyconecage: AntennaDef = {
+  id: "skyconecage",
+  name: "Sky-tilted capped bicone, wire cage (6.7:1)",
+  category: "Broadband",
+  traits: { pol: "vertical", pattern: "omni" },
+  summary: "The compact bicone bent from Ø1 mm wire instead of sheet: 16 frames per side and a few hoops, 960 MHz–6.4 GHz at Ø72 × 75 mm, beam tilted up. Needs a ferrite sleeve (6 beads) on the coax.",
+  multiband: "broadband",
+  params: PARAMS,
+  defaults: { bands: "960e6-6400e6" },
+  build: (p) => buildCage(SKYCONE_W16, p),
+};
+
 /** Tabulated results per type id (simulate.ts). */
-export const SKYCONE_TABLES: Record<string, SkyconeTable> = { skycone7: SKYCONE_7, skycone8: SKYCONE_8, skycone21: SKYCONE_21 };
+export const SKYCONE_TABLES: Record<string, SkyconeTable> = { skycone7: SKYCONE_7, skycone8: SKYCONE_8, skycone21: SKYCONE_21, skyconecage: SKYCONE_W16 };

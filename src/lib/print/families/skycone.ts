@@ -1,7 +1,8 @@
 import type { Manifold, ManifoldToplevel } from "manifold-3d";
 import type { Design } from "../../types";
 import { FAIL, msg, PartError, type PartSpec } from "../parts";
-import { MAX_SIZE, mm } from "../rules";
+import { CLEAR, MAX_SIZE, mm } from "../rules";
+import { channel } from "../shapes";
 
 // Sky-tilted capped bicone: the home-build kit of docs/FPV-DETECTOR-BUILD.md (the same parts as
 // tools/wideband-antenna/print_parts.py). Geometry comes from the design's sheet facets, so the parts follow the band.
@@ -26,6 +27,12 @@ export const SKYCONE_STRINGS = [
   "Flat pattern of one sheet part at 1:1, in {0} pieces that butt together (too long for one piece): tape them edge to edge, then scribe round them.",
   "Covers the antenna: a 1.2 mm tube from the ground rim to the lid, closed on top, printed in {0} pieces that glue together on their laps (too large for one piece). Its top is glued to the lid and its lower edge to the cup or the ground rim.",
   "Tube for the coax under the cup, with a 12 cm pocket inside for the ferrite sleeve (6 beads up to Ø11 mm).",
+  "Covers the antenna: a 1.2 mm tube from the ground hoop to the top hoops, closed on top. Its top rests on the top hoops and its lower edge slides over the cup, so the cover and cup hold the cage. Not simulated with the wire cage: expect a shift of about 0.1 in SWR, as with the solid version.",
+  "Its conical top carries the ground frames: one groove per frame sets their angle and spacing. The cover slides over its wall; the handle plugs into its socket.",
+  "Frame bending jig",
+  "Grooves with the exact shape of one hot frame and one ground frame: press the wire into a groove and bend it at the corners, so that every frame comes out the same.",
+  "Frame spacing ring",
+  "Holds the hot frames at equal angles round the rim while you solder the hoops: one notch per frame. It lifts off upward when the cage is done.",
 ];
 
 /** Cutting-template titles by sheet label (the labels come from antennas/skycone.ts). */
@@ -76,6 +83,26 @@ export const SKYCONE_HOWTO = {
     "Slide it onto the coax end with the centre pin in its slot, rest the washer (with the feed cone) on it and solder the pin to the washer from above.",
     "Let it cool and slide the fork out sideways.",
   ],
+  coverCage: [
+    "Print it in PETG (or ASA), top down, with 3 walls (1.2 mm) and no infill.",
+    "When the antenna is finished and measured, lower the cover over the cage until its top rests on the top hoops.",
+    "Glue or tape its lower edge to the cup wall and let it cure upright on the stand.",
+  ],
+  cupCage: [
+    "Print it on its flat bottom, cradle up, 3 walls and 15–20 % infill.",
+    "Thread the coax up through the cup, solder the collar onto its jacket at the listed height, lay the ground frames in the grooves with their inner ends on the collar and solder them to it.",
+    "Solder the ground hoops round the frames at their bends, then fix the frames in the grooves with a few dots of silicone and glue the handle into the socket.",
+  ],
+  jig: [
+    "Print it flat, grooves up, with 100 % infill.",
+    "Press a straight piece of wire (cut length from the list) into a groove from one end and bend it at each corner with flat-nose pliers, so that it lies flat in the groove all along.",
+    "Make all the frames of a side in the same groove and check each one against it before you solder.",
+  ],
+  ring: [
+    "Print it flat.",
+    "Solder the hot frames to the washer at equal angles, put the ring over the cage at the rim and click each frame into its notch.",
+    "Solder the hoops at every bend, then lift the ring off upward.",
+  ],
   template: [
     "Print it flat (1.2 mm, 100 % infill).",
     "Hold it on the sheet and scribe round it, including the lap strip; mark the groove line on the lap.",
@@ -96,6 +123,7 @@ interface Seg { a: Pt; b: Pt; label: string; hot: boolean; kind: "sector" | "str
 
 /** The profile back from the design: each sheet's first facet runs from (ρa, za) to (ρb, zb) at φ = 0 (mm). */
 export function skyconeProfile(d: Design) {
+  if (d.frames) return cageProfile(d);
   const segs: Seg[] = [];
   (d.sheets ?? []).forEach((sh, k) => {
     const pl = d.plates.find((q) => q.sheet === k);
@@ -118,6 +146,17 @@ export function skyconeProfile(d: Design) {
   const cones = walk.slice(0, kRu + 1);
   const pin = d.wires[0];
   return { segs, walk, cones, ground, Ru, zLid, Rg, zGrim, gap: mm(Math.abs(pin.b[2] - pin.a[2])) };
+}
+
+/** The same outline from a wire cage's frames (mm): the hot frame from the washer edge, the ground frame from the collar. */
+function cageProfile(d: Design) {
+  const f = d.frames!;
+  const walk: Pt[] = f.hot.map(([r, z]) => [mm(r), mm(z)]), ground: Pt[] = f.ground.map(([r, z]) => [mm(r), mm(z)]);
+  const Ru = Math.max(...walk.map((p) => p[0])), zLid = Math.max(...walk.map((p) => p[1]));
+  const Rg = Math.max(...ground.map((p) => p[0])), zGrim = Math.min(...ground.map((p) => p[1]));
+  const kRu = walk.findIndex((p) => p[0] >= Ru - 1e-6);
+  const pin = d.wires[0];
+  return { segs: [] as Seg[], walk, cones: walk.slice(0, kRu + 1), ground, Ru, zLid, Rg, zGrim, gap: mm(Math.abs(pin.b[2] - pin.a[2])) };
 }
 
 const interp = (pts: Pt[], r: number): number => {
@@ -203,9 +242,24 @@ function coverPieces(M: ManifoldToplevel, rin: number, z0: number, zInTop: numbe
   return out;
 }
 
+/** Pin-gap fork: a plate as thick as the gap with a slot for the centre pin and a thicker grip. */
+const forkShape = (M: ManifoldToplevel, gap: number): Manifold => M.Manifold.cube([40, 14, gap])
+  .subtract(M.Manifold.cube([10, 1.4, gap + 2]).translate([-0.01, 6.3, -1]))
+  .subtract(M.Manifold.cylinder(gap + 2, 0.9, 0.9, 24).translate([10, 7, -1]))
+  .add(M.Manifold.cube([20, 14, 4]).translate([20, 0, 0]));
+
+/** One groove per frame along a (ρ, z) path (mm), centred on the wire: n copies round the axis. */
+function frameGrooves(M: ManifoldToplevel, path: Pt[], n: number, wireD: number): Manifold {
+  const one = M.Manifold.union(path.slice(1).map((q, i) => channel(M, [path[i][0], 0, path[i][1]], [q[0], 0, q[1]], wireD)));
+  return M.Manifold.union(Array.from({ length: n }, (_, k) => one.rotate([0, 0, (360 * k) / n])));
+}
+
 /** Every printed part of the kit; `sheetT` is the sheet thickness (mm); `sleeve`: a long handle for a 6-bead ferrite sleeve. */
 export function skyconeParts(d: Design, sheetT = 0.3, sleeve = false): PartSpec[] {
   const g = skyconeProfile(d);
+  // a wire cage: the frame wire's centre is on the profile, so the plastic keeps half a wire diameter off it
+  const cage = d.frames, wireD = cage ? mm(2 * d.wires[1].r) : 0;
+  if (cage) sheetT = wireD / 2;
   const L = (x: number) => ({ len: x / 1000 });
   const rin = Math.max(g.Ru, g.Rg) + 2 + sheetT;           // cover inside radius: 2 mm outside the widest rim
   const zInTop = g.zLid + sheetT + 0.1, zCov0 = g.zGrim - 8;
@@ -217,19 +271,20 @@ export function skyconeParts(d: Design, sheetT = 0.3, sleeve = false): PartSpec[
   const split = coverSplit(rin, zInTop + WALL_C - zCov0);
 
   parts.push({
-    id: "shell", title: SKYCONE_STRINGS[0], use: "holder", qty: 1, howTo: SKYCONE_HOWTO.cover.map((s) => msg(s)),
-    purpose: split.n * split.k > 1 ? msg(SKYCONE_STRINGS[17], split.n * split.k) : msg(SKYCONE_STRINGS[1]),
+    id: "shell", title: SKYCONE_STRINGS[0], use: "holder", qty: 1, howTo: (cage ? SKYCONE_HOWTO.coverCage : SKYCONE_HOWTO.cover).map((s) => msg(s)),
+    purpose: split.n * split.k > 1 ? msg(SKYCONE_STRINGS[17], split.n * split.k) : msg(SKYCONE_STRINGS[cage ? 19 : 1]),
     build: (M) => coverPieces(M, rin, zCov0, zInTop),
   });
   if (2 * rWallO <= MAX_SIZE) parts.push({
-    id: "skycone-cup", title: SKYCONE_STRINGS[2], use: "holder", qty: 1, purpose: msg(SKYCONE_STRINGS[3]), howTo: SKYCONE_HOWTO.cup.map((s) => msg(s)),
+    id: "skycone-cup", title: SKYCONE_STRINGS[2], use: "holder", qty: 1, purpose: msg(SKYCONE_STRINGS[cage ? 20 : 3]), howTo: (cage ? SKYCONE_HOWTO.cupCage : SKYCONE_HOWTO.cup).map((s) => msg(s)),
     build: (M) => {
       tooSmall();
       const slope = Math.atan2(g.ground[0][1] - g.ground[1][1], g.ground[1][0] - g.ground[0][0]);
-      const dz = sheetT / Math.cos(slope) + 0.1;
+      const dz = (cage ? 0 : sheetT / Math.cos(slope)) + 0.1;           // a cage: the wires lie half sunk in their grooves
       const rs = [...new Set([rBore, rWallI, ...g.ground.map((p) => p[0]).filter((r) => r > rBore && r < rWallI)])].sort((a, b) => a - b);
       const cradle = rs.map((r): Pt => [r, interp(g.ground, r) - dz]);
-      return [centre(revolve(M, [[rBore, zCup0 + 12], [rSock, zCup0 + 12], [rSock, zCup0], [rWallO, zCup0], [rWallO, g.zGrim + 0.8], [rWallI, g.zGrim + 0.8], ...cradle.reverse()]))];
+      const cup = revolve(M, [[rBore, zCup0 + 12], [rSock, zCup0 + 12], [rSock, zCup0], [rWallO, zCup0], [rWallO, g.zGrim + 0.8], [rWallI, g.zGrim + 0.8], ...cradle.reverse()]);
+      return [centre(cage ? cup.subtract(frameGrooves(M, g.ground, cage.n, wireD)) : cup)];
     },
   });
   parts.push({
@@ -250,6 +305,41 @@ export function skyconeParts(d: Design, sheetT = 0.3, sleeve = false): PartSpec[
         .subtract(M.Manifold.cube([30, 6, 40]).translate([0, -3, 4]))];
     },
   });
+  if (cage) {
+    parts.push({
+      id: "skycone-fork", title: SKYCONE_STRINGS[12], use: "jig", qty: 1, purpose: msg(SKYCONE_STRINGS[13], L(g.gap)), howTo: SKYCONE_HOWTO.fork.map((s) => msg(s)),
+      build: (M) => [forkShape(M, g.gap)],
+    });
+    parts.push({
+      id: "skycone-bend", title: SKYCONE_STRINGS[21], use: "jig", qty: 1, purpose: msg(SKYCONE_STRINGS[22]), howTo: SKYCONE_HOWTO.jig.map((s) => msg(s)),
+      build: (M) => {
+        // both frames flat in the plate's top face (x = ρ, y = z), the ground frame beside the hot one
+        const P = 4, T = Math.max(3, wireD + 2);
+        const lay = (pts: Pt[], dx: number, dy: number): Pt[] => pts.map(([r, z]) => [r + dx, z + dy]);
+        const xs = (pts: Pt[]) => pts.map((p) => p[0]), ys = (pts: Pt[]) => pts.map((p) => p[1]);
+        const hot = lay(g.walk, P - Math.min(...xs(g.walk)), P - Math.min(...ys(g.walk)));
+        const gx0 = Math.max(...xs(hot)) + 2 * P;
+        const gnd = lay(g.ground, gx0 - Math.min(...xs(g.ground)), P - Math.min(...ys(g.ground)));
+        const W = Math.max(...xs(gnd)) + P, H = Math.max(...ys(hot), ...ys(gnd)) + P;
+        if (W > MAX_SIZE || H > MAX_SIZE) throw new PartError(msg("Too large to print in one piece: {0}", { len: Math.max(W, H) / 1000 }));
+        const groove = (pts: Pt[]) => pts.slice(1).map((q, i) => channel(M, [pts[i][0], pts[i][1], 0], [q[0], q[1], 0], wireD)).concat(pts.map((q) => M.Manifold.sphere((wireD + CLEAR) / 2, 16).translate([q[0], q[1], 0])));
+        return [M.Manifold.cube([W, H, T]).translate([0, 0, -T]).subtract(M.Manifold.union([...groove(hot), ...groove(gnd)]))];
+      },
+    });
+    if (2 * (g.Ru + 8) <= MAX_SIZE) parts.push({
+      id: "skycone-ring", title: SKYCONE_STRINGS[23], use: "jig", qty: 1, purpose: msg(SKYCONE_STRINGS[24]), howTo: SKYCONE_HOWTO.ring.map((s) => msg(s)),
+      build: (M) => {
+        const h = 5, rIn = g.Ru, rOut = g.Ru + 6;
+        const ring = M.Manifold.cylinder(h, rOut, rOut, SEG).subtract(M.Manifold.cylinder(h + 2, rIn, rIn, SEG).translate([0, 0, -1]));
+        const notches = Array.from({ length: cage.n }, (_, k) => {
+          const t = (2 * Math.PI * k) / cage.n;
+          return M.Manifold.cylinder(h + 2, (wireD + CLEAR) / 2, (wireD + CLEAR) / 2, 16).translate([rIn * Math.cos(t), rIn * Math.sin(t), -1]);
+        });
+        return [ring.subtract(M.Manifold.union(notches))];
+      },
+    });
+    return parts;
+  }
   if (2 * g.Ru <= MAX_SIZE && g.zLid - g.walk[0][1] <= MAX_SIZE) parts.push({
     id: "skycone-former", title: SKYCONE_STRINGS[8], use: "former", qty: 1, purpose: msg(SKYCONE_STRINGS[9]), howTo: SKYCONE_HOWTO.former.map((s) => msg(s)),
     build: (M) => {
@@ -275,10 +365,7 @@ export function skyconeParts(d: Design, sheetT = 0.3, sleeve = false): PartSpec[
   });
   parts.push({
     id: "skycone-fork", title: SKYCONE_STRINGS[12], use: "jig", qty: 1, purpose: msg(SKYCONE_STRINGS[13], L(g.gap)), howTo: SKYCONE_HOWTO.fork.map((s) => msg(s)),
-    build: (M) => [M.Manifold.cube([40, 14, g.gap])
-      .subtract(M.Manifold.cube([10, 1.4, g.gap + 2]).translate([-0.01, 6.3, -1]))
-      .subtract(M.Manifold.cylinder(g.gap + 2, 0.9, 0.9, 24).translate([10, 7, -1]))
-      .add(M.Manifold.cube([20, 14, 4]).translate([20, 0, 0]))],
+    build: (M) => [forkShape(M, g.gap)],
   });
   // cutting templates: every cone (annular sector) and the lid; a pattern larger than the bed comes in butting pieces,
   // and one that cannot be split to fit (a radial extent past the bed) is left to the paper template

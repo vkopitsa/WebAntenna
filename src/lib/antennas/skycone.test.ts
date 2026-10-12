@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ANTENNA_BY_ID } from "./index";
-import { SKYCONE_8 } from "./skycone.data";
+import { SKYCONE_8, SKYCONE_W16 } from "./skycone.data";
 import { skyconeCurrents, skyconeGain, skyconeZ } from "./skycone";
 import { radiationEligible, s11, simulate } from "../simulate";
 import { partsFor } from "../print";
@@ -33,6 +33,28 @@ describe("sky-tilted capped bicones", () => {
     const parts = partsFor("skycone7", def.defaults, d);
     expect(parts.map((q) => q.id)).toEqual(expect.arrayContaining(["shell", "skycone-cup", "skycone-handle", "skycone-former", "skycone-tpl-1"]));
     expect(parts.find((q) => q.id === "skycone-handle")!.purpose.s).toContain("ferrite sleeve");
+  });
+
+  it("wire cage at 960 MHz is design W16: the NEC-2 model's 280 wires, Ø71.5 × 74.7 mm, SWR < 2, frames and jigs", () => {
+    const def = ANTENNA_BY_ID.skyconecage, p = { bands: "960e6-6400e6" }, d = def.build(p);
+    // tools/wideband-antenna/wirecage.py at 16 frames of Ø1 mm: 128 frame wires, 144 hoop chords, 8 hub spokes (+ the pin gap)
+    const live = d.wires.filter((w) => !w.drawOnly);
+    expect(live.length).toBe(281);
+    expect(live.reduce((a, w) => a + Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1], w.b[2] - w.a[2]), 0) * 1e3).toBeCloseTo(3146.0, 0);
+    expect(dim("skyconecage", "960e6-6400e6", "Overall height") * 1e3).toBeCloseTo(74.7, 1);
+    expect(dim("skyconecage", "960e6-6400e6", "Hot element diameter") * 1e3).toBeCloseTo(71.5, 1);
+    expect(d.necSupported).toBe(true);
+    const r = simulate(def, p, d);
+    expect(r.method).toBe("analytic");
+    expect(Math.max(...r.z.filter((q) => q.f >= 960e6 && q.f <= 6.4e9).map((q) => s11(q, 50).swr))).toBeLessThan(2);
+    expect(d.cuts!.find((c) => c.what.startsWith("Hot frame"))).toMatchObject({ qty: 16 });
+    expect(d.cuts!.find((c) => c.what.startsWith("Hot frame"))!.length * 1e3).toBeCloseTo(86.4, 0);
+    const parts = partsFor("skyconecage", def.defaults, d).map((q) => q.id);
+    expect(parts).toEqual(expect.arrayContaining(["shell", "skycone-cup", "skycone-handle", "skycone-bend", "skycone-ring"]));
+    expect(parts).not.toContain("skycone-former");                  // trapped inside the cage by the lid hoops
+    expect(templatePages(def, d, false).length).toBe(1);
+    // Radiation view: the current sits on the 16 frames
+    expect(skyconeCurrents("skyconecage", d)!.els.length).toBe(16 * SKYCONE_W16.cur.seg.length);
   });
 
   it("the tabulated sweep: SWR ≤ 1.4 over 800 MHz – 6.4 GHz, beam above the horizon", () => {

@@ -111,6 +111,7 @@ const NOT_TRIMMED: Record<string, string> = {
   biquad: "The biquad is broadband (roughly 10 %): check the SWR across the band. The spacing to the reflector sets the match.",
   pagoda: "Not tuned by trimming: the board spacing sets the centre frequency (Baert's table: D1 grows about 0.15 mm and D2 about 0.24 mm per 100 MHz lower). Check the SWR across the band.",
   pcbloop: "Tune the small loop with the capacitors: Cs sets the resonance, Cp the match. A trimmer capacitor for Cs makes this easy.",
+  skyconecage: "Broadband: not tuned by trimming. The pin gap sets the top of the band and the rim height the bottom; check the SWR across the band.",
   skycone7: "Broadband: not tuned by trimming. The pin gap sets the top of the band and the rim height the bottom; check the SWR across the band.",
   skycone8: "Broadband: not tuned by trimming. The pin gap sets the top of the band and the rim height the bottom; check the SWR across the band.",
   skycone21: "Broadband: not tuned by trimming. The pin gap sets the top of the band and the rim height the bottom; check the SWR across the band.",
@@ -243,6 +244,7 @@ function cutWhat(pc: Piece, def: AntennaDef): string {
 }
 
 export function cutList(def: AntennaDef, d: Design, trimmedTags: Set<string>): CutRow[] {
+  if (d.cuts) return d.cuts.map((c) => ({ tag: "", what: M(c.what), qty: c.qty, length: c.length, cut: c.length, dia: c.dia, note: c.note ? M(c.note) : undefined }));
   const rows: CutRow[] = [];
   for (const pc of pieces(d)) {
     if (pc.group === "feed" || (pc.mech && pc.length < 5e-3)) continue;
@@ -326,7 +328,13 @@ export function bom(def: AntennaDef, d: Design, cuts: CutRow[]): BomRow[] {
       const s = plateSize(pl.pts);
       rows.push({ item: s.disc ? M("Metal disc Ø{0}", { len: s.a }) : M("Metal plate {0} × {1}", { len: s.a }, { len: s.b }), qty: M("{0} pc", 1), note: M(pl.label) });
     }
-    if (!d.sheets?.length) rows.push({ item: connector(d.f, false, false), qty: M("{0} pc", 1) });
+    if (d.frames) {
+      const washers = d.tables.find((t) => t.title.startsWith("Hub washers"))?.rows ?? [];
+      for (const w of washers) rows.push({ item: M("{0}: disc Ø{1}, hole Ø{2}", String(w[0]), { len: +w[1] }, { len: +w[2] }), qty: M("{0} pc", 1), note: M("Brass or copper, 0.3–0.5 mm: the frames are soldered round its edge") });
+      rows.push({ item: M("Semi-rigid coax UT-141 / RG-402 (Ø3.6 mm) with an SMA plug"), qty: M("{0} pc", 1), note: M("The ground collar is soldered onto its jacket") });
+      rows.push({ item: M("Ferrite beads for the coax (material 43 or 61, inner Ø ≥ 3.7 mm)"), qty: M("{0} pc", 6), note: M("Stacked on the first 11 cm of coax below the ground cone (ferrite sleeve)") });
+    }
+    if (!d.sheets?.length && !d.frames) rows.push({ item: connector(d.f, false, false), qty: M("{0} pc", 1) });
   }
   const fm = feedMatch(def, d);
   if (fm) rows.push({ item: fm, qty: M("{0} pc", 1) });
@@ -372,6 +380,10 @@ export function steps(d: Design, hasBoom: boolean, tunable: boolean): Msg[] {
     s.push(M("Print the 1:1 flat patterns, glue them onto the sheet and cut the parts out (tin snips, then file the edges)."));
     s.push(M("Roll each sector into its cone and each strip into its ring over a former, overlap or butt the seam and solder it along its length."));
     s.push(M("Solder the hot element together (washer, cones, rim, lid) and the ground cone with its skirt. Solder the coax jacket into the ground cone apex and the centre pin into the washer, keeping the listed gap."));
+  } else if (d.frames) {
+    s.push(M("Print the 1:1 frame template (or the bending jig) and bend every frame over it with flat-nose pliers: all frames of a side must be identical."));
+    s.push(M("Solder the washer onto the coax centre pin at the listed gap and the collar onto the coax jacket. Stand the frames round them at equal angles (the printed former and cup have one groove per frame) and solder each frame end to the washer or collar."));
+    s.push(M("Bend each hoop into a ring of the listed diameter and solder it round the frames at its bend, at every crossing. Keep the frames in their grooves while you do it."));
   } else {
     s.push(M("Cut every part to the cut length in the list. Driven parts are cut long so you can trim them."));
     if (hasBoom) s.push(M("Tape the 1:1 drilling strip to the boom, mark the element positions, then drill and fit the elements."));
@@ -483,6 +495,10 @@ export const BUILD_STRINGS = [
   "Clip-on ferrite for the coax (about 150 Ω at the lowest band)",
   "Ferrite beads for the coax (material 43 or 61, inner Ø ≥ 3.7 mm)",
   "Stacked on the first 11 cm of coax below the ground cone (ferrite sleeve)",
+  "Brass or copper, 0.3–0.5 mm: the frames are soldered round its edge", "The ground collar is soldered onto its jacket", "Bends: see the template", "Bend into a ring and solder the ends",
+  "Print the 1:1 frame template (or the bending jig) and bend every frame over it with flat-nose pliers: all frames of a side must be identical.",
+  "Solder the washer onto the coax centre pin at the listed gap and the collar onto the coax jacket. Stand the frames round them at equal angles (the printed former and cup have one groove per frame) and solder each frame end to the washer or collar.",
+  "Bend each hoop into a ring of the listed diameter and solder it round the frames at its bend, at every crossing. Keep the frames in their grooves while you do it.",
   "Print the 1:1 flat patterns, glue them onto the sheet and cut the parts out (tin snips, then file the edges).",
   "Roll each sector into its cone and each strip into its ring over a former, overlap or butt the seam and solder it along its length.",
   "Solder the hot element together (washer, cones, rim, lid) and the ground cone with its skirt. Solder the coax jacket into the ground cone apex and the centre pin into the washer, keeping the listed gap.",

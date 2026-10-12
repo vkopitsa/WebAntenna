@@ -330,7 +330,7 @@ export function Preview({ design, svgRef, type, params }: { design: Design; svgR
           {field.status === "running" || (field.status === "done" && field.key !== fieldKey) ? <span>{t("Computing field…")}</span>
             : field.status === "error" ? <span>{field.error}</span>
             : field.status === "done" && !field.data ? <span>{t("No field model for this antenna")}</span>
-            : fresh ? <><span className="ramp" />{t("Electric field (instantaneous, × distance)")}<span className="glow" />{t("Current on the wire")}{fresh.model === "standin" ? <em>{t("Approximate: wire model of the copper, substrate as a frequency scale")}</em> : fresh.model === "ideal" ? <em>{t("Assumed current distribution")}</em> : fresh.model === "bor" ? <em>{t("Precomputed surface currents (body-of-revolution MoM)")}</em> : null}</> : null}
+            : fresh ? <><span className="ramp" />{t("Electric field (instantaneous, × distance)")}<span className="glow" />{t("Current on the wire")}{fresh.model === "standin" ? <em>{t("Approximate: wire model of the copper, substrate as a frequency scale")}</em> : fresh.model === "ideal" ? <em>{t("Assumed current distribution")}</em> : fresh.model === "bor" ? <em>{t("Precomputed surface currents (body-of-revolution MoM)")}</em> : fresh.model === "cage" ? <em>{t("Precomputed wire currents (NEC-2)")}</em> : null}</> : null}
         </div>
       )}
     </div>
