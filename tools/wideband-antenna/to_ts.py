@@ -12,6 +12,6 @@ for fn in sys.argv[1:]:
     d = json.load(open(fn))
     r1 = lambda a: [round(v, 1) for v in a]
     obj = dict(fLo=d["fLo"], fHi=d["fHi"], gap=d["gap"], upper=d["upper"], lower=d["lower"], els=d["els"],
-               f=d["f"], r=r1(d["r"]), x=r1(d["x"]), g=[r1(row) for row in d["g"]])
+               f=d["f"], r=r1(d["r"]), x=r1(d["x"]), g=[r1(row) for row in d["g"]], cur=d["cur"])
     print(f"/** {src[fn.split('/')[-1]]} */")
     print(f"export const {names[fn.split('/')[-1]]}: SkyconeTable = {json.dumps(obj, separators=(',', ':'))};\n")

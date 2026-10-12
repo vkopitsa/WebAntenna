@@ -18,7 +18,11 @@ plus about 150 g of printed parts.
 
 ![Printed parts in place](fpv-detector/print/assembly.png)
 
-STL files: [`fpv-detector/print/`](fpv-detector/print/) (millimetres, already oriented for printing).
+STL files: [`fpv-detector/print/`](fpv-detector/print/) (millimetres, already oriented for printing). The
+same parts, for whatever band you set, are in the app: open "Sky-tilted capped bicone (8:1)" (or 21:1),
+**Build → 3D-printed parts** (each part's STL, or all of them as a zip, with these how-to steps).
+For the 21:1 version the cover comes in glued pieces, and the parts that do not fit a 180 mm bed
+(cup, former, main-cone template) are left out: use the paper templates and rigid foam for those.
 To make them for a changed design, run `tools/wideband-antenna/print_parts.py`
 (see [Re-generating the parts](#re-generating-the-parts)).
 

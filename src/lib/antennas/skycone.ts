@@ -3,6 +3,8 @@
 // docs/FPV-DETECTOR-ANTENNA.md (tools/wideband-antenna). The shape is fixed (it was optimised as a whole) and scales
 // with the lowest frequency; the Simulation tab shows that study's tabulated sweep, since thin wires cannot model it.
 import type { AntennaDef, Design, Plate, Sheet, Table, Vec3, Wire } from "../types";
+import type { CurrentElement } from "../mom";
+import type { IdealCurrents } from "../idealcurrents";
 import { fmt, wavelength } from "../rf";
 import { v } from "../geom";
 import { band, BANDS } from "./common";
@@ -24,6 +26,9 @@ export interface SkyconeTable {
   r: number[];
   x: number[];
   g: number[][];
+  /** Surface currents for the Radiation view: segments (ρ0, z0, ρ1, z1) in metres and, per frequency (ratio to fLo),
+   *  the total axial current at each segment's middle as re, im pairs (V = 1 at the port). */
+  cur: { seg: number[][]; f: number[]; i: number[][] };
 }
 
 /** Facets round the axis for the drawing and CAD (each facet is a planar trapezoid). */
@@ -95,6 +100,33 @@ export function skyconeGain(t: SkyconeTable, fLow: number, f: number): (th: numb
     const k = Math.min(Math.floor(x), n - 1);
     return row[k] + (row[k + 1] - row[k]) * (x - k);
   };
+}
+
+/** Rings of current per segment for the Radiation view. */
+const RING = 12;
+
+/**
+ * The solved surface current of the nearest tabulated frequency, scaled to the design: each profile segment becomes
+ * RING short elements round the axis, each carrying 1/RING of the total axial current. null for other types.
+ */
+export function skyconeCurrents(defId: string, d: Design): IdealCurrents | null {
+  const t = SKYCONE_TABLES[defId];
+  if (!t) return null;
+  const fLow = d.sweeps[0].start, s = t.fLo / fLow, u = d.f / fLow;
+  let k = 0;
+  t.cur.f.forEach((x, i) => { if (Math.abs(Math.log(x / u)) < Math.abs(Math.log(t.cur.f[k] / u))) k = i; });
+  const I = t.cur.i[k], els: CurrentElement[] = [], segs: number[] = [], ir: number[] = [], ii: number[] = [];
+  t.cur.seg.forEach(([r0, z0, r1, z1], j) => {
+    for (let m = 0; m < RING; m++) {
+      const ph = (2 * Math.PI * m) / RING, c = Math.cos(ph), sn = Math.sin(ph);
+      const p: Vec3 = [r0 * s * c, r0 * s * sn, z0 * s], q: Vec3 = [r1 * s * c, r1 * s * sn, z1 * s];
+      const cr = I[2 * j] / RING, ci = I[2 * j + 1] / RING;
+      els.push({ dl: [q[0] - p[0], q[1] - p[1], q[2] - p[2]], mid: [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2, (p[2] + q[2]) / 2], cr, ci, r: 0.5e-3 * s });
+      segs.push(...p, ...q);
+      ir.push(cr); ii.push(ci);
+    }
+  });
+  return { els, segs: Float64Array.from(segs), ir: Float64Array.from(ir), ii: Float64Array.from(ii) };
 }
 
 /** Frequency range the table covers (Hz) for a design starting at fLow. */

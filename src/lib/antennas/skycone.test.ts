@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { ANTENNA_BY_ID } from "./index";
 import { SKYCONE_8 } from "./skycone.data";
-import { skyconeGain, skyconeZ } from "./skycone";
-import { s11, simulate } from "../simulate";
+import { skyconeCurrents, skyconeGain, skyconeZ } from "./skycone";
+import { radiationEligible, s11, simulate } from "../simulate";
+import { partsFor } from "../print";
 import { templatePages } from "../template";
 
 // Reference: docs/FPV-DETECTOR-ANTENNA.md (design B_simple and design A, body-of-revolution MoM, no cable).
@@ -51,5 +52,24 @@ describe("sky-tilted capped bicones", () => {
   it("the build sheet carries the 1:1 flat patterns", () => {
     const def = ANTENNA_BY_ID.skycone8, d = def.build(def.defaults);
     expect(templatePages(def, d, false).length).toBeGreaterThan(1);
+  });
+
+  it("Radiation view: rings of the solved surface current, scaled with the size", () => {
+    const def = ANTENNA_BY_ID.skycone8, d = def.build(def.defaults);
+    expect(radiationEligible("skycone8", d)).toBe(true);
+    const c = skyconeCurrents("skycone8", d)!;
+    expect(c.els.length).toBe(12 * SKYCONE_8.cur.seg.length);
+    expect(c.els.every((e) => Number.isFinite(e.cr) && Number.isFinite(e.ci))).toBe(true);
+    const zmax = Math.max(...c.els.map((e) => e.mid[2]));
+    expect(zmax).toBeCloseTo(0.089, 2);                                 // up to the lid at 89 mm
+    const half = skyconeCurrents("skycone8", def.build({ bands: "1600e6-12800e6" }))!;
+    expect(Math.max(...half.els.map((e) => e.mid[2]))).toBeCloseTo(zmax / 2, 6);
+  });
+
+  it("print kit: B gets every part in one piece each; A's cover comes in glued pieces", () => {
+    const ids = (id: string) => { const def = ANTENNA_BY_ID[id]; return partsFor(id, def.defaults, def.build(def.defaults)).map((p) => p.id); };
+    expect(ids("skycone8")).toEqual(expect.arrayContaining(["shell", "skycone-cup", "skycone-handle", "skycone-stand", "skycone-former", "skycone-wedge", "skycone-fork", "skycone-tpl-1"]));
+    expect(ids("skycone21")).toContain("shell");
+    expect(ids("skycone21")).not.toContain("skycone-cup");               // Ø279 mm: larger than the bed
   });
 });

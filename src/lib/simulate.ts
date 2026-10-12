@@ -174,7 +174,7 @@ export function momEligible(defId: string, d: Design): boolean {
  * (pcbwires.ts) or an assumed current distribution (idealcurrents.ts).
  */
 export function radiationEligible(defId: string, d: Design): boolean {
-  return momEligible(defId, d) || !!d.pcb || defId === "collinear" || defId === "pcbloop";
+  return momEligible(defId, d) || !!d.pcb || defId === "collinear" || defId === "pcbloop" || !!SKYCONE_TABLES[defId];
 }
 
 export interface SimOptions {

@@ -21,4 +21,17 @@ for f in fs:
     out["f"].append(round(f / f_lo, 5)); out["r"].append(round(s.Z.real, 2)); out["x"].append(round(s.Z.imag, 2))
     out["g"].append(np.round(bor.gain_dbi(s, np.radians(90 - els)), 2).tolist())
     print(f"{f/1e6:8.1f} MHz  Z {s.Z.real:6.1f}{s.Z.imag:+6.1f}j  swr {bor.swr(s.Z):.2f}", flush=True)
+# surface currents for the Radiation view: one fixed mesh (λ/12 at the top), solved at 16 log-spaced frequencies;
+# per segment (ρ0, z0, ρ1, z1) and the total axial current at its middle (V = 1 at the port), aperture excluded
+me = bor.build_mesh(fam.geometry(p), 1.1 * f_hi, per_lambda=12)
+keep = [s for s in range(len(me.L)) if me.tags[s] != "feed"]
+out["cur"] = dict(seg=[[round(float(v), 6) for v in (me.r0[s], me.z0[s], me.r1[s], me.z1[s])] for s in keep], f=[], i=[])
+for f in D.logf(16, 0.95 * f_lo, 1.05 * f_hi):
+    me.f = f
+    sol = bor.solve(me)
+    c0, c1 = bor.seg_currents(sol)
+    im = c0 + 0.5 * c1
+    out["cur"]["f"].append(round(f / f_lo, 5))
+    out["cur"]["i"].append([float(f"{v:.4g}") for s in keep for v in (im[s].real, im[s].imag)])
+print("current segments", len(keep))
 json.dump(out, open(sys.argv[6], "w"))

@@ -9,6 +9,7 @@ import { momEligible } from "./simulate";
 import { C0, wavelength } from "./rf";
 import { pcbStandIn } from "./pcbwires";
 import { idealCurrents } from "./idealcurrents";
+import { skyconeCurrents } from "./antennas/skycone";
 
 const ETA0 = 4e-7 * Math.PI * C0;
 
@@ -19,7 +20,7 @@ export interface FieldGrid { nx: number; ny: number; e: Float32Array; r: Float32
 /** segs: 6 floats per MoM segment (p, q); ir/ii: segment midpoint currents along p → q. */
 /** model: where the currents come from (MoM on the wires, MoM on a PCB copper stand-in, or an assumed distribution). */
 export interface RadiationField { f: number; grid: FieldGrid; segs: Float64Array; ir: Float64Array; ii: Float64Array; model: FieldModel }
-export type FieldModel = "mom" | "standin" | "ideal";
+export type FieldModel = "mom" | "standin" | "ideal" | "bor";
 export type RGB = [number, number, number];
 
 /** Total E (complex, 3 components) at pt into out = [ExR, ExI, EyR, EyI, EzR, EzI]. */
@@ -95,8 +96,8 @@ export function fieldSolver(): ((defId: string, d: Design, plane: FieldPlane) =>
     const k = JSON.stringify([defId, d.f, d.feed, d.wires, d.pcb ?? null]);
     if (k !== key) {
       key = k;
-      const ideal = idealCurrents(defId, d);
-      last = ideal && { ...ideal, model: "ideal" };
+      const bor = skyconeCurrents(defId, d), ideal = bor ? null : idealCurrents(defId, d);
+      last = bor ? { ...bor, model: "bor" } : ideal && { ...ideal, model: "ideal" };
       // MoM on the wires, or on the PCB copper's wire stand-in at its scaled frequency (the field radiates at d.f)
       const st = last || momEligible(defId, d) ? null : pcbStandIn(d);
       const md = st ? st.design : d, fs = st ? st.fs : d.f;

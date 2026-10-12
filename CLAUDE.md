@@ -75,6 +75,9 @@ src/msg.ts               formats a lib Msg {s, a: [{len}|{hz}|{pct}|…]} for th
 docs/ANTENNAS.md         every formula, its source, and the NEC-2 / MoM verification numbers
 docs/FPV-DETECTOR-ANTENNA.md  wideband FPV-detector antenna study (sky-tilted cone, 800 MHz – 6.4 GHz)
 docs/FPV-DETECTOR-BUILD.md    home build guide for it; STL jigs/cover/cup in docs/fpv-detector/print (tools print_parts.py)
+                         in the app: print/families/skycone.ts (same kit from the design's sheet facets; cover split
+                         into glued sectors/rings when > 180 mm); Radiation view = tabulated BoR surface currents
+                         (skyconeCurrents, 12 elements per ring)
                          in the app as skycone8 / skycone21 (antennas/skycone.ts): fixed profile scaled by the band,
                          Simulation = tabulated BoR-MoM results (skycone.data.ts, regenerate with the tools' export_app_table.py
                          + to_ts.py); `Design.sheets` = flat patterns (BOM rows + 1:1 template)

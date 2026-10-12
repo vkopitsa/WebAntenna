@@ -10,6 +10,7 @@ import { FORMER_HOWTO, FORMER_STRINGS, helixParts } from "./families/former";
 import { SPREADER_HOWTO, SPREADER_STRINGS, moxonParts, quadParts } from "./families/spreader";
 import { STANDOFF_HOWTO, STANDOFF_STRINGS, biquadParts } from "./families/standoff";
 import { SPACER_HOWTO, SPACER_STRINGS, collinearParts, jpoleParts } from "./families/spacer";
+import { SKYCONE_HOWTO, SKYCONE_STRINGS, SKYCONE_TPL, skyconeParts } from "./families/skycone";
 import { SHELL_HOWTO, SHELL_STRINGS, shellFor } from "./shells";
 import { en } from "../build";
 
@@ -27,6 +28,8 @@ const FAMILIES: Record<string, (p: Params, d: Design) => PartSpec[]> = {
   biquad: (_p, d) => biquadParts(d),
   jpole: (_p, d) => jpoleParts(d),
   collinear: collinearParts,
+  skycone8: (_p, d) => skyconeParts(d),
+  skycone21: (_p, d) => skyconeParts(d),
 };
 
 /** Printable parts for an antenna design (the family's parts plus its shell); empty when the type has none (yet).
@@ -35,6 +38,7 @@ export const partsFor = (defId: string, p: Params, d: Design): PartSpec[] => {
   const family = FAMILIES[defId]?.(p, d) ?? [];
   // printed antennas get the PCB enclosure: every one has a board model except the PCB loop (drawn as plates only);
   // a stacked build (pagoda) is round and gets a radome like the cloverleaf
+  if (family.some((s) => s.id === "shell")) return family;          // the family brings its own (simulated) cover
   const shell = shellFor(defId, p, d, (!!d.pcb && !d.pcb.levels?.length) || defId === "pcbloop");
   return shell ? [...family, shell] : family;
 };
@@ -49,6 +53,7 @@ export const PRINT_STRINGS = [
   ...PART_STRINGS, ...CENTRE_STRINGS, ...HUB_STRINGS, ...BOOM_STRINGS, ...FORMER_STRINGS, ...DISCONE_STRINGS, ...SPREADER_STRINGS, ...STANDOFF_STRINGS, ...SPACER_STRINGS, ...FAN_STRINGS,
   ...Object.values(CENTRE_HOWTO).flat(), ...HUB_HOWTO, ...Object.values(BOOM_HOWTO).flat(), ...FORMER_HOWTO, ...DISCONE_HOWTO, ...Object.values(SPREADER_HOWTO).flat(), ...STANDOFF_HOWTO, ...Object.values(SPACER_HOWTO).flat(), ...Object.values(FAN_HOWTO).flat(),
   ...SHELL_STRINGS, ...Object.values(SHELL_HOWTO).flat(),
+  ...SKYCONE_STRINGS, ...Object.values(SKYCONE_TPL), ...Object.values(SKYCONE_HOWTO).flat(),
 ];
 
 /** README.txt for the parts zip: every part with its quantity, purpose and how-to steps, in English with lengths in mm. */

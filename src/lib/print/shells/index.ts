@@ -159,7 +159,8 @@ function feedHood(defId: string, p: Params, d: Design, gap: number): { inner: Bo
 export function shellPlan(defId: string, p: Params, d: Design): ShellPlan {
   const style = styleOf(d), { wall, gap } = STYLE[style];
   const dp = domePlan(defId, p, d, style);
-  if (dp && domeFits(dp.r, domeHeight(dp), wall)) {
+  // the sky-tilted bicones bring their own cover (families/skycone.ts): the plan only describes it as a dome
+  if (dp && (domeFits(dp.r, domeHeight(dp), wall) || defId.startsWith("skycone"))) {
     const H = domeHeight(dp);
     return { kind: "dome", style, inner: { lo: [-dp.r, -dp.r, dp.z0], hi: [dp.r, dp.r, dp.z1] }, opts: dp, toWorld: [0, 0, domeOffset(dp)], pieceZ: (i, n) => (n > 1 ? pieceBottoms(H)[i] : 0) };
   }
