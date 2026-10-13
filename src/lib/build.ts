@@ -112,6 +112,7 @@ const NOT_TRIMMED: Record<string, string> = {
   pagoda: "Not tuned by trimming: the board spacing sets the centre frequency (Baert's table: D1 grows about 0.15 mm and D2 about 0.24 mm per 100 MHz lower). Check the SWR across the band.",
   pcbloop: "Tune the small loop with the capacitors: Cs sets the resonance, Cp the match. A trimmer capacitor for Cs makes this easy.",
   skyconecage: "Broadband: not tuned by trimming. The pin gap sets the top of the band and the rim height the bottom; check the SWR across the band.",
+  skyconecagemini: "Broadband: not tuned by trimming. The pin gap sets the top of the band, the shorting wire and the rim height the bottom; check the SWR across the band.",
   skycone7: "Broadband: not tuned by trimming. The pin gap sets the top of the band and the rim height the bottom; check the SWR across the band.",
   skycone8: "Broadband: not tuned by trimming. The pin gap sets the top of the band and the rim height the bottom; check the SWR across the band.",
   skycone21: "Broadband: not tuned by trimming. The pin gap sets the top of the band and the rim height the bottom; check the SWR across the band.",
@@ -384,6 +385,7 @@ export function steps(d: Design, hasBoom: boolean, tunable: boolean): Msg[] {
     s.push(M("Print the 1:1 frame template (or the bending jig) and bend every frame over it with flat-nose pliers: all frames of a side must be identical."));
     s.push(M("Solder the hot frames to the washer in the printed cradle and the ground frames to the collar on the coax jacket in the cup: one groove per frame keeps them at equal angles. Then solder the washer onto the coax centre pin at the listed gap."));
     s.push(M("Bend each hoop on its step of the printed hoop mandrel (or into a ring of the listed diameter) and solder it against the outside of the frames at its bend, at every crossing. Keep the frames in their grooves while you do it."));
+    if (d.frames.short) s.push(M("Last, with the hot cage on the centre pin: solder the straight shorting wire from one hot frame down to the ground frame under it, at the marks of the template (its distance from the axis is in the table, ±0.5 mm). One wire only, on one frame; it passes just outside the small ground hoop, so keep the two from touching."));
   } else {
     s.push(M("Cut every part to the cut length in the list. Driven parts are cut long so you can trim them."));
     if (hasBoom) s.push(M("Tape the 1:1 drilling strip to the boom, mark the element positions, then drill and fit the elements."));
@@ -499,6 +501,8 @@ export const BUILD_STRINGS = [
   "Print the 1:1 frame template (or the bending jig) and bend every frame over it with flat-nose pliers: all frames of a side must be identical.",
   "Solder the hot frames to the washer in the printed cradle and the ground frames to the collar on the coax jacket in the cup: one groove per frame keeps them at equal angles. Then solder the washer onto the coax centre pin at the listed gap.",
   "Bend each hoop on its step of the printed hoop mandrel (or into a ring of the listed diameter) and solder it against the outside of the frames at its bend, at every crossing. Keep the frames in their grooves while you do it.",
+  "Last, with the hot cage on the centre pin: solder the straight shorting wire from one hot frame down to the ground frame under it, at the marks of the template (its distance from the axis is in the table, ±0.5 mm). One wire only, on one frame; it passes just outside the small ground hoop, so keep the two from touching.",
+  "Straight: solder it on at the marks of the template",
   "Print the 1:1 flat patterns, glue them onto the sheet and cut the parts out (tin snips, then file the edges).",
   "Roll each sector into its cone and each strip into its ring over a former, overlap or butt the seam and solder it along its length.",
   "Solder the hot element together (washer, cones, rim, lid) and the ground cone with its skirt. Solder the coax jacket into the ground cone apex and the centre pin into the washer, keeping the listed gap.",

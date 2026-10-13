@@ -12,7 +12,7 @@ half-plane.
 ```bash
 cd tools/wideband-antenna
 python3 -m venv --system-site-packages .venv
-.venv/bin/pip install numpy scipy matplotlib numba manifold3d PyNEC   # PyNEC (nec2++) only for val_dipole.py / val_discone.py
+.venv/bin/pip install numpy scipy matplotlib numba manifold3d PyNEC cma   # PyNEC (nec2++): val_*.py and the wire-cage tools; cma: opt_cma.py
 ```
 
 Run every script from this directory (they import each other by module name). Numba compiles the
@@ -42,6 +42,14 @@ processes with `NUMBA_NUM_THREADS=1` each; single-design scripts use numba threa
 | `wirecage.py` | NEC-2 (PyNEC) wire-cage version of a solid design: N frames along the profile, hoops at the kinks, hub rings near the axis (NEC rejects > ~16 Ø1 mm wires meeting there): `python wirecage.py family8 designs/S73.json 16 0.5` |
 | `export_cage_table.py` | App table for the wire cage (NEC-2, same JSON as `export_app_table.py` plus `cage`; currents of frame 0 × n): `python export_cage_table.py family6 designs/W16.json 16 0.5 960e6 6.4e9 64 app_W16.json`, then `to_ts.py app_B.json app_A.json app_S73.json app_W16.json` |
 | `family9.py` | Wire-cage family for `opt.py` (NEC per candidate in a subprocess with a 90 s timeout, no cable model): `NCAGE=16 FLO=912e6 SIZE=0.075 FAMILY=family9 X0=designs/S73.json POP=10 python opt.py w16 20 1` → designs/W16.json (Ø71.5 × 74.7 mm, SWR ≤ 1.95 over 0.96–6.4 GHz, 15–50° gain +1.9 dBi mean; W12: SWR 2.5 at 6.4 GHz) |
+| `family10.py` | **Shaped wire cage** (NEC-2): the v6 profile plus twisted frames (conical spirals), in-plane zigzags, a fold-down brim, a signed ground skirt (down or folded up), hot-to-ground legs and **shunt wires** (`sh`: 0/1/2/4 straight wires from a hot frame to the ground frame at radius `shr`). `wire_list()` (the NEC model, kinds frame0/frame/ring/spoke/shunt/…), `collisions()` (wires closer than their radii: NEC-2++ rejects them), `model(p, f, seg=, nphi=, cable=, beads=)` (fixed segment length, full-azimuth pattern, coax jacket with ferrite beads). All extras zero = `wirecage.py`. Env: `SEG` (fixed segments in the cost; use 2–2.5e-3), `NFREQ`, `ABORT`, `TIMEOUT` |
+| `family11.py` | Family 10 in box-normalised parameters (ground depth, radii and kinks as fractions of the box), so every candidate fits `SIZE`; `to_abs()` / `from_abs()` convert to and from family 10 |
+| `opt_cma.py` | **CMA-ES** from a seed, 8 processes; `FREE=a,b,…` searches only those parameters (the rest stay at the seed): `OMP_NUM_THREADS=1 FAMILY=family11 SIZE=0.066 FLO=912e6 X0=seed.json SIGMA=0.08 POP=16 FREE=g,r0u,ru,kx,ky,ht,hc,capu,gd,rl,gkx,gky,gs,shr python opt_cma.py s66sh 120 2` → W65. Progress in `opt_<tag>.jsonl`, best in `best_<tag>.json` (family-11 parameters: convert with `to_abs()` at the same `SIZE`) |
+| `opt2.py` | Differential evolution from a buildable start (the seed, perturbations of it and random samples that pass `feasible()`); stalled on the 25-parameter family 11 |
+| `shapecage.py` | Sweep of a family-10 design: `python shapecage.py designs/W65.json 96 912e6 6.6e9 1.5e-3` (last argument: λ/per, or a segment length in metres; `key=value` overrides a parameter) |
+| `export_shaped_table.py` | App table for a cage with shunt wires (1.5 mm segments, gain = mean over 8 azimuths, `cage.short` with the wire's node radius, heights, frame and its current segments): `python export_shaped_table.py designs/W65.json 960e6 6.4e9 64 app_W65.json`, then `python to_ts.py --entry app_W65.json` (one entry, to replace the `SKYCONE_W65` line in `skycone.data.ts`) |
+| `cage_cable.py` | Cable check of a cage: the coax jacket as a wire down the axis (15/25/35 cm), bare, 1 bead or the 6-bead sleeve: `python cage_cable.py designs/W65.json` |
+| `render_cage.py` | 3D view and profile of a family-10 cage (shunt wire in red): `python render_cage.py designs/W65.json out.png "title"` |
 | `report.py` | Text report of one design: no-cable sweep with gains at 0–70° elevation, then cable ± ferrite cases. `python report.py family6 "$(cat designs/B_simple.json)" 16 34 800e6` |
 | `final_report.py` | Dense sweep (λ/24, 140 points), drone-band table, cable table, `sweep.csv`, `summary.json` and the PNG charts used in the doc: `python final_report.py family6 "$(cat designs/B_simple.json)" outdir 800e6 6.4e9` |
 | `tolerance.py` | Monte Carlo build tolerance: `F_LO=800e6 python tolerance.py family6 "$(cat designs/B_simple.json)" 48 1.0 0.3 1.5` (lengths ±1 mm, gap ±0.3 mm, angles ±1.5°). |
@@ -103,3 +111,14 @@ not `pkill -f`, which also matches your own shell command line.
   in the score.
 - At 800 MHz, ~110 mm is the practical minimum for SWR ≤ 2 with sky gain (λ/4 = 94 mm); ≤ 95 mm did
   not get below SWR ≈ 3 in a short run.
+- **A small cage is short of resistance, not of length.** Scaled to 0.88 × the W16 cage is 14 − 18j Ω at
+  912 MHz. Twisting, zigzagging, brims and rim-to-ground legs lengthen the current path but leave R near
+  14 Ω (and add resonances). One shunt wire between the cones (≈ 5 nH, an L-network) brings it to 50 Ω:
+  W65, Ø65 × 65 mm, SWR 1.85 (W16: Ø71.5 × 74.7, 1.95). 60 mm reaches 2.2.
+- **Converge the mesh before tuning a shunt.** With the wire carrying the low-band match, λ/20 is 0.4 off in
+  SWR at 912 MHz (and 0.3 at 4.5–5 GHz); the optimiser exploits it. Use 2–2.5 mm segments in the cost.
+- **A coarse frequency grid hides narrow features.** 16 points missed a 100 MHz-wide resonance of W63 at
+  3.78 GHz (SWR 2.4); sweep the winner at ≥ 96 points and scan any bump.
+- **CMA-ES on a small subspace beats DE on everything.** DE over 25 shape parameters (most random cages
+  collide) and CMA-ES over all 25 stalled; CMA-ES over the 14 profile parameters + the wire's radius from a
+  scaled seed converged in 30 generations.

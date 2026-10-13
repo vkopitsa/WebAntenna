@@ -222,6 +222,13 @@ hoops in their slots, lay the 16 hot frames in their grooves and solder everythi
 hoops; lift the hot cage off and solder the washer onto the centre pin with the gap fork. The
 6-bead ferrite sleeve and the 130 mm handle are the same as for S73. See "Wire-cage version" in the study.
 
+**Small wire cage (W65, Ø65 × 65 mm, same band):** the app's "Sky-tilted capped bicone, small wire cage
+(6.7:1)". Same kit and order of work as W16, with smaller frames (83 mm hot, 32.5 mm ground) and one extra
+step at the end: solder **one straight 9.8 mm shorting wire** from one hot frame down to the ground frame
+under it, 11.1 mm from the axis (±0.5 mm; × marks on the template). Keep it from touching the small ground
+hoop just inside it. The wire is a DC short across the coax, so turn off any bias-tee on the receiver.
+See "Smaller wire cage" in the study.
+
 Keep any other plastic out of the feed region: the first ~15 mm round the coax end, between the two
 cones. A plastic plug there was not simulated, and the pin gap is the most sensitive dimension of the
 antenna. The support wedges sit there only while you solder.

@@ -24,6 +24,8 @@ A compact variant **S73** (Ø73 × 71 mm) covers **960 MHz – 6.4 GHz** with SW
 see [Smaller: compact variants](#smaller-compact-variants-from-960-mhz).
 The same compact size can be bent from **Ø1 mm wire**: 16 frames per side plus hoops (design **W16**, Ø71.5 × 74.7 mm,
 NEC-2 SWR ≤ 1.97 over 960 MHz – 6.4 GHz); see [Wire-cage version](#wire-cage-version-w16).
+One straight **shorting wire** from a hot frame to the ground frame makes the cage smaller: design **W65**,
+Ø65 × 65 mm, NEC-2 SWR ≤ 1.85 over the same band; see [Smaller wire cage](#smaller-wire-cage-one-shorting-wire-w65).
 
 ![Cross-section of design B](fpv-detector/profile.png)
 
@@ -32,7 +34,7 @@ NEC-2 SWR ≤ 1.97 over 960 MHz – 6.4 GHz); see [Wire-cage version](#wire-cage
 ![Sections of designs B and A at the same scale](fpv-detector/A_B_section.png)
 
 **In the app:** the designs are antenna types in the Broadband group, **"Sky-tilted capped bicone (8:1)"** (B),
-**"(21:1)"** (A), **"compact (6.7:1)"** (S73) and **"wire cage (6.7:1)"** (W16). The band editor scales the shape (e.g. 1–8 GHz); Simulation shows this study's
+**"(21:1)"** (A), **"compact (6.7:1)"** (S73), **"wire cage (6.7:1)"** (W16) and **"small wire cage (6.7:1)"** (W65). The band editor scales the shape (e.g. 1–8 GHz); Simulation shows this study's
 tabulated MoM sweep and elevation pattern, scaled to the size; Build lists the flat patterns and
 prints them at 1:1 (`src/lib/antennas/skycone.ts`). The name: an *asymmetric bicone*, or an *inverted
 discone* (cone on top as the hot element, a shallow ground cone below), with a capped top (rim + lid).
@@ -371,6 +373,85 @@ handle, the stand, the gap fork, a frame bending jig, a stepped hoop mandrel (on
 size, a slot for the solder joint) and a cradle for the hot side (washer pocket, a groove per frame up the
 cones, a slot for each cone hoop under them). The hot cage lifts off the cradle upward; a mandrel inside it
 would be trapped by the lid hoops. NEC-2 export is enabled.
+
+### Smaller wire cage: one shorting wire (W65)
+
+W16 cannot simply be scaled down. At 0.88 × (Ø63 × 64 mm) the SWR at 912 MHz goes from 1.9 to 4.0,
+and at 0.80 × to 5.4. From 1.15 GHz up the scaled cage is still fine. At 912 MHz it is
+Z ≈ 14 − 18j Ω: **the resistance is too low**, and the reactance is small. Every way of making the
+frames longer in the same box therefore failed. It brings the reactance down but not the resistance
+up. These were tried in NEC-2 (`family10.py`) from the 0.85–0.88 × seeds:
+
+| Frame shape (same box) | 912 MHz | Rest of the band |
+|---|---|---|
+| Hot frames twisted into conical spirals, up to 120° | SWR 4.0 → 2.7–3.1 | 1.2–2.0 GHz rises to 2.8–3.6 (helical-sheath resonances) |
+| Frames zigzagged in their own plane (2–5 mm, 4–10 half-waves), hot or ground | unchanged (Z stays 13 − 15j Ω) | slightly worse |
+| A fold-down brim on the hot rim (10–25 mm, straight or helical) | unchanged | a strong resonance at 2.5–3 GHz (SWR up to 9) |
+| 2 or 4 frames continued as legs from the hot rim to the ground rim (straight or helical) | R rises, but X goes to −40…−100j Ω | worse, with resonances |
+| Shunt stubs from the hot cone to the ground cone near the axis (5 mm out) | the feed is shorted | SWR 10–2000 |
+| **One** shunt wire from a hot frame to the ground frame, 11–15 mm out | **2.1–2.4** | 1.3–2.4 GHz at 2.0–2.7 before re-optimising, ≤ 1.85 after |
+
+The last row is the answer. A shunt inductor across a small antenna is the classic L-network:
+R − jX in parallel with jωL becomes (R² + X²)/R ≈ 35–55 Ω when ωL cancels the parallel susceptance
+(about 5 nH at 912 MHz). A 9.8 mm wire between the cones 11 mm from the axis is that inductor. Its
+admittance falls with frequency, and the profile was re-optimised around it, so the upper band
+keeps its match. It is a DC short across the coax: fine for a receiver, but no bias-tee.
+
+Search: differential evolution over all 25 shape parameters stalled at cost 4.1 inside 60 mm. Most
+random candidates collide or crowd the hub, and the landscape is rough. CMA-ES over all 25 stalled
+at 2.6 inside 66 mm. CMA-ES over the 14 profile parameters plus the wire's radius, seeded with
+W16 × 0.88 and one wire, found W65 in 30 generations (`opt_cma.py`, `family11.py`).
+
+**Mesh.** With the wire carrying the match, λ/20 segments are 0.4 off in SWR at 912 MHz, and up to
+0.3 off at 4.5–5 GHz. A 60 mm run tuned on λ/20 showed 2.0, but it is 2.4 on a converged mesh. W65
+came from a λ/20 run and holds on the converged mesh. The 63 and 60 mm runs used 2.5 mm segments,
+which are within 0.1 of converged. Every number below is at 1.5 or 2 mm, which are within 0.03 of
+each other.
+
+| Ø1 mm wire, free space, no cable | Size (frames) | Worst SWR, 960 MHz – 6.4 GHz | at 912 MHz (−5 %) | Gain at 15–50°, mean |
+|---|---|---|---|---|
+| W16 | Ø71.5 × 74.7 mm | 1.95 (2.02 on its 3.6 GHz feature) | 1.94 | +1.8 dBi |
+| **W65**: W16 + one shorting wire, re-optimised | **Ø65.1 × 64.9 mm** | **1.85** (1.74 in the app table) | **1.76** | **+2.1 dBi** |
+| W63: same, 63 mm box | Ø63.0 × 62.4 mm | 1.99, but a narrow feature at 3.78 GHz reaches 2.40 | 1.88 | +1.9 dBi |
+| W60: same, 60 mm box | Ø59.7 × 59.6 mm | 2.23 | 2.24 | +1.8 dBi |
+
+W65 is 13 % lower and 9 % narrower than W16 (about 30 % less volume), and it matches better. The
+optimiser's 16-point grid did not see W63's 100 MHz-wide feature (W16 has a milder one at 3.6 GHz).
+Only a fine scan found it, so W65 was checked the same way: its feature peaks at 1.85 at 3.84 GHz.
+
+**Cable** (`cage_cable.py`: the coax jacket as a wire down the axis, 15, 25 and 35 cm, worst SWR over
+912 MHz – 2 GHz):
+
+| | No cable | Bare cable | 1 bead | 6-bead sleeve |
+|---|---|---|---|---|
+| W16 | 1.96 | up to 4.46 | up to 3.13 | ≤ 1.93 |
+| W65 | 1.78 | up to 5.76 | up to 3.90 | ≤ 1.90 |
+
+The smaller cage couples more to the cable, but the same 6-bead sleeve keeps it in spec.
+
+**Tolerance of the wire.** Its distance from the axis sets the bottom of the band. At 9.96 / 11.12 /
+11.63 / 12.37 mm the worst SWR is 2.00 / 1.77 / 1.85 / 1.97, so place it within ±0.5 mm. It passes
+1.1 mm (centre to centre) outside the small ground hoop. Keep the two from touching.
+
+![W65: 16 frames per side and one shorting wire](fpv-detector/W65_cage.png)
+
+W65 (`designs/W65.json`), z = 0 at the coax end, Ø1 mm wire:
+
+| Part | Qty | Shape |
+|---|---|---|
+| Hot frame | 16 | washer edge (ρ 3.2, z 1.8) → (15.0, 13.3) → (31.6, 50.9) → (31.6, 59.2) → (14.4, 59.2); 83.0 mm of wire, 3 bends |
+| Ground frame | 16 | collar (ρ 3.0, z −0.1) → (10.0, −0.2) → (32.6, −2.9) → (32.6, −5.7); 32.5 mm, 2 bends |
+| **Shorting wire** | **1** | straight, at ρ 11.1 mm from one hot frame (z 9.5) down to the ground frame under it (z −0.3); 9.8 mm |
+| Hot hoops | 4 | Ø31.7 at z 12.7; Ø65.1 at z 50.7; Ø64.5 at z 59.9; Ø28.9 at z 60.2 (the lid edge) |
+| Ground hoops | 3 | Ø20.1 at z 0.8; Ø66.6 at z −2.2; Ø67.1 at z −5.7 |
+| Hot washer | 1 | Ø6.5 on the centre pin, 1.8 mm above the coax end |
+| Ground collar | 1 | Ø6.0 on the coax jacket, at its end |
+
+In the app: **"Sky-tilted capped bicone, small wire cage (6.7:1)"**. It uses the same build as W16:
+cut list, 1:1 frame template (an × marks the wire's two ends), the printed kit, and NEC-2 export.
+Simulation is the NEC-2 table (`export_shaped_table.py`: 1.5 mm segments, 64 frequencies, gain is
+the mean over 8 azimuths because the wire breaks the 16-fold symmetry). The Radiation view puts the
+frame currents on all 16 frames and the wire's current on the wire alone.
 
 ## How it was found
 

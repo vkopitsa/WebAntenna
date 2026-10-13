@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ANTENNA_BY_ID } from "./index";
-import { SKYCONE_8, SKYCONE_W16 } from "./skycone.data";
+import { SKYCONE_8, SKYCONE_W16, SKYCONE_W65 } from "./skycone.data";
 import { skyconeCurrents, skyconeGain, skyconeZ } from "./skycone";
 import { radiationEligible, s11, simulate } from "../simulate";
 import { partsFor } from "../print";
@@ -64,6 +64,39 @@ describe("sky-tilted capped bicones", () => {
     expect(templatePages(def, d, false).length).toBe(1);
     // Radiation view: the current sits on the 16 frames
     expect(skyconeCurrents("skyconecage", d)!.els.length).toBe(16 * SKYCONE_W16.cur.seg.length);
+  });
+
+  it("small wire cage at 960 MHz is design W65: the NEC-2 model's 314 wires with one shorting wire, Ø65 × 65 mm, SWR < 2", () => {
+    const def = ANTENNA_BY_ID.skyconecagemini, p = { bands: "960e6-6400e6" }, d = def.build(p);
+    // tools/wideband-antenna/family10.py wire_list(): 160 frame wires (every frame has the shorting wire's nodes),
+    // 144 hoop chords, 8 hub spokes, the shorting wire and the pin gap
+    const live = d.wires.filter((w) => !w.drawOnly);
+    expect(live.length).toBe(314);
+    expect(live.reduce((a, w) => a + Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1], w.b[2] - w.a[2]), 0) * 1e3).toBeCloseTo(2972.2, 0);
+    expect(dim("skyconecagemini", "960e6-6400e6", "Overall height") * 1e3).toBeCloseTo(64.9, 1);
+    expect(dim("skyconecagemini", "960e6-6400e6", "Ground cone diameter") * 1e3).toBeCloseTo(65.1, 1);
+    expect(dim("skyconecagemini", "960e6-6400e6", "Shorting wire length") * 1e3).toBeCloseTo(9.8, 1);
+    // one shorting wire, vertical, on frame 8, from the hot frame's node down to the ground frame's node
+    const sh = live.filter((w) => w.tag === "S");
+    expect(sh.length).toBe(1);
+    expect(Math.hypot(sh[0].a[0], sh[0].a[1]) * 1e3).toBeCloseTo(11.12, 2);
+    expect(Math.atan2(sh[0].a[1], sh[0].a[0])).toBeCloseTo(Math.PI, 6);
+    const ends = [sh[0].a, sh[0].b];
+    expect(ends.every((e) => live.some((w) => w !== sh[0] && w.group !== "feed" && [w.a, w.b].some((q) => Math.hypot(q[0] - e[0], q[1] - e[1], q[2] - e[2]) < 1e-9)))).toBe(true);
+    const r = simulate(def, p, d);
+    expect(r.method).toBe("analytic");
+    expect(Math.max(...r.z.filter((q) => q.f >= 960e6 && q.f <= 6.4e9).map((q) => s11(q, 50).swr))).toBeLessThan(1.9);
+    expect(d.cuts!.find((c) => c.what.startsWith("Shorting wire"))).toMatchObject({ qty: 1 });
+    expect(d.frames!.short!.hot[0] * 1e3).toBeCloseTo(11.12, 2);
+    expect(d.frames!.hoops.hot.length + d.frames!.hoops.ground.length).toBe(7);   // no hoop at the shorting wire's nodes
+    expect(d.notes.some((n) => n.startsWith("The shorting wire is a DC short"))).toBe(true);
+    expect(templatePages(def, d, false).length).toBe(1);
+    const parts = partsFor("skyconecagemini", def.defaults, d).map((q) => q.id);
+    expect(parts).toEqual(expect.arrayContaining(["shell", "skycone-cup", "skycone-bend", "skycone-cradle", "skycone-hoops"]));
+    // Radiation view: rings on the 16 frames, plus the shorting wire's own segments
+    const k = SKYCONE_W65.cage!.short!.k;
+    expect(k).toBeGreaterThan(0);
+    expect(skyconeCurrents("skyconecagemini", d)!.els.length).toBe(16 * (SKYCONE_W65.cur.seg.length - k) + k);
   });
 
   it("the tabulated sweep: SWR ≤ 1.4 over 800 MHz – 6.4 GHz, beam above the horizon", () => {

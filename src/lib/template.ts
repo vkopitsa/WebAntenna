@@ -125,8 +125,18 @@ function frameDrawing(def: AntennaDef, d: Design): Drawing | null {
   };
   draw(hot, P - hx0, `HOT FRAME x ${f.n}`, "WASHER");
   draw(gnd, dxG, `GROUND FRAME x ${f.n}`, "COLLAR");
+  if (f.short) {                                       // where the shorting wire is soldered on (one frame of each side)
+    const mark = (q: [number, number], dx: number, hot: boolean) => {
+      const x = dx + q[0] * 1e3, y = P + 6 + zTop - q[1] * 1e3, l = 1.5 + wd;
+      prims.push({ k: "line", x1: x - l, y1: y - l, x2: x + l, y2: y + l, w: 0.35 }, { k: "line", x1: x - l, y1: y + l, x2: x + l, y2: y - l, w: 0.35 });
+      // hot: right of the rising frame and below it; ground: above the flat frame (the collar label is below)
+      prims.push({ k: "text", x: hot ? x + l + 1.5 : x - 2, y: hot ? y + 3.5 : y - l - 2.5, s: "SHORTING WIRE", size: 2.2, bold: true });
+    };
+    mark(f.short.hot, P - hx0, true);
+    mark(f.short.ground, dxG, false);
+  }
   const w = dxG + gx0 + gndW + P, h = zTop - Math.min(...all.map((q) => q[1])) + 2 * P + 18;
-  const out: Drawing = { w, h, prims, caption: `${def.name} - frames, 1:1 (circles: hoops at the bends; the axis is to the left of each frame)` };
+  const out: Drawing = { w, h, prims, caption: `${def.name} - frames, 1:1 (circles: hoops at the bends; the axis is to the left of each frame${f.short ? "; x: shorting wire" : ""})` };
   return fitsTiles(out) ? out : null;
 }
 
