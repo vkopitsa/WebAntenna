@@ -31,7 +31,9 @@ RWIRE = float(os.environ.get("RWIRE", "0.5e-3"))
 FLO = float(os.environ.get("FLO", "912e6"))
 SIZE = float(os.environ.get("SIZE", "0.075"))
 HMAX = DMAX = SIZE
-FS_MAIN = D.logf(int(os.environ.get("NFREQ", "18")), FLO, 6.6e9)
+FS_MAIN = sorted(set(D.logf(int(os.environ.get("NFREQ", "18")), FLO, 6.6e9))
+                 | {float(f) for f in os.environ.get("FEXTRA", "").split(",") if f})   # FEXTRA: extra frequencies (Hz)
+                                                 # in the cost, e.g. every 60 MHz over a narrow feature the log grid missed
 ELS = (15, 20, 25, 30, 35, 40, 45, 50)
 HUB_R = 3.0e-3
 GAP_MIN = 2.5e-3            # hot and ground parts closer than this (in rho, z) are rejected

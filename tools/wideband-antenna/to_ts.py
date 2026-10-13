@@ -4,11 +4,12 @@ export_shaped_table.py: the small cage with its shorting wire, `cage.short`). --
 entry alone, to append to skycone.data.ts without regenerating the others."""
 import json, sys
 names = {"app_B.json": "SKYCONE_8", "app_A.json": "SKYCONE_21", "app_S73.json": "SKYCONE_7", "app_W16.json": "SKYCONE_W16",
-         "app_W65.json": "SKYCONE_W65"}
+         "app_W65.json": "SKYCONE_W65", "app_W40.json": "SKYCONE_W40"}
 src = {"app_B.json": "design B_simple (family6, 800 MHz – 6.4 GHz)", "app_A.json": "design A (family4, 300 MHz – 6.4 GHz)",
        "app_S73.json": "design S73 (family8, 960 MHz – 6.4 GHz, compact)",
        "app_W16.json": "design W16 (family9, 16-frame wire cage of Ø1 mm wire, 960 MHz – 6.4 GHz; NEC-2, gain = mean over phi)",
-       "app_W65.json": "design W65 (family10/11, the 16-frame cage with one shorting wire, 960 MHz – 6.4 GHz; NEC-2 at 1.5 mm segments, gain = mean over 8 azimuths)"}
+       "app_W65.json": "design W65 (family10/11, the 16-frame cage with one shorting wire, 960 MHz – 6.4 GHz; NEC-2 at 1.5 mm segments, gain = mean over 8 azimuths)",
+       "app_W40.json": "design W40 (family13, Ø39 × 40 mm cage with one shorting wire, 1.4 – 6.4 GHz: below the Chu floor for 960 MHz; NEC-2 at 1.5 mm segments, gain = mean over 8 azimuths)"}
 entry_only = sys.argv[1] == "--entry"
 if entry_only:
     sys.argv.pop(1)

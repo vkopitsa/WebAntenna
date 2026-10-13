@@ -8,7 +8,7 @@ import type { IdealCurrents } from "../idealcurrents";
 import { fmt, wavelength } from "../rf";
 import { v } from "../geom";
 import { band, BANDS } from "./common";
-import { SKYCONE_21, SKYCONE_7, SKYCONE_8, SKYCONE_W16, SKYCONE_W65 } from "./skycone.data";
+import { SKYCONE_21, SKYCONE_7, SKYCONE_8, SKYCONE_W16, SKYCONE_W40, SKYCONE_W65 } from "./skycone.data";
 
 export interface SkyconeTable {
   /** Design band (Hz) the profile and the table belong to. */
@@ -302,8 +302,9 @@ function withNode(path: P2[], rho: number): { path: P2[]; q: P2 } {
 }
 
 /** The wire cage: the compact shape as n bent wire frames per side, hoops at the kinks, hub washers at the axis,
- *  and (cage.short) straight shorting wires from a hot frame down to the ground frame under it. */
-function buildCage(t: SkyconeTable, bandsP: Parameters<typeof band>[0]): Design {
+ *  and (cage.short) straight shorting wires from a hot frame down to the ground frame under it.
+ *  mini: the Ø40 mm cage (W40), whose band starts at 1.4 GHz because the box is below the Chu limit for 960 MHz. */
+function buildCage(t: SkyconeTable, bandsP: Parameters<typeof band>[0], mini = false): Design {
   const { bands } = band(bandsP);
   const fLow = Math.min(...bands.map((b) => b[0])), fHigh = Math.max(...bands.map((b) => b[1]));
   const fTop = fLow * (t.fHi / t.fLo), s = t.fLo / fLow;
@@ -397,13 +398,19 @@ function buildCage(t: SkyconeTable, bandsP: Parameters<typeof band>[0]): Design 
       { label: "Wire frames (hot + ground)", value: `${n} + ${n}` },
     ],
     notes: [
-      sh
+      mini
+        ? "The smallest sky-tilted bicone that still works: the small wire cage shrunk to Ø39 × 40 mm, 16 bent frames per side with a wire hoop at every bend and one straight shorting wire from a hot frame down to the ground frame under it. A box this small fits a sphere of radius 28 mm, and below that the Chu limit rules out a match at 960 MHz whatever the wire shape (bent, twisted and coiled frames were all tried), so this cage starts at 1.4 GHz: SWR ≤ 2.1 up to 6.4 GHz. Hold it by the coax with the cones up: the beam is tilted toward the sky (15–50° elevation)."
+        : sh
         ? "The small sky-tilted bicone built from wire: 16 bent frames per side with a wire hoop at every bend, plus one straight shorting wire from a hot frame down to the ground frame under it. That wire is what makes it small: at the bottom of the band it works as an inductor across the feed and lifts the low resistance of the small cage to about 50 Ω. Hold it by the coax with the cones up: the beam is tilted toward the sky (15–50° elevation)."
         : "The compact sky-tilted bicone built from wire: 16 bent frames per side follow the solid shape, with a wire hoop soldered round them at every bend. With 16 frames it matches the solid version (fewer frames lose the top of the band). Hold it by the coax with the cones up: the beam is tilted toward the sky (15–50° elevation).",
-      "The shape is fixed (it was optimised as a whole); all dimensions scale with your lowest frequency, the wire diameter too. The Simulation tab shows the precomputed NEC-2 sweep of this cage (Ø1 mm wire at 960 MHz), scaled to your size.",
+      mini
+        ? "The shape is fixed (it was optimised as a whole); all dimensions scale with your lowest frequency, the wire diameter too. The Simulation tab shows the precomputed NEC-2 sweep of this cage (Ø1 mm wire at 1.4 GHz), scaled to your size."
+        : "The shape is fixed (it was optimised as a whole); all dimensions scale with your lowest frequency, the wire diameter too. The Simulation tab shows the precomputed NEC-2 sweep of this cage (Ø1 mm wire at 960 MHz), scaled to your size.",
       "Feed through UT-141 (RG-402) semi-rigid coax: the hot frames are soldered round a washer on the centre pin (keep the listed gap above the coax end), the ground frames round a collar on the coax jacket.",
       ...(sh ? ["The shorting wire is a DC short across the coax. That is fine for a receiver, but switch off any antenna power (bias-tee) on the receiver input, or put a DC block in the line."] : []),
-      "Ferrite sleeve required: stack about 6 ferrite beads (material 43 or 61, about 150 Ω each) on the first 11 cm of coax below the ground cone. This small antenna couples strongly to the cable: with one bead a 15–35 cm cable still lifts the SWR to 2.7 at the bottom of the band, with the sleeve it stays below 1.9.",
+      mini
+        ? "Ferrite sleeve required: stack about 6 ferrite beads (material 43 or 61, about 150 Ω each) on the first 11 cm of coax below the ground cone. This small antenna couples strongly to the cable: 15–35 cm of bare cable lifts the SWR to 3.5 in the lower half of the band, one bead leaves 2.1, the sleeve keeps it below 1.8."
+        : "Ferrite sleeve required: stack about 6 ferrite beads (material 43 or 61, about 150 Ω each) on the first 11 cm of coax below the ground cone. This small antenna couples strongly to the cable: with one bead a 15–35 cm cable still lifts the SWR to 2.7 at the bottom of the band, with the sleeve it stays below 1.9.",
       ...(fHigh > fTop * 1.001 ? ["Warning: your highest band is above this shape's range; the SWR there is not computed. Lower the bands or use the 21:1 version."] : []),
       "Full study, build steps, tolerances and solver checks: docs/FPV-DETECTOR-ANTENNA.md in the project repository.",
     ],
@@ -475,5 +482,17 @@ export const skyconecagemini: AntennaDef = {
   build: (p) => buildCage(SKYCONE_W65, p),
 };
 
+export const skyconecage40: AntennaDef = {
+  id: "skyconecage40",
+  name: "Sky-tilted capped bicone, mini wire cage (4.6:1)",
+  category: "Broadband",
+  traits: { pol: "vertical", pattern: "omni" },
+  summary: "The small wire cage shrunk to Ø39 × 40 mm (16 frames per side, one shorting wire). A box this small fits a sphere of radius 28 mm, below the Chu limit for 960 MHz, so the band starts at 1.4 GHz: 1.4–6.4 GHz at SWR ≤ 2.1, beam tilted up. Needs a ferrite sleeve (6 beads) on the coax.",
+  multiband: "broadband",
+  params: PARAMS,
+  defaults: { bands: "1400e6-6400e6" },
+  build: (p) => buildCage(SKYCONE_W40, p, true),
+};
+
 /** Tabulated results per type id (simulate.ts). */
-export const SKYCONE_TABLES: Record<string, SkyconeTable> = { skycone7: SKYCONE_7, skycone8: SKYCONE_8, skycone21: SKYCONE_21, skyconecage: SKYCONE_W16, skyconecagemini: SKYCONE_W65 };
+export const SKYCONE_TABLES: Record<string, SkyconeTable> = { skycone7: SKYCONE_7, skycone8: SKYCONE_8, skycone21: SKYCONE_21, skyconecage: SKYCONE_W16, skyconecagemini: SKYCONE_W65, skyconecage40: SKYCONE_W40 };

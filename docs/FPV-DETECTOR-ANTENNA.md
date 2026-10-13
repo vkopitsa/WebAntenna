@@ -27,7 +27,7 @@ NEC-2 SWR ≤ 1.97 over 960 MHz – 6.4 GHz); see [Wire-cage version](#wire-cage
 One straight **shorting wire** from a hot frame to the ground frame makes the cage smaller: design **W65**,
 Ø65 × 65 mm, NEC-2 SWR ≤ 1.85 over the same band; see [Smaller wire cage](#smaller-wire-cage-one-shorting-wire-w65).
 Ø40 × 40 mm is below the physical floor for 960 MHz (SWR ≥ 4.65 with a perfect match; bent, twisted and coiled frames
-do not change that), but a 40 mm cage covers **1.4 – 6.4 GHz** at SWR ≤ 1.91 (design **W40**);
+do not change that), but a 40 mm cage covers **1.4 – 6.4 GHz** at SWR ≤ 2.1 (design **W40**, in the app);
 see [How small can the cage go?](#how-small-can-the-cage-go-ø40--40-mm-study).
 
 ![Cross-section of design B](fpv-detector/profile.png)
@@ -37,7 +37,7 @@ see [How small can the cage go?](#how-small-can-the-cage-go-ø40--40-mm-study).
 ![Sections of designs B and A at the same scale](fpv-detector/A_B_section.png)
 
 **In the app:** the designs are antenna types in the Broadband group, **"Sky-tilted capped bicone (8:1)"** (B),
-**"(21:1)"** (A), **"compact (6.7:1)"** (S73), **"wire cage (6.7:1)"** (W16) and **"small wire cage (6.7:1)"** (W65). The band editor scales the shape (e.g. 1–8 GHz); Simulation shows this study's
+**"(21:1)"** (A), **"compact (6.7:1)"** (S73), **"wire cage (6.7:1)"** (W16), **"small wire cage (6.7:1)"** (W65) and **"mini wire cage (4.6:1)"** (W40, 1.4 – 6.4 GHz). The band editor scales the shape (e.g. 1–8 GHz); Simulation shows this study's
 tabulated MoM sweep and elevation pattern, scaled to the size; Build lists the flat patterns and
 prints them at 1:1 (`src/lib/antennas/skycone.ts`). The name: an *asymmetric bicone*, or an *inverted
 discone* (cone on top as the hot element, a shallow ground cone below), with a capped top (rim + lid).
@@ -508,21 +508,26 @@ which in theory halves the Chu Q: with 8 frames, brim +180° and skirt ∓70°, 
 1.3 → 0.4 Ω whichever way the moments add, because the azimuthal current sits at the open end.
 
 What a 40 mm cage does do: scored from 1.4 GHz, the plain profile with one shunt wire gives
-**W40, Ø39 × 40 mm, SWR ≤ 1.91 over 1.44 – 6.4 GHz** (1.69 at 1.4 GHz, mean loss 0.31 dB, +2.1 dBi at
-15–50°), right where the floor puts SWR 2; scored from 1.2 GHz it reaches 2.9 at 1.2 GHz and 3.5 worst.
+**W40, Ø39 × 40 mm, SWR ≤ 2.1 over 1.4 – 6.4 GHz** (2.03 at 2 mm segments, 2.08 at 1.5 mm, on 96-point
+sweeps; mean loss 0.37 dB, +2.0 dBi at 15–50°), right where the floor puts SWR 2. The first 18-point run
+claimed 1.91 and hid a 70 MHz-wide resonance at 6.3 GHz (SWR 2.9, converged at 2 / 1.5 / 1.2 mm segments);
+re-tuned with every 60 MHz of 5.8–6.6 GHz in the cost (`FEXTRA`) it is gone, at the price of 2.0–2.1
+in the middle of the band. Scored from 1.2 GHz the cage reaches 2.9 at 1.2 GHz and 3.5 worst.
 W40 (`tools/wideband-antenna/designs/W40.json`), z = 0 at the coax end, 16 frames per side:
 
 | Part | Qty | Shape |
 |---|---|---|
-| Hot frame | 16 | washer edge (ρ 3.0, z 1.2) → (7.0, 9.7) → (13.3, 23.2) → (19.4, 30.6) → (19.4, 36.4) → (5.5, 36.4); 53.7 mm, 4 bends |
-| Ground frame | 16 | collar (ρ 3.0, z −0.1) → (7.0, −0.4) → (19.5, −1.7) → (19.5, −3.6); 18.5 mm, 2 bends |
-| Shorting wire | 1 | at ρ 7.0 mm, from the hot frame (z 9.7) to the ground frame (z −0.4); 10.2 mm |
-| Hot hoops | 4 | Ø26.5 at z 23.2; Ø38.8 at z 30.6; Ø38.8 at z 36.4; Ø10.9 at z 36.4 (the lid edge) |
-| Ground hoops | 3 | Ø8.0 at z −0.1; Ø39.1 at z −1.7; Ø39.1 at z −3.6 |
-| Hot washer | 1 | Ø6.0 on the centre pin, 1.2 mm above the coax end (3.0 / 3.3 / 3.6 mm radius → worst SWR 1.94 / 2.05 / 2.13) |
+| Hot frame | 16 | washer edge (ρ 3.3, z 1.2) → (6.9, 9.9) → (11.8, 21.5) → (18.3, 32.5) → (18.3, 35.2) → (4.4, 35.2); 51.6 mm, 4 bends |
+| Ground frame | 16 | collar (ρ 3.0, z −0.1) → (6.9, −0.5) → (19.6, −2.0) → (19.6, −4.6); 19.3 mm, 2 bends |
+| Shorting wire | 1 | at ρ 6.9 mm, from the hot frame (z 9.9) to the ground frame (z −0.5); 10.4 mm |
+| Hot hoops | 4 | Ø23.6 at z 21.5; Ø36.5 at z 32.5; Ø36.5 at z 35.2; Ø8.8 at z 35.2 (the lid edge) |
+| Ground hoops | 3 | Ø8.0 at z −0.1; Ø39.3 at z −2.0; Ø39.3 at z −4.6 |
+| Hot washer | 1 | Ø6.5 on the centre pin, 1.25 mm above the coax end (the washer radius sets the bottom edge: ±0.3 mm moves the SWR there by ≈ 0.1) |
 
-It is not in the app: the FPV bands at 0.9 and 1.2–1.3 GHz are what the 40 mm box gives up, and the
-capacitor-matched cage needs a lumped part the app's cage model does not have. Reproduce the study with
+In the app it is **"Sky-tilted capped bicone, mini wire cage (4.6:1)"** (`skyconecage40`), with W65's build
+kit, template and NEC-2 table (`export_shaped_table.py`, 1.5 mm segments). Cable (`cage_cable.py`, 1.4–3 GHz):
+bare up to 3.5, one bead 2.1, the 6-bead sleeve ≤ 1.75. The FPV bands at 0.9 and 1.2–1.3 GHz are what
+the 40 mm box gives up; the capacitor-matched cage needs a lumped part the app's cage model does not have. Reproduce the study with
 `results/run40.sh` (the runs) and `results/run40m.sh` (the same cages re-optimised for the mean loss);
 `band13.py` prints the table above from the `results/sweep_*.json` files.
 
