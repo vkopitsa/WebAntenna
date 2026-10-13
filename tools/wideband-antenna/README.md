@@ -46,6 +46,8 @@ processes with `NUMBA_NUM_THREADS=1` each; single-design scripts use numba threa
 | `family11.py` | Family 10 in box-normalised parameters (ground depth, radii and kinks as fractions of the box), so every candidate fits `SIZE`; `to_abs()` / `from_abs()` convert to and from family 10 |
 | `opt_cma.py` | **CMA-ES** from a seed, 8 processes; `FREE=a,b,…` searches only those parameters (the rest stay at the seed): `OMP_NUM_THREADS=1 FAMILY=family11 SIZE=0.066 FLO=912e6 X0=seed.json SIGMA=0.08 POP=16 FREE=g,r0u,ru,kx,ky,ht,hc,capu,gd,rl,gkx,gky,gs,shr python opt_cma.py s66sh 120 2` → W65. Progress in `opt_<tag>.jsonl`, best in `best_<tag>.json` (family-11 parameters: convert with `to_abs()` at the same `SIZE`) |
 | `opt2.py` | Differential evolution from a buildable start (the seed, perturbations of it and random samples that pass `feasible()`); stalled on the 25-parameter family 11 |
+| `family12.py` | Family 11's profile + shunt wires with **springs**: the hot frames, ground frames and shunt wire can each be wound into a coil round their own centre line (turns, coil radius, radius window; straight leads keep the turns clear of joints and hoops). Same cost as family 10 (it patches `family10.build` / `wire_list`). `OMP_NUM_THREADS=1 FAMILY=family12 SIZE=0.060 FLO=960e6 SEG=2e-3 X0=results/best_sp60b.json SIGMA=0.05 POP=16 FREE=ru,kx,ky,ht,hc,capu,gd,rl,gkx,gky,gs,shr,th,ch,tg,cg,ts python opt_cma.py sp60f 40 4` |
+| `sweep12.py` | Dense parallel sweep of a family-12 design (8 processes): `SIZE=0.060 SEG=2e-3 python sweep12.py results/best_sp60f.json 48 960e6 6.6e9 [th=0 tg=0 ...]` (key=value overrides, e.g. springs off) |
 | `shapecage.py` | Sweep of a family-10 design: `python shapecage.py designs/W65.json 96 912e6 6.6e9 1.5e-3` (last argument: λ/per, or a segment length in metres; `key=value` overrides a parameter) |
 | `export_shaped_table.py` | App table for a cage with shunt wires (1.5 mm segments, gain = mean over 8 azimuths, `cage.short` with the wire's node radius, heights, frame and its current segments): `python export_shaped_table.py designs/W65.json 960e6 6.4e9 64 app_W65.json`, then `python to_ts.py --entry app_W65.json` (one entry, to replace the `SKYCONE_W65` line in `skycone.data.ts`) |
 | `cage_cable.py` | Cable check of a cage: the coax jacket as a wire down the axis (15/25/35 cm), bare, 1 bead or the 6-bead sleeve: `python cage_cable.py designs/W65.json` |
@@ -122,3 +124,13 @@ not `pkill -f`, which also matches your own shell command line.
 - **CMA-ES on a small subspace beats DE on everything.** DE over 25 shape parameters (most random cages
   collide) and CMA-ES over all 25 stalled; CMA-ES over the 14 profile parameters + the wire's radius from a
   scaled seed converged in 30 generations.
+- **Springs do not shrink the cage.** Coiling the frames or the shunt (family 12) adds wire, not radiation
+  resistance. At 60 mm, scored from 912 MHz, the best design (2 turns on the hot frames, 1 on the ground frames)
+  reached SWR 2.16, against 2.24 for the same profile without coils. The limit there is a +40j hump at 1.3–1.7 GHz
+  between the shunt's two tunings. Scored from 960 MHz (no low-band margin), Ø59.7 × 59.6 mm reaches SWR 1.90
+  (1.94 at 1.5 mm segments), and **1.90 with the coils removed too**: the profile does the work
+  (`results/best_sp60f.json`, SIZE = 0.060).
+- **The size floor is physics, not shape.** Chu Q with the Bode–Fano bound for a constant |Γ| above f_lo,
+  ln(1/|Γ|) ≤ π / Q(ka), predicts SWR 1.86 for W65 at 912 MHz (achieved: 1.77). For Ø40 × 40 mm at 960 MHz
+  (ka ≈ 0.57) it allows only SWR ≈ 4–5, whatever the wire shape. A cage that small needs a higher f_lo
+  (W65 × 0.62 ≈ 1.5–6.4 GHz) or resistive loading.
