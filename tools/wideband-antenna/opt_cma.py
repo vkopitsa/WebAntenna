@@ -42,7 +42,8 @@ def f(v):
 if __name__ == "__main__":
     d = json.load(open(os.environ["X0"]))
     d = d.get("p", d)
-    u0 = np.array([(min(max(d[k], lo), hi) - lo) / (hi - lo) for k, lo, hi in zip(F.NAMES, F.LO, F.HI)])
+    dflt = getattr(F, "DEFAULTS", {})                   # a seed from a smaller family: its missing parameters off
+    u0 = np.array([(min(max(d.get(k, dflt.get(k, lo)), lo), hi) - lo) / (hi - lo) for k, lo, hi in zip(F.NAMES, F.LO, F.HI)])
     names = os.environ.get("FREE", "").split(",") if os.environ.get("FREE") else list(F.NAMES)
     globals()["FREE"] = np.array([F.NAMES.index(k) for k in names])
     globals()["U0"] = u0

@@ -82,7 +82,8 @@ docs/FPV-DETECTOR-BUILD.md    home build guide for it; STL jigs/cover/cup in doc
                          Simulation = tabulated BoR-MoM results (skycone.data.ts, regenerate with the tools' export_app_table.py
                          + to_ts.py); `Design.sheets` = flat patterns (BOM rows + 1:1 template)
 tools/wideband-antenna/  Python (numba) body-of-revolution MoM + FDTD, DE optimiser, tolerance/report scripts;
-                         NOT part of the app; README.md there has setup, workflow and lessons
+                         NOT part of the app; README.md there has setup, workflow and lessons (incl. the Ø40 × 40 mm
+                         study: below the Chu floor for 960 MHz, bends don't help; W40 = 1.4–6.4 GHz, not in the app)
 ```
 
 ## Conventions

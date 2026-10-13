@@ -509,6 +509,8 @@ def model(p, f, n=NCAGE, r=RWIRE, per=20, els=None, info=None, seg=None, nphi=No
     for depth, R in (beads if cable > 0 else ()):
         k = min(ncs, int(depth / (cable / ncs)) + 1)
         c.ld_card(4, ct, k, k, R, 0.0, 0.0)
+    if p.get("cser", 0.0) > 0.05:            # series capacitor (pF) in the pin: a second matching element next to
+        c.ld_card(0, 1, 1, 1, 0.0, 0.0, p["cser"] * 1e-12)      # the shunt wire's inductance (family 13, 40 mm)
     c.ex_card(0, 1, 1, 0, 1.0, 0, 0, 0, 0, 0)
     c.fr_card(0, 1, f / 1e6, 0)
     if els is None:
@@ -554,9 +556,17 @@ def evaluate(p, fs=None, per=20, abort=None, seg=SEG):
     return dict(H=H, D=Dm, main=rows, swr_main=max(r["swr"] for r in rows))
 
 
+COST = os.environ.get("COST", "minimax")        # "loss": mean mismatch loss (dB) over the log grid instead of the
+                                                 # worst SWR: for a cage too small to reach SWR 2 at the bottom
+
+
 def cost_of(res):
     swrs = np.array([r["swr"] for r in res["main"]])
-    c = max(res["swr_main"], 1.85) + 0.5 * np.mean(np.maximum(0, swrs - 1.8))
+    if COST == "loss":
+        gm = (swrs - 1) / (swrs + 1)
+        c = float(np.mean(-10 * np.log10(np.maximum(1e-6, 1 - gm ** 2))))
+    else:
+        c = max(res["swr_main"], 1.85) + 0.5 * np.mean(np.maximum(0, swrs - 1.8))
     G = np.array([r["g"] for r in res["main"]])
     gavg = 10 * np.log10(np.mean(10 ** (G / 10), axis=1))
     gmin = G.min(axis=1)

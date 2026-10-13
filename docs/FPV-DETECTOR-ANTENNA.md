@@ -26,6 +26,9 @@ The same compact size can be bent from **Ø1 mm wire**: 16 frames per side plus 
 NEC-2 SWR ≤ 1.97 over 960 MHz – 6.4 GHz); see [Wire-cage version](#wire-cage-version-w16).
 One straight **shorting wire** from a hot frame to the ground frame makes the cage smaller: design **W65**,
 Ø65 × 65 mm, NEC-2 SWR ≤ 1.85 over the same band; see [Smaller wire cage](#smaller-wire-cage-one-shorting-wire-w65).
+Ø40 × 40 mm is below the physical floor for 960 MHz (SWR ≥ 4.65 with a perfect match; bent, twisted and coiled frames
+do not change that), but a 40 mm cage covers **1.4 – 6.4 GHz** at SWR ≤ 1.91 (design **W40**);
+see [How small can the cage go?](#how-small-can-the-cage-go-ø40--40-mm-study).
 
 ![Cross-section of design B](fpv-detector/profile.png)
 
@@ -452,6 +455,76 @@ cut list, 1:1 frame template (an × marks the wire's two ends), the printed kit,
 Simulation is the NEC-2 table (`export_shaped_table.py`: 1.5 mm segments, 64 frequencies, gain is
 the mean over 8 azimuths because the wire breaks the 16-fold symmetry). The Radiation view puts the
 frame currents on all 16 frames and the wire's current on the wire alone.
+
+### How small can the cage go? Ø40 × 40 mm study
+
+The question was whether bending the frames (curves, twists, zigzags, coils, legs, brims) could bring
+the cage to Ø40 × 40 mm and keep 960 MHz – 6.4 GHz. It cannot, and the reason is the volume, not the
+shape. A Ø40 × 40 mm cylinder fits in a sphere of radius 28 mm; at 960 MHz that is ka = 0.57, the Chu
+Q is 7.2, and the Bode–Fano bound for a flat |Γ| above f_lo, ln(1/|Γ|) ≤ π/Q, allows SWR 4.65 at best
+with a perfect lossless matching network — SWR 2 at 40 mm is possible only from 1.42 GHz.
+
+| Box (D = H) | ka at 960 MHz | Floor (ideal match) | Best cage with one shunt wire, worst SWR 960 MHz – 6.4 GHz |
+|---|---|---|---|
+| 40 mm | 0.57 | 4.65 | 12.3 (4.9 with a series capacitor, below) |
+| 45 mm | 0.64 | 3.5 | 5.6 |
+| 50 mm | 0.71 | 2.8 | 3.6 |
+| 60 mm | 0.85 | 1.95 | 1.9 (W60, above) |
+
+Every bend was tried in NEC-2 at 40 mm (`family13.py`: family 11's profile, brim, twists of the cone,
+brim, ground and skirt frames up to a full turn, legs, shunt wires, zigzags and family 12's coils, all
+searchable at once; 16 frames for the profile, 12 for the bends), each from the scaled 60 mm cage and
+from 150 random buildable shapes of its kind (`random13.py`), then CMA-ES. Judged on dense sweeps:
+
+| Ø40 × 40 mm, Ø1 mm wire | SWR at 960 MHz | SWR ≤ 2 from | Mean mismatch loss, 0.96–6.4 GHz |
+|---|---|---|---|
+| The 60 mm cage scaled to 40 mm, nothing else changed | 53 | 1.51 GHz | 1.37 dB |
+| Profile + shunt re-optimised for the worst SWR | 12.3 | never | 2.73 dB |
+| + frames twisted into conical spirals (−150°), skirt twisted 166° | 11.4 | 4.8 GHz | 2.39 dB |
+| + zigzag frames | 16.2 | never | 2.29 dB |
+| + legs from the hot rim to the ground rim | 12.7 | never | 3.11 dB |
+| + coils wound into the frames and the shunt | 8.6–13.1 | never | 2.2–3.5 dB |
+| + a **series capacitor** (1.6 pF) in the pin | **4.9** (5.5 worst) | never (≤ 3 from 5.4 GHz) | 1.49 dB |
+
+Every bend lowers the SWR at 960 MHz by moving the mismatch elsewhere: the mean loss over the band
+goes up, not down (the rows above were scored on the worst SWR, which a cage below its floor cannot
+improve, so the optimiser flattened the band instead). Scored on the mean mismatch loss itself
+(`COST=loss`), the same cages come out as the best a 40 mm box can do over 960 MHz – 6.4 GHz:
+
+| Ø40 × 40 mm, scored on the mean loss | SWR at 960 MHz | SWR ≤ 2 from | Mean loss | SWR at 0.96 / 1.24 / 2.5 / 3.5 / 5.8 GHz |
+|---|---|---|---|---|
+| Profile + shunt wire (**W40x**, `designs/W40x.json`) | 24 | 1.51 GHz | **1.07 dB** | 24 / 4.9 / 1.7 / 1.5 / 1.1 |
+| + coils in the frames and the shunt (12 frames) | 26 | 1.51 GHz | 1.14 dB | — |
+| + a 2.0 pF series capacitor (**C40x**, `designs/C40x.json`) | 12 | 1.95 GHz | **0.92 dB** | 12 / 4.4 / 1.5 / 1.8 / 1.5 |
+
+Against the untouched scaled seed (1.37 dB) the re-optimised profile gains 0.3 dB on average, the
+coils add nothing on top of it, and the capacitor another 0.15 dB — all of it in 1–1.8 GHz, while
+900 MHz stays 6–8 dB down and 1.2–1.3 GHz 2–2.5 dB down. The mechanism is the match, then the Q: with the cage's unmatched impedance
+(3 Ω − 55j at 960 MHz, 50 Ω from 2 GHz up) an ideal lossless network gives worst SWR 16 with one
+element (a shunt inductor — the shunt wire), 6.3 with two (shunt L + series 2.4 pF) and 5.9 with
+three (`matchbound.py`). The coils and the capacitor are the second element in wire and in SMD form.
+A helical sheath (frames wound round the outer wall) was also checked for a loop-mode contribution,
+which in theory halves the Chu Q: with 8 frames, brim +180° and skirt ∓70°, R at 960 MHz drops
+1.3 → 0.4 Ω whichever way the moments add, because the azimuthal current sits at the open end.
+
+What a 40 mm cage does do: scored from 1.4 GHz, the plain profile with one shunt wire gives
+**W40, Ø39 × 40 mm, SWR ≤ 1.91 over 1.44 – 6.4 GHz** (1.69 at 1.4 GHz, mean loss 0.31 dB, +2.1 dBi at
+15–50°), right where the floor puts SWR 2; scored from 1.2 GHz it reaches 2.9 at 1.2 GHz and 3.5 worst.
+W40 (`tools/wideband-antenna/designs/W40.json`), z = 0 at the coax end, 16 frames per side:
+
+| Part | Qty | Shape |
+|---|---|---|
+| Hot frame | 16 | washer edge (ρ 3.0, z 1.2) → (7.0, 9.7) → (13.3, 23.2) → (19.4, 30.6) → (19.4, 36.4) → (5.5, 36.4); 53.7 mm, 4 bends |
+| Ground frame | 16 | collar (ρ 3.0, z −0.1) → (7.0, −0.4) → (19.5, −1.7) → (19.5, −3.6); 18.5 mm, 2 bends |
+| Shorting wire | 1 | at ρ 7.0 mm, from the hot frame (z 9.7) to the ground frame (z −0.4); 10.2 mm |
+| Hot hoops | 4 | Ø26.5 at z 23.2; Ø38.8 at z 30.6; Ø38.8 at z 36.4; Ø10.9 at z 36.4 (the lid edge) |
+| Ground hoops | 3 | Ø8.0 at z −0.1; Ø39.1 at z −1.7; Ø39.1 at z −3.6 |
+| Hot washer | 1 | Ø6.0 on the centre pin, 1.2 mm above the coax end (3.0 / 3.3 / 3.6 mm radius → worst SWR 1.94 / 2.05 / 2.13) |
+
+It is not in the app: the FPV bands at 0.9 and 1.2–1.3 GHz are what the 40 mm box gives up, and the
+capacitor-matched cage needs a lumped part the app's cage model does not have. Reproduce the study with
+`results/run40.sh` (the runs) and `results/run40m.sh` (the same cages re-optimised for the mean loss);
+`band13.py` prints the table above from the `results/sweep_*.json` files.
 
 ## How it was found
 
