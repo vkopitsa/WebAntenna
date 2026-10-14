@@ -5,6 +5,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import family10 as F
+import family13  # noqa: F401  (shunt coils, csh / cser of the split-study designs)
 
 p = json.load(open(sys.argv[1]))
 p = F.full(p.get("p", p))
@@ -15,7 +16,7 @@ fig = plt.figure(figsize=(11, 5.2))
 ax = fig.add_subplot(1, 2, 1, projection="3d")
 col = dict(frame="#1f6fb4", frame0="#1f6fb4", ring="#d9822b", spoke="#888888", axis="#1f6fb4", leg="#c2185b", shunt="#c2185b", feed="k")
 for kind, a, b, r in info["wires"]:
-    ax.plot(*[(a[k] * 1e3, b[k] * 1e3) for k in range(3)], color=col.get(kind, "k"), lw=2.2 if kind == "shunt" else 0.9)
+    ax.plot(*[(a[k] * 1e3, b[k] * 1e3) for k in range(3)], color=col.get(kind, "k"), lw=2.2 if kind in ("shunt", "shuntc") else 0.9)
 ax.plot([0, 0], [0, 0], [0, p["g"] * 1e3], color="k", lw=2)
 m = max(H, Dm) * 1e3 / 2
 zc = (F.build(p)["top"] + F.build(p)["bot"]) * 1e3 / 2

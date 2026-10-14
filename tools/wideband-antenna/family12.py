@@ -175,9 +175,10 @@ def wire_list(b, n=F10.NCAGE, r=F10.RWIRE):
         ang = [2 * math.pi * k / n for k in range(n)]
         xyz = lambda q, t: (q[0] * math.cos(t + q[2]), q[0] * math.sin(t + q[2]), q[1])
         extra = []
-        for t in ang[n // b["nsh"] // 2::n // b["nsh"]]:
+        for i, t in enumerate(ang[n // b["nsh"] // 2::n // b["nsh"]]):
+            kind = "shuntc" if i % 2 else "shunt"          # every second shunt takes the csh capacitor (family 13)
             for a, c in zip(sh, sh[1:]):
-                extra.append(("shunt", xyz(a, t), xyz(c, t), r))
+                extra.append((kind, xyz(a, t), xyz(c, t), r))
         k = next(i for i, w in enumerate(wires) if w[0] == "ring") if any(w[0] == "ring" for w in wires) else len(wires)
         wires = wires[:k] + extra + wires[k:]
     return wires

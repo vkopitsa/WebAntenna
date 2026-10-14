@@ -23,7 +23,7 @@ import { printedvdipole } from "./printedvdipole";
 import { pcbloop } from "./pcbloop";
 import { dualbanddipole } from "./dualbanddipole";
 import { sleevedipole } from "./sleevedipole";
-import { skycone7, skycone8, skycone21, skyconecage, skyconecagemini, skyconecage40 } from "./skycone";
+import { skycone7, skycone8, skycone21, skyconecage, skyconecagemini, skyconecage40, skyconecage44 } from "./skycone";
 import { centre, widthPct } from "../bands";
 import { band } from "./common";
 
@@ -71,5 +71,5 @@ function withBands(def: AntennaDef): AntennaDef {
   };
 }
 
-export const ANTENNAS: AntennaDef[] = [dipole, fandipole, groundplane, spring, jpole, collinear, yagi, moxon, quad, biquad, helix, cloverleaf, pagoda, patch, pcbmonopole, meander, ifa, printeddipole, printedvdipole, dualbanddipole, sleevedipole, pcbloop, discone, skycone7, skyconecage, skyconecagemini, skyconecage40, skycone8, skycone21].map(withBands);
+export const ANTENNAS: AntennaDef[] = [dipole, fandipole, groundplane, spring, jpole, collinear, yagi, moxon, quad, biquad, helix, cloverleaf, pagoda, patch, pcbmonopole, meander, ifa, printeddipole, printedvdipole, dualbanddipole, sleevedipole, pcbloop, discone, skycone7, skyconecage, skyconecagemini, skyconecage40, skyconecage44, skycone8, skycone21].map(withBands);
 export const ANTENNA_BY_ID: Record<string, AntennaDef> = Object.fromEntries(ANTENNAS.map((a) => [a.id, a]));

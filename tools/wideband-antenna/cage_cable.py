@@ -5,6 +5,7 @@ prints the worst SWR over 912 MHz - 2 GHz (where the cable matters; `FLO` / `FHI
 import os, sys, json
 import numpy as np
 import family10 as F
+import family13  # noqa: F401  (patches the shunt coil, csh and cser of the split-study designs into family 10)
 
 d = json.load(open(sys.argv[1]))
 p = d.get("p", d)

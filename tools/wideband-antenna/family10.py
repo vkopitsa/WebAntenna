@@ -31,7 +31,8 @@ RWIRE = float(os.environ.get("RWIRE", "0.5e-3"))
 FLO = float(os.environ.get("FLO", "912e6"))
 SIZE = float(os.environ.get("SIZE", "0.075"))
 HMAX = DMAX = SIZE
-FS_MAIN = sorted(set(D.logf(int(os.environ.get("NFREQ", "18")), FLO, 6.6e9))
+FHI = float(os.environ.get("FHI", "6.6e9"))   # top of the scored band (the split study: 1.36 GHz / 7.2 GHz)
+FS_MAIN = sorted(set(D.logf(int(os.environ.get("NFREQ", "18")), FLO, FHI))
                  | {float(f) for f in os.environ.get("FEXTRA", "").split(",") if f})   # FEXTRA: extra frequencies (Hz)
                                                  # in the cost, e.g. every 60 MHz over a narrow feature the log grid missed
 ELS = (15, 20, 25, 30, 35, 40, 45, 50)
@@ -485,12 +486,14 @@ def collisions(wires, k=7, r_hub=5e-3):
 COAX_R = 1.79e-3            # UT-141 jacket
 
 
-def model(p, f, n=NCAGE, r=RWIRE, per=20, els=None, info=None, seg=None, nphi=None, cable=0.0, beads=()):
+def model(p, f, n=NCAGE, r=RWIRE, per=20, els=None, info=None, seg=None, nphi=None, cable=0.0, beads=(), sleeve=None):
     """NEC-2 at f: (Z at the pin gap, gain array). els (ascending, evenly spaced): pattern at those elevations, at
     phi 0, 90/n and 180/n deg, or at nphi cuts round the full circle (a cage with a shunt is not n-fold symmetric);
     default the cost's ELS at phi 0 and 180/n. info (dict) gets the NEC context, the wires and frame 0's tags.
     cable (m): the coax jacket hanging down the axis from the coax end (common-mode path), 5 mm segments;
-    beads: [(depth below the coax end m, R ohm)] ferrite beads as series resistances on it."""
+    beads: [(depth below the coax end m, R ohm)] ferrite beads as series resistances on it;
+    sleeve: (length m, radius m) a quarter-wave choke sleeve (bazooka) round the cable: 8 wires from 2 mm below the
+    cage's lowest point down the length, shorted to the jacket at the bottom (open at the top), no ferrite."""
     from PyNEC import nec_context
     b = build(p)
     lam = 3e8 / f
@@ -506,13 +509,45 @@ def model(p, f, n=NCAGE, r=RWIRE, per=20, els=None, info=None, seg=None, nphi=No
     if cable > 0:
         ct = len(wires) + 1
         ncs = max(1, int(math.ceil(cable / 5e-3)))
-        G.wire(ct, ncs, 0, 0, 0, 0, 0, -cable, COAX_R, 1, 1)
+        if not sleeve:
+            G.wire(ct, ncs, 0, 0, 0, 0, 0, -cable, COAX_R, 1, 1)
+        else:                       # one (length, radius) or a list of them, stacked down the cable (a two-section
+            dz = cable / ncs        # sleeve chokes a wider band than one quarter-wave tube)
+            spans = []
+            z_top = b["bot"] - 2e-3
+            for ls, rs in ([sleeve] if isinstance(sleeve[0], (int, float)) else list(sleeve)):
+                z_bot = max(-round((-z_top + ls) / dz) * dz, -cable + dz)
+                if z_bot < z_top - dz:
+                    spans.append((z_top, z_bot, rs))
+                z_top = z_bot - dz              # the next tube starts one cable segment below this short
+            cuts = [0.0] + [zb for _, zb, _ in spans] + [-cable]
+            for z0, z1 in zip(cuts, cuts[1:]):  # the jacket is split at every short: NEC joins wires at wire ends
+                if z1 < z0 - 1e-9:              # only (a short onto a segment end inside one wire failed
+                    G.wire(ct, max(1, int(round((z0 - z1) / dz))), 0, 0, z0, 0, 0, z1, COAX_R, 1, 1)
+                    ct += 1                     # geometry_complete)
+            ct -= 1
+            for z_top, z_bot, rs in spans:
+                ns = max(2, int(math.ceil((z_top - z_bot) / (seg or lam / per))))
+                for k in range(8):
+                    ph = 2 * math.pi * k / 8
+                    x, y = rs * math.cos(ph), rs * math.sin(ph)
+                    ct += 1
+                    G.wire(ct, ns, x, y, z_top, x, y, z_bot, r, 1, 1)
+                    ct += 1
+                    G.wire(ct, 1, x, y, z_bot, 0, 0, z_bot, r, 1, 1)
     c.geometry_complete(0)
     for depth, R in (beads if cable > 0 else ()):
+        assert not sleeve, "beads and a sleeve together are not modelled"
         k = min(ncs, int(depth / (cable / ncs)) + 1)
         c.ld_card(4, ct, k, k, R, 0.0, 0.0)
     if p.get("cser", 0.0) > 0.05:            # series capacitor (pF) in the pin: a second matching element next to
         c.ld_card(0, 1, 1, 1, 0.0, 0.0, p["cser"] * 1e-12)      # the shunt wire's inductance (family 13, 40 mm)
+    if p.get("csh", 0.0) > 0.05:             # series capacitor (pF) in every second shunt wire ("shuntc", 2 or 4
+        prev = None                          # shunts): that branch is a series L-C across the port, a second
+        for tag, w in enumerate(wires, 1):   # resonance next to the plain shunt's L (double tuning, split study)
+            if w[0] == "shuntc" and prev != "shuntc":
+                c.ld_card(0, tag, 1, 1, 0.0, 0.0, p["csh"] * 1e-12)
+            prev = w[0]
     c.ex_card(0, 1, 1, 0, 1.0, 0, 0, 0, 0, 0)
     c.fr_card(0, 1, f / 1e6, 0)
     if els is None:
@@ -541,6 +576,14 @@ def swr(z, z0=50.0):
 SEG = float(os.environ.get("SEG", "0")) or None     # fixed segment length (m) instead of lambda / per
 
 
+SLEEVE = tuple(float(v) for v in os.environ.get("SLEEVE", "").split(",")) if os.environ.get("SLEEVE") else None
+                                                 # SLEEVE=0.07,0.005: a choke sleeve (length, radius m) on the cable
+CABLES = [float(v) for v in os.environ.get("CABLES", "").split(",") if v]     # bare coax lengths (m) in the cost:
+FS_CABLE = sorted(set(D.logf(int(os.environ.get("NCABLE", "8")), FLO, min(FHI, 2.4 * FLO))))   # a cable-robust cage
+                                                 # (no ferrite): the worst SWR with the jacket down the axis, over the
+                                                 # bottom of the band where the cable matters, joins the worst SWR
+
+
 def evaluate(p, fs=None, per=20, abort=None, seg=SEG):
     """NEC sweep. abort (SWR): solve the two lowest frequencies first (the hard ones for a small cage) and stop
     there when either is worse; the partial result's cost is then a lower bound."""
@@ -555,9 +598,15 @@ def evaluate(p, fs=None, per=20, abort=None, seg=SEG):
         if abort is not None and i == 1 and max(r["swr"] for r in rows) > abort:
             break
     rows.sort(key=lambda r: r["f"])
-    return dict(H=H, D=Dm, main=rows, swr_main=max(r["swr"] for r in rows))
+    res = dict(H=H, D=Dm, main=rows, swr_main=max(r["swr"] for r in rows))
+    if CABLES and len(rows) == len(order):           # not for an aborted (partial) evaluation
+        cab = [dict(f=f, L=L, swr=swr(model(p, f, per=per, seg=seg, cable=L, sleeve=SLEEVE)[0])) for f in FS_CABLE for L in CABLES]
+        res["cable"] = cab
+        res["swr_cable"] = max(r["swr"] for r in cab)
+    return res
 
 
+SWRFLOOR = float(os.environ.get("SWRFLOOR", "1.85"))   # the minimax cost does not reward a worst SWR below this
 COST = os.environ.get("COST", "minimax")        # "loss": mean mismatch loss (dB) over the log grid instead of the
                                                  # worst SWR: for a cage too small to reach SWR 2 at the bottom
 
@@ -568,7 +617,9 @@ def cost_of(res):
         gm = (swrs - 1) / (swrs + 1)
         c = float(np.mean(-10 * np.log10(np.maximum(1e-6, 1 - gm ** 2))))
     else:
-        c = max(res["swr_main"], 1.85) + 0.5 * np.mean(np.maximum(0, swrs - 1.8))
+        c = max(res["swr_main"], res.get("swr_cable", 0.0), SWRFLOOR) + 0.5 * np.mean(np.maximum(0, swrs - 1.8))
+        if "cable" in res:
+            c += 0.5 * np.mean(np.maximum(0, np.array([r["swr"] for r in res["cable"]]) - 1.8))
     G = np.array([r["g"] for r in res["main"]])
     gavg = 10 * np.log10(np.mean(10 ** (G / 10), axis=1))
     gmin = G.min(axis=1)

@@ -83,7 +83,8 @@ docs/FPV-DETECTOR-BUILD.md    home build guide for it; STL jigs/cover/cup in doc
                          + to_ts.py); `Design.sheets` = flat patterns (BOM rows + 1:1 template)
 tools/wideband-antenna/  Python (numba) body-of-revolution MoM + FDTD, DE optimiser, tolerance/report scripts;
                          NOT part of the app; README.md there has setup, workflow and lessons (incl. the Ø40 × 40 mm
-                         study: below the Chu floor for 960 MHz, bends don't help; W40 = 1.4–6.4 GHz is skyconecage40)
+                         study: below the Chu floor for 960 MHz, bends don't help; W40 = 1.4–6.4 GHz is skyconecage40; the two-antenna split: B44f = 1.36–7 GHz is skyconecage44 with a
+                         choke sleeve instead of ferrite, A55 = 0.96–1.36 GHz needs capacitors and is not an app type)
 ```
 
 ## Conventions

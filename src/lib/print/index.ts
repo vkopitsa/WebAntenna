@@ -32,6 +32,7 @@ const FAMILIES: Record<string, (p: Params, d: Design) => PartSpec[]> = {
   skyconecage: (_p, d) => skyconeParts(d, 0, true),
   skyconecagemini: (_p, d) => skyconeParts(d, 0, true),
   skyconecage40: (_p, d) => skyconeParts(d, 0, true),
+  skyconecage44: (_p, d) => skyconeParts(d, 0, true),
   skycone8: (_p, d) => skyconeParts(d),
   skycone21: (_p, d) => skyconeParts(d),
 };

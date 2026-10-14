@@ -21,11 +21,12 @@ SIZE, HMAX, DMAX = F10.SIZE, F10.HMAX, F10.DMAX
 WIDE = dict(tw_h=(-150.0, 150.0), tw_f=(-360.0, 360.0), tw_g=(-150.0, 150.0), tw_k=(-360.0, 360.0))
 PARAMS = [(k,) + WIDE.get(k, (lo, hi)) for k, lo, hi in F11.PARAMS] + F12.PARAMS[len(F12.PROFILE):] + [
     ("cser", 0.0, 10.0),      # series capacitor in the pin, pF (0: none); with the shunt wire an L-network
-]
+    ("csh", 0.0, 10.0),       # series capacitor in every second shunt wire, pF (0: none): with sh = 2 one plain
+]                             # shunt (L) and one L-C branch, the double-tuned match for the narrow low band (A)
 NAMES = [p[0] for p in PARAMS]
 LO = np.array([p[1] for p in PARAMS])
 HI = np.array([p[2] for p in PARAMS])
-DEFAULTS = dict(F10.DEFAULTS, hf=0.0, cser=0.0, **F12.SPRING)   # a seed without the extras: straight, no brim, no legs
+DEFAULTS = dict(F10.DEFAULTS, hf=0.0, cser=0.0, csh=0.0, **F12.SPRING)   # a seed without the extras: straight, no brim, no legs
 
 
 def unpack(x):
@@ -39,6 +40,7 @@ def to_abs(q):
     for k in F12.SPRING:
         p["sp_" + k] = q.get(k, F12.SPRING[k])
     p["cser"] = q.get("cser", 0.0)
+    p["csh"] = q.get("csh", 0.0)
     return p
 
 

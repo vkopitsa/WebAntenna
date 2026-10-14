@@ -29,6 +29,9 @@ One straight **shorting wire** from a hot frame to the ground frame makes the ca
 Ø40 × 40 mm is below the physical floor for 960 MHz (SWR ≥ 4.65 with a perfect match; bent, twisted and coiled frames
 do not change that), but a 40 mm cage covers **1.4 – 6.4 GHz** at SWR ≤ 2.1 (design **W40**, in the app);
 see [How small can the cage go?](#how-small-can-the-cage-go-ø40--40-mm-study).
+Splitting the band between **two antennas** gets below that: **B44f** (Ø43 × 44 mm, 1.36 – 7 GHz, SWR ≤ 1.73; 43 mm at ≤ 1.95 with cable) and
+**A55** (Ø51 × 54 mm, 960 MHz – 1.36 GHz, SWR ≤ 1.9 with two small capacitors); no ferrite: a quarter-wave choke sleeve on the coax keeps them ≤ 2.0 / ≤ 1.7 with any cable;
+see [Two antennas instead of one](#two-antennas-instead-of-one-960-mhz--136-ghz-and-136--7-ghz).
 
 ![Cross-section of design B](fpv-detector/profile.png)
 
@@ -37,7 +40,7 @@ see [How small can the cage go?](#how-small-can-the-cage-go-ø40--40-mm-study).
 ![Sections of designs B and A at the same scale](fpv-detector/A_B_section.png)
 
 **In the app:** the designs are antenna types in the Broadband group, **"Sky-tilted capped bicone (8:1)"** (B),
-**"(21:1)"** (A), **"compact (6.7:1)"** (S73), **"wire cage (6.7:1)"** (W16), **"small wire cage (6.7:1)"** (W65) and **"mini wire cage (4.6:1)"** (W40, 1.4 – 6.4 GHz). The band editor scales the shape (e.g. 1–8 GHz); Simulation shows this study's
+**"(21:1)"** (A), **"compact (6.7:1)"** (S73), **"wire cage (6.7:1)"** (W16), **"small wire cage (6.7:1)"** (W65), **"mini wire cage (4.6:1)"** (W40, 1.4 – 6.4 GHz) and **"mini wire cage 7 GHz (5.1:1)"** (B44f, 1.36 – 7 GHz, choke sleeve instead of ferrite). The band editor scales the shape (e.g. 1–8 GHz); Simulation shows this study's
 tabulated MoM sweep and elevation pattern, scaled to the size; Build lists the flat patterns and
 prints them at 1:1 (`src/lib/antennas/skycone.ts`). The name: an *asymmetric bicone*, or an *inverted
 discone* (cone on top as the hot element, a shallow ground cone below), with a capped top (rim + lid).
@@ -530,6 +533,158 @@ bare up to 3.5, one bead 2.1, the 6-bead sleeve ≤ 1.75. The FPV bands at 0.9 a
 the 40 mm box gives up; the capacitor-matched cage needs a lumped part the app's cage model does not have. Reproduce the study with
 `results/run40.sh` (the runs) and `results/run40m.sh` (the same cages re-optimised for the mean loss);
 `band13.py` prints the table above from the `results/sweep_*.json` files.
+
+### Two antennas instead of one: 960 MHz – 1.36 GHz and 1.36 – 7 GHz
+
+The 40 mm study ends at the Chu floor: one cage cannot be small *and* cover 960 MHz – 6.4 GHz. Two cages can,
+because the floor is set by the lowest frequency and the *shape* of the band. For a high-pass band (f_lo up) the
+Bode–Fano form above applies; for a narrow band-pass of fractional width B, B · ln(1/|Γ|) ≤ π / Q, so the
+960 MHz – 1.36 GHz antenna (B = 0.34) needs far less volume than one that must also reach 6.4 GHz, *if* it is
+matched over the band with more than one element. The split, with the same cost as the cages above (worst SWR,
+15–50° sky gain, Ø1 mm wire, 16 frames, 2 mm segments, `FHI` caps the scored band; no ferrite anywhere):
+
+| Antenna | Band | Box | Floor (ideal match) | Design | Worst SWR, dense sweep (2 mm / 1.5 mm segments) | Mean gain 15–50° |
+|---|---|---|---|---|---|---|
+| **B44f** | 1.36 – 7.0 GHz | Ø43.1 × 43.8 mm | 1.83 | profile + 1 shorting wire, searched with the cost floor lowered to 1.5 (`designs/B44f.json`, `runZ3.sh`) | **1.73 / 1.74** (at 2.05 GHz) | +2.1 dBi |
+| B44 | 1.36 – 7.0 GHz | Ø42.5 × 43.8 mm | 1.83 | profile + 1 shorting wire (`designs/B44.json`, cost floor 1.85) | 1.81 / 1.82 (SWR ≤ 2 from 1.35 GHz; 1.69 at 1.36 GHz) | +2.1 dBi |
+| B42 | 1.36 – 7.0 GHz | Ø42.0 × 40.8 mm | 1.98 | the same, 42 mm (`designs/B42.json`) | 2.04 / 2.04 (at 2.24 GHz) | +1.7 dBi |
+| B43 | 1.36 – 7.0 GHz | Ø42.8 × 43.0 mm | 1.90 | the same, 43 mm (`designs/B43.json`) | 1.85 / 1.86 (at 2.09 GHz) | +2.1 dBi |
+| B43s | 1.36 – 7.0 GHz | Ø42.9 × 42.9 mm | 1.90 | 43 mm searched with the 50 mm sleeve and the cables in the cost (`designs/B43s.json`) | 1.87 alone, **≤ 1.95 with any cable** (sleeve table) | +2.1 dBi |
+| B46 | 1.36 – 7.0 GHz | Ø44.0 × 45.9 mm | 1.70 | the same, 46 mm | 1.81 (the search's cost floors at 1.85) | +2.6 dBi |
+| **A55** | 0.96 – 1.36 GHz | Ø51.3 × 54.1 mm | 1.15 | profile + 2 coiled shorting wires, 2 capacitors (`designs/A55.json`) | **1.86 / 1.88** (1.63 – 1.84 inside, 1.86 at the ends) | +1.0 dBi |
+| **A52** | 0.96 – 1.36 GHz | Ø50.9 × 51.5 mm | 1.21 | the same, 52 mm (`designs/A52.json`): the smallest at SWR < 2, less margin than A55 | **1.94 / 1.98** (at 956 MHz) | +0.8 dBi |
+| A51 | 0.96 – 1.36 GHz | Ø50.6 × 50.8 mm | 1.18 | the same, 51 mm (`results/best_a51f.json`, 40 generations from A52): over 2 | 2.03 / 2.10 (at 956 MHz) | +1.0 dBi |
+| A50 | 0.96 – 1.36 GHz | Ø48.6 × 49.8 mm | 1.27 | the same, 50 mm (`designs/A50.json`) | 2.13 / 2.19 (at 956 MHz; 1.8 – 2.1 above) | +1.0 dBi |
+
+![B44: 16 frames per side, one shorting wire](fpv-detector/B44_cage.png)
+
+**B44** is W40 one size up, re-tuned for 1.36 – 7 GHz with `FEXTRA` every 100 MHz over 5.8 – 7.2 GHz (the band
+top is 7 GHz now; the 40 mm cage's 6.3 GHz feature does not come back). It sits on its floor: 44 and 46 mm both
+end at 1.81, 43 mm at 1.85, 42 mm at 2.04 — with the search's cost floor at 1.85. Lowering the floor to 1.5
+(`SWRFLOOR`) lets the same 44 mm box reach **1.73** (B44f), so B44f is the design to build; B44 (1.81) stays as
+the reference. In the app B44f is **"Sky-tilted capped bicone, mini wire cage 7 GHz (5.1:1)"** (`skyconecage44`, the
+NEC-2 table from `export_shaped_table.py`, W65's build kit and template; its cable note describes the choke sleeve).
+B44f (`tools/wideband-antenna/designs/B44f.json`), z = 0 at the coax end:
+
+| Part | Qty | Shape |
+|---|---|---|
+| Hot frame | 16 | washer edge (ρ 3.0, z 2.1) → (ρ 3.8, z 2.1) → (ρ 8.0, z 8.7) → (ρ 13.2, z 16.7) → (ρ 21.6, z 32.8) → (ρ 21.6, z 41.4) → (ρ 9.6, z 41.4); 56.8 mm, 5 bends |
+| Ground frame | 16 | collar (ρ 3.0, z -0.0) → (ρ 5.7, z -0.1) → (ρ 8.0, z -0.1) → (ρ 21.2, z -0.4) → (ρ 21.2, z -2.5); 20.3 mm, 3 bends |
+| Shorting wire | 1 | at ρ 8.0 mm, from the hot frame (z 8.7) to the ground frame (z -0.1); 8.9 mm |
+| Hot hoops | 4 | Ø26.5 at z 16.7; Ø43.1 at z 32.8; Ø43.1 at z 41.4; Ø19.2 at z 41.4 |
+| Ground hoops | 3 | Ø11.3 at z -0.1; Ø42.4 at z -0.4; Ø42.4 at z -2.5 |
+| Hot washer | 1 | Ø7.5 on the centre pin, 2.1 mm above the coax end |
+
+**A55 needs two capacitors.** With one shorting wire (a shunt inductor, one matching element) the low band is
+single-tuned, and the band at SWR ≤ 2 is only (S − 1)/(Q √S) ≈ 0.7 / Q wide: 10 % at 40 mm, 25 % at 50 mm, 36 %
+at 60 mm against the 34 % needed, which is why W60 / W65 are the smallest wire-only cages for 960 MHz. The
+optimiser confirms it: the plain profile + shorting wire ends at SWR 7.4 / 4.6 / 3.35 / 2.8 at 40 / 45 / 50 /
+55 mm, and bending the frames (coils 8.0 at 40 mm; 100 random zigzag, leg and coil shapes each: best 20 – 32)
+does not change that. What does is a second resonance: an ideal-ladder check on the unmatched cage
+(`dtune.py`) gives, on the unoptimised 50 mm seed over 0.96 – 1.36 GHz, 3.7 with the shunt wire alone, 2.8 with
+a series capacitor in the pin added, and **1.94 with a second shunt branch of L and C in series** (`shunt L,
+series C, shunt L-C`, the double-tuned match). In wire: two shorting wires, every second one with a small
+capacitor in it (`csh`), plus the capacitor in the pin (`cser`). Searched in two stages (`results/runA3.sh`,
+`runA4.sh`: the five matching knobs with the profile frozen, then everything), it gives 2.13 at 50 mm, 2.03 at 51 mm, 1.94 at 52 mm and
+**1.86 at 55 mm** (1.95 after the first stage alone, Ø54.9 × 54.8 mm). The capacitors are 0402 / 0603 ceramics (2 – 5 pF, no ferrite); the app's cage model has no
+lumped parts, so A55 is not an app type. A55 (`tools/wideband-antenna/designs/A55.json`), z = 0 at the coax end:
+
+![A55: a cup over a shallow cone, two coiled shorting wires](fpv-detector/A55_cage.png)
+
+| Part | Qty | Shape |
+|---|---|---|
+| Hot frame | 16 | washer edge (ρ 3.0, z 3.2) → (4.5, 3.2) → (10.2, 17.7) → (12.5, 23.5) → (25.5, 27.5) → (25.5, 37.4) → (12.3, 37.4); 60.1 mm, 5 bends |
+| Ground frame | 16 | collar ring (ρ 3.0, z −5.0) → (6.2, −10.2) → (10.2, −11.5) → (25.6, −16.7); 26.6 mm, 2 bends (4 spokes from the coax end to the ring) |
+| Shorting wire | 2 | at ρ 10.2 mm, from the hot frame (z 17.7) to the ground frame (z −11.5), wound into 2.3 turns Ø3.6 mm (33.5 mm of wire); one of them with a 3.6 pF capacitor in series |
+| Hot hoops | 5 | Ø9.1 at z 3.2; Ø24.9 at z 23.5; Ø51.0 at z 27.5; Ø51.0 at z 37.4; Ø24.6 at z 37.4 (the lid edge) |
+| Ground hoops | 2 | Ø12.3 at z −10.2; Ø51.3 at z −16.7 |
+| Hot washer | 1 | Ø9.1 on the centre pin, 3.2 mm above the coax end |
+| Series capacitor | 1 | 2.2 pF in the centre pin, between the coax and the washer |
+
+**Tolerance of A55's parts** (`results/tol_A55.log`, worst SWR over the band, nominal 1.85): the pin capacitor
+is the sensitive one, 2.2 pF ± 5 % gives 1.93 / 1.94 and ± 10 % 2.06, so use a C0G 2.2 pF ± 0.1 pF; the shunt's
+3.6 pF can be ± 10 % (1.86 – 1.89); the shunt coils must be wound to the count, +0.25 turn gives 2.18, −0.25 turn
+1.85 (both capacitors + 10 %: 2.08, − 10 %: 1.99).
+
+**Random shapes, springs and every bend were tried again** for the low band (`results/runAB.sh`: coils in the
+frames and the shunt, zigzags, legs, twisted brims; CMA-ES and 100 random buildable shapes per group at 40 mm):
+every one scores worse than the plain profile with the same match. The lever is the number of matching elements,
+not the form of the wire — the same lesson as the 40 mm study.
+
+**Cable (no ferrite).** A bare coax down the axis is part of these antennas: B44 alone is 1.81, with a bare
+15 / 25 / 35 cm jacket 3.25 / 2.77 / 2.39 (one bead would give 2.0, the 6-bead sleeve 1.8). The cable-robust
+variants (`results/runX.sh`: the three bare lengths in the cost, `CABLES`) are in the table below.
+
+| Antenna | Cage only | Bare cable 15 / 25 / 35 cm | 1 bead | 6-bead sleeve |
+|---|---|---|---|---|
+| B44 | 1.81 | 3.25 / 2.77 / 2.39 | 1.97 / 1.86 / 2.01 | 1.78 / 1.77 / 1.80 |
+| A55 | 1.83 | 10.4 / 7.1 / 3.9 | 4.4 / 2.2 / 2.3 | 1.85 / 1.67 / 1.78 |
+| B44x: B44 re-optimised with the bare cables in the cost (`designs/B44x.json`, `runX.sh`) | 2.04 | 2.54 / 2.42 / 2.36 | 2.27 / 2.14 / 2.40 | 1.99 / 1.97 / 1.99 |
+
+| Antenna + choke sleeve (no ferrite) | Cage only | With 15 / 25 / 35 cm of bare cable and the sleeve, 0.96 – 1.36 or 1.36 – 7 GHz |
+|---|---|---|
+| **B44s**: B44 re-optimised with the Ø10 × 50 mm sleeve and the cables in the cost (`designs/B44s.json`, `runX4.sh`; Ø43.6 × 42.4 mm) | 1.89 | **1.82 / 1.84 / 1.87** |
+| B44 as found + Ø10 × 50 mm sleeve | 1.81 | 1.86 / 1.90 / 2.00 |
+| **A55 + Ø20 × 75 mm sleeve** (1.5 mm segments) | 1.88 | **2.16 / 1.62 / 1.80** |
+| A55s: A55 re-optimised with the Ø20 × 75 mm sleeve and the cables in the cost (`designs/A55s.json`, `runX5.sh`; Ø48.8 × 54.2 mm) | 1.96 / 1.95 | 2.06 / 1.62 / 1.81 (2.10 / 1.62 / 1.82 at 1.5 mm segments) |
+| **A52 + two Ø20 mm sleeves 70 + 50 mm** (`results/sleeve2_A52.log`) | 1.94 | **1.82 / 1.64 / 1.78** |
+| B43 + Ø10 × 50 mm sleeve, 1.36 – 7 GHz (`results/sleeve_B43_full.log`) | 1.85 | 1.68 / 2.02 / 2.08 (B44: 1.86 / 1.90 / 2.00) |
+| **B43s**: 43 mm searched with the sleeve and the cables in the cost (`designs/B43s.json`, `runZ3.sh`) | 1.87 | **1.68 / 1.90 / 1.95** |
+| **B44f** + Ø10 × 50 mm sleeve (`results/sleeve_B44f_full.log`) | 1.73 | **1.58 / 1.81 / 2.00** |
+
+The 15 cm cable with A55 stays at 2.1 whatever the cage does: one quarter-wave tube chokes well near one
+frequency only. **Two tubes in series** (the second starts just below the first's short) cover the band
+(`cage_sleeve.py` `SLEEVES=70+50`, both Ø20 mm, `results/sleeve2_A55_*.log`), worst SWR with 15 / 25 / 35 cm:
+
+| A55, two Ø20 mm sleeves | 60 + 40 mm | 65 + 45 | **70 + 50** | 75 + 45 | 75 + 55 | 80 + 50 |
+|---|---|---|---|---|---|---|
+| | 2.8 / 3.5 / 2.2 | 1.97 / 2.26 / 1.84 | **1.64 / 1.64 / 1.70** | 1.88 / 1.86 / 1.90 | 1.88 / 1.62 / 1.80 | 2.2 / 1.9 / 2.1 |
+
+On 1.5 mm segments 70 + 50 mm gives 1.68 / 1.69 / 1.76, and the lengths are not critical: 68 + 50, 72 + 50,
+70 + 55 and 70 + 45 all stay within 1.5 – 2.0. So the low-band antenna is **≤ 1.9 alone and ≤ 1.8 with any of the
+three cables and a 70 + 50 mm two-section sleeve (Ø20 mm, 120 mm of tube under the cage), no ferrite**; the
+same sleeve on the smaller A52 gives 1.82 / 1.64 / 1.78, so A52 (Ø51 × 51.5 mm) also holds SWR < 2 with any cable.
+For B, 43 mm works with any cable once the sleeve and cables are in the search (B43s, ≤ 1.95), and 44 mm with the
+cost floor lowered gives the best cage of all (B44f, 1.73 alone, ≤ 2.00 with cable): B43s is the smallest, B44f the
+best-matched.
+
+At 960 MHz a 55 mm cage is a quarter of a wavelength across the diagonal, and a bare 15 – 25 cm jacket is the
+other half of the dipole: A55 on its own is 1.83, with the cable 7 – 10. The hoop-and-frame ground side does not
+shield it; W65 showed the same (5.8 bare). Without ferrite the cable has to be part of the design.
+
+**A quarter-wave choke sleeve instead of ferrite.** A metal tube over the coax, open towards the cage and shorted
+to the jacket at its far end (a bazooka: Ø10 mm, 8 wires in the model, `cage_sleeve.py`, `family10.model(sleeve=)`),
+stops the jacket current without any ferrite. With the cages as found:
+
+| Antenna + sleeve | Bare cable 15 / 25 / 35 cm | Sleeve 50 mm | 60 mm | 70 mm | 80 mm |
+|---|---|---|---|---|---|
+| A55, 0.96 – 1.36 GHz | 10.4 / 7.1 / 3.9 | 8.4 / 9.3 / 5.1 | 3.3 / 3.1 / 3.5 | **2.24 / 1.80 / 2.33** | 2.7 / 2.5 / 2.7 |
+| B44, 1.36 – 3 GHz (above 3 GHz the sleeve changes nothing, ≤ 1.75) | 3.25 / 2.77 / 2.39 | **1.86 / 1.90 / 2.00** | 2.1 / 2.2 / 2.1 | — | — |
+
+B44 with a 50 mm sleeve is at SWR ≤ 2.0 with any of the three cables over the whole 1.36 – 7 GHz band. For
+A55 the sleeve wants to be fatter (the band is 34 % wide, a thin sleeve is a quarter wave at one frequency):
+worst SWR with 15 / 25 / 35 cm of cable, sleeve radius × length (`results/sleeve_A55_r*.log`):
+
+| A55 sleeve | 65 mm | 70 mm | 75 mm | 80 mm | 85 mm |
+|---|---|---|---|---|---|
+| Ø8 mm | 2.8 / 2.8 / 3.2 | 2.4 / 2.0 / 2.6 | 2.5 / 2.4 / 2.5 | | |
+| Ø10 mm | | 2.24 / 1.80 / 2.33 | | 2.7 / 2.5 / 2.7 | |
+| Ø16 mm | 2.2 / 1.9 / 2.2 | 2.1 / 1.8 / 2.0 | 2.15 / 1.67 / 1.84 | | |
+| **Ø20 mm** | | 2.14 / 1.75 / 1.84 | **2.15 / 1.61 / 1.74** | 2.3 / 1.8 / 2.0 | 2.6 / 2.1 / 2.3 |
+| Ø24 mm | | 2.16 / 1.75 / 1.71 | 2.14 / 1.59 / 1.70 | 2.3 / 1.7 / 1.9 | 2.5 / 1.9 / 2.1 |
+
+So **A55 + a Ø20 × 75 mm sleeve: SWR ≤ 2.15 with any cable** (the 2.15 is the 15 cm cable at 960 MHz; 25 and
+35 cm stay ≤ 1.75), **B44 + a Ø10 × 50 mm sleeve: ≤ 2.0**, and the two-section sleeve above takes A55 to ≤ 1.8.
+The sleeve is a tube under the cage, soldered to the jacket at its far end, nothing else. Re-optimising the cage
+with its sleeve and the three cables in the cost (`results/runX3.sh` – `runX5.sh`) adds little: with the thin
+sleeve A55 stays at its seed's cost (stopped after 12 generations), with the fat one it trades 0.1 of cage-only
+SWR for 0.1 on the 15 cm cable (**A55s**), and B44 moves from 2.00 to 1.89 on the search grid (**B44s**,
+`designs/B44s.json`); both in the sleeve table above.
+
+Reproduce: `results/runAB.sh` (phase 1 and the random screening), `runA2.sh` (series capacitor), `runA3.sh` /
+`runA4.sh` (double-tuned, 45 – 55 mm), `runB2.sh` (42 mm), `runX.sh` – `runX5.sh` (bare cable and sleeves),
+`runZ.sh` / `runZ2.sh` (52 / 43 mm); `results/status.sh <tags>` prints the best cost of each run, `parts_table.py` the tables
+above, `sweep13.py` the dense sweeps, `cage_sleeve.py` the cable + sleeve tables.
 
 ## How it was found
 

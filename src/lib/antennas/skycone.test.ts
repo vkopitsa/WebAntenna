@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ANTENNA_BY_ID } from "./index";
-import { SKYCONE_8, SKYCONE_W16, SKYCONE_W40, SKYCONE_W65 } from "./skycone.data";
+import { SKYCONE_8, SKYCONE_W16, SKYCONE_B44, SKYCONE_W40, SKYCONE_W65 } from "./skycone.data";
 import { skyconeCurrents, skyconeGain, skyconeZ } from "./skycone";
 import { radiationEligible, s11, simulate } from "../simulate";
 import { partsFor } from "../print";
@@ -122,6 +122,32 @@ describe("sky-tilted capped bicones", () => {
     expect(parts).toEqual(expect.arrayContaining(["shell", "skycone-cup", "skycone-bend", "skycone-cradle", "skycone-hoops"]));
     const k = SKYCONE_W40.cage!.short!.k;
     expect(skyconeCurrents("skyconecage40", d)!.els.length).toBe(16 * (SKYCONE_W40.cur.seg.length - k) + k);
+  });
+
+  it("mini wire cage for 1.36–7 GHz is design B44f: the same 314-wire topology at Ø43 × 44 mm, SWR ≤ 1.75", () => {
+    const def = ANTENNA_BY_ID.skyconecage44, p = { bands: "1360e6-7000e6" }, d = def.build(p);
+    // tools/wideband-antenna/family13.py (designs/B44f.json): wire_list() gives 314 wires, 2018.4 mm
+    const live = d.wires.filter((w) => !w.drawOnly);
+    expect(live.length).toBe(314);
+    expect(live.reduce((a, w) => a + Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1], w.b[2] - w.a[2]), 0) * 1e3).toBeCloseTo(2018.4, 0);
+    expect(dim("skyconecage44", "1360e6-7000e6", "Overall height") * 1e3).toBeCloseTo(43.8, 1);
+    expect(dim("skyconecage44", "1360e6-7000e6", "Hot element diameter") * 1e3).toBeCloseTo(43.1, 1);
+    expect(dim("skyconecage44", "1360e6-7000e6", "Ground cone diameter") * 1e3).toBeCloseTo(42.4, 1);
+    expect(dim("skyconecage44", "1360e6-7000e6", "Shorting wire length") * 1e3).toBeCloseTo(8.85, 1);
+    const sh = live.filter((w) => w.tag === "S");
+    expect(sh.length).toBe(1);
+    expect(Math.hypot(sh[0].a[0], sh[0].a[1]) * 1e3).toBeCloseTo(8.04, 2);
+    const r = simulate(def, p, d);
+    expect(r.method).toBe("analytic");
+    expect(Math.max(...r.z.filter((q) => q.f >= 1.36e9 && q.f <= 7.0e9).map((q) => s11(q, 50).swr))).toBeLessThan(1.8);
+    expect(d.frames!.hoops.hot.length + d.frames!.hoops.ground.length).toBe(7);
+    expect(d.notes.some((n) => n.includes("choke sleeve"))).toBe(true);
+    expect(d.notes.some((n) => n.includes("Ferrite sleeve required"))).toBe(false);
+    expect(templatePages(def, d, false).length).toBe(1);
+    const parts = partsFor("skyconecage44", def.defaults, d).map((q) => q.id);
+    expect(parts).toEqual(expect.arrayContaining(["shell", "skycone-cup", "skycone-bend", "skycone-cradle", "skycone-hoops"]));
+    const kb = SKYCONE_B44.cage!.short!.k;
+    expect(skyconeCurrents("skyconecage44", d)!.els.length).toBe(16 * (SKYCONE_B44.cur.seg.length - kb) + kb);
   });
 
   it("the tabulated sweep: SWR ≤ 1.4 over 800 MHz – 6.4 GHz, beam above the horizon", () => {
