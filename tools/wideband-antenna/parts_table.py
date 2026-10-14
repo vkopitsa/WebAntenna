@@ -35,8 +35,9 @@ print(f"| Ground frame | {n} | collar " + " → ".join(f"(ρ {mm(r)}, z {mm(z)})
 if b["nsh"]:
     sh = b["shunt"]
     (r0, z0, _), (r1, z1, _) = sh[0], sh[-1]
-    ls = sum(math.dist(a[:2], c[:2]) for a, c in zip(sh, sh[1:]))
-    coil = f", wound into {p.get('sp_ts', 0):.1f} turns Ø{2 * p.get('sp_cs', 0) * 1e3:.1f} mm" if p.get("sp_ts", 0) >= 0.5 else ""
+    xyz = lambda q: (q[0] * math.cos(q[2]), q[0] * math.sin(q[2]), q[1])
+    ls = sum(math.dist(xyz(a), xyz(c)) for a, c in zip(sh, sh[1:]))     # the coil's wire, in 3D
+    coil = f", wound into {int(round(p.get('sp_ts', 0)))} turns Ø{2 * p.get('sp_cs', 0) * 1e3:.1f} mm" if p.get("sp_ts", 0) >= 0.5 else ""
     cap = f"; every second one with a {p['csh']:.1f} pF series capacitor" if p.get("csh", 0) > 0.05 and b["nsh"] >= 2 else ""
     print(f"| Shorting wire | {b['nsh']} | at ρ {mm(r0)} mm, from the hot frame (z {mm(z0)}) to the ground frame (z {mm(z1)});"
           f" {mm(ls)} mm{coil}{cap} |")

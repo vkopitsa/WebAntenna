@@ -186,7 +186,7 @@ not `pkill -f`, which also matches your own shell command line.
   start CMA-ES stalled for 14 generations.
 - **Size pinning** (`results/runZ.sh`, resumed by `runZ2.sh` after a full disk): A double-tuned at 52 mm gives 1.94 / 1.98
   on dense sweeps (Ø50.9 × 51.5 mm, `designs/A52.json`; 50 mm: 2.13, 51 mm: 2.03 / 2.10 (`runZ3.sh`), 55 mm: 1.86), so 52 mm is where SWR 2 crosses, B at 43 mm 1.85 / 1.86
-  (`designs/B43.json`; 42 mm: 2.04, 44 mm: 1.81) — the size / SWR curve is smooth, no cliff between the sizes. B44f is in the app as `skyconecage44`: `python export_shaped_table.py designs/B44f.json 1.36e9 7.0e9 64 app_B44f.json`, then `python to_ts.py --entry app_B44f.json >> ../../src/lib/antennas/skycone.data.ts`.
+  (`designs/B43.json`; 42 mm: 2.04, 44 mm: 1.81) — the size / SWR curve is smooth, no cliff between the sizes. B44f is in the app as `skyconecage44`: `python export_shaped_table.py designs/B44f.json 1.36e9 7.0e9 64 app_B44f.json`, then `python to_ts.py --entry app_B44f.json >> ../../src/lib/antennas/skycone.data.ts`; A55 likewise as `skyconecage55` (`SIZE=0.055 … designs/A55.json 0.96e9 1.36e9 64 app_A55.json`: `export_shaped_table.py` writes the coil (`turns`, `coilDia`), the capacitors as E24 values (`cap`, `pinCap`) and no shunt currents for a coiled shunt).
 - **The cost floors at 1.85** (`max(swr, SWRFLOOR)`, default 1.85): B at 44 and 46 mm both report 1.86 on the grid and
   1.81 on the dense sweep. `SWRFLOOR=1.5` on the same 44 mm box gives **1.73 / 1.74** (`designs/B44f.json`, `runZ3.sh`),
   and 43 mm searched with the sleeve + cables in the cost holds ≤ 1.95 with any cable (`designs/B43s.json`).

@@ -40,7 +40,7 @@ see [Two antennas instead of one](#two-antennas-instead-of-one-960-mhz--136-ghz-
 ![Sections of designs B and A at the same scale](fpv-detector/A_B_section.png)
 
 **In the app:** the designs are antenna types in the Broadband group, **"Sky-tilted capped bicone (8:1)"** (B),
-**"(21:1)"** (A), **"compact (6.7:1)"** (S73), **"wire cage (6.7:1)"** (W16), **"small wire cage (6.7:1)"** (W65), **"mini wire cage (4.6:1)"** (W40, 1.4 – 6.4 GHz) and **"mini wire cage 7 GHz (5.1:1)"** (B44f, 1.36 – 7 GHz, choke sleeve instead of ferrite). The band editor scales the shape (e.g. 1–8 GHz); Simulation shows this study's
+**"(21:1)"** (A), **"compact (6.7:1)"** (S73), **"wire cage (6.7:1)"** (W16), **"small wire cage (6.7:1)"** (W65), **"mini wire cage (4.6:1)"** (W40, 1.4 – 6.4 GHz) and **"mini wire cage 7 GHz (5.1:1)"** (B44f, 1.36 – 7 GHz, choke sleeve instead of ferrite) and **"low-band wire cage (1.4:1)"** (A55, 960 MHz – 1.36 GHz, two coiled shorting wires and two capacitors, two choke tubes). The band editor scales the shape (e.g. 1–8 GHz); Simulation shows this study's
 tabulated MoM sweep and elevation pattern, scaled to the size; Build lists the flat patterns and
 prints them at 1:1 (`src/lib/antennas/skycone.ts`). The name: an *asymmetric bicone*, or an *inverted
 discone* (cone on top as the hot element, a shallow ground cone below), with a capped top (rim + lid).
@@ -586,8 +586,10 @@ a series capacitor in the pin added, and **1.94 with a second shunt branch of L 
 series C, shunt L-C`, the double-tuned match). In wire: two shorting wires, every second one with a small
 capacitor in it (`csh`), plus the capacitor in the pin (`cser`). Searched in two stages (`results/runA3.sh`,
 `runA4.sh`: the five matching knobs with the profile frozen, then everything), it gives 2.13 at 50 mm, 2.03 at 51 mm, 1.94 at 52 mm and
-**1.86 at 55 mm** (1.95 after the first stage alone, Ø54.9 × 54.8 mm). The capacitors are 0402 / 0603 ceramics (2 – 5 pF, no ferrite); the app's cage model has no
-lumped parts, so A55 is not an app type. A55 (`tools/wideband-antenna/designs/A55.json`), z = 0 at the coax end:
+**1.86 at 55 mm** (1.95 after the first stage alone, Ø54.9 × 54.8 mm). The capacitors are 0402 / 0603 ceramics (2 – 5 pF, no ferrite). In the app A55 is **"Sky-tilted capped bicone,
+low-band wire cage (1.4:1)"** (`skyconecage55`): the cage model draws the coiled shorting wires with the study's
+geometry, lists the capacitors (E24 values, 2.2 and 3.6 pF) in a table and the notes, and the Simulation tab is the
+NEC-2 table with the capacitors as series loads. A55 (`tools/wideband-antenna/designs/A55.json`), z = 0 at the coax end:
 
 ![A55: a cup over a shallow cone, two coiled shorting wires](fpv-detector/A55_cage.png)
 
@@ -595,7 +597,7 @@ lumped parts, so A55 is not an app type. A55 (`tools/wideband-antenna/designs/A5
 |---|---|---|
 | Hot frame | 16 | washer edge (ρ 3.0, z 3.2) → (4.5, 3.2) → (10.2, 17.7) → (12.5, 23.5) → (25.5, 27.5) → (25.5, 37.4) → (12.3, 37.4); 60.1 mm, 5 bends |
 | Ground frame | 16 | collar ring (ρ 3.0, z −5.0) → (6.2, −10.2) → (10.2, −11.5) → (25.6, −16.7); 26.6 mm, 2 bends (4 spokes from the coax end to the ring) |
-| Shorting wire | 2 | at ρ 10.2 mm, from the hot frame (z 17.7) to the ground frame (z −11.5), wound into 2.3 turns Ø3.6 mm (33.5 mm of wire); one of them with a 3.6 pF capacitor in series |
+| Shorting wire | 2 | at ρ 10.2 mm, from the hot frame (z 17.7) to the ground frame (z −11.5), wound into 2 turns Ø3.6 mm (37.4 mm of wire, 29.2 mm end to end); one of them with a 3.6 pF capacitor in series |
 | Hot hoops | 5 | Ø9.1 at z 3.2; Ø24.9 at z 23.5; Ø51.0 at z 27.5; Ø51.0 at z 37.4; Ø24.6 at z 37.4 (the lid edge) |
 | Ground hoops | 2 | Ø12.3 at z −10.2; Ø51.3 at z −16.7 |
 | Hot washer | 1 | Ø9.1 on the centre pin, 3.2 mm above the coax end |

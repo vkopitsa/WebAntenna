@@ -115,6 +115,7 @@ const NOT_TRIMMED: Record<string, string> = {
   skyconecagemini: "Broadband: not tuned by trimming. The pin gap sets the top of the band, the shorting wire and the rim height the bottom; check the SWR across the band.",
   skyconecage40: "Broadband: not tuned by trimming. The pin gap sets the top of the band, the shorting wire and the rim height the bottom; check the SWR across the band.",
   skyconecage44: "Broadband: not tuned by trimming. The pin gap sets the top of the band, the shorting wire and the rim height the bottom; check the SWR across the band.",
+  skyconecage55: "Not tuned by trimming: the two capacitors and the coil turns set the double-tuned match; check the SWR across the band and change the pin capacitor by one E24 step if the whole band sits high.",
   skycone7: "Broadband: not tuned by trimming. The pin gap sets the top of the band and the rim height the bottom; check the SWR across the band.",
   skycone8: "Broadband: not tuned by trimming. The pin gap sets the top of the band and the rim height the bottom; check the SWR across the band.",
   skycone21: "Broadband: not tuned by trimming. The pin gap sets the top of the band and the rim height the bottom; check the SWR across the band.",

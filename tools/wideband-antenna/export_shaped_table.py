@@ -10,6 +10,7 @@ import sys, json, math
 import numpy as np
 import designs as D
 import family2 as F2
+import family13  # noqa: F401  (shunt coils, csh / cser: the split study's A55)
 import family10 as F10
 
 d = json.load(open(sys.argv[1]))
@@ -28,14 +29,31 @@ els = np.arange(-90, 91, 5.0)
 q = dict(p)
 q["Sl"] = max(0.0, p["Sg"])
 up, lo, zt, zb, rm = F2.profile(q)
+E24 = [1.0, 1.1, 1.2, 1.3, 1.5, 1.6, 1.8, 2.0, 2.2, 2.4, 2.7, 3.0, 3.3, 3.6, 3.9, 4.3, 4.7, 5.1, 5.6, 6.2, 6.8, 7.5, 8.2, 9.1]
+
+
+def e24(c):
+    """The nearest E24 value (pF, 0.1 - 100): the optimiser's capacitor as a part you can buy."""
+    dec = 10 ** math.floor(math.log10(c))
+    return min((v * dec for v in E24 + [10.0]), key=lambda v: abs(v - c))
+
+
 short = None
+coiled = False
 if b["nsh"]:
-    (r0, z0, _), (r1, z1, _) = b["shunt"]
+    (r0, z0, _), (r1, z1, _) = b["shunt"][0], b["shunt"][-1]       # a coiled shunt (family 12) is a polyline
     k_frame = n // b["nsh"] // 2
     short = dict(n=b["nsh"], rho=round(r0, 6), zHot=round(z0, 6), zGnd=round(z1, 6), frame=k_frame)
+    if p.get("sp_ts", 0) >= 0.5:                                   # wound into a coil: turns and coil diameter
+        coiled = True
+        short.update(turns=int(round(p["sp_ts"])), coilDia=round(2 * p["sp_cs"], 6))   # family 12 winds round(ts) turns
+    if p.get("csh", 0) > 0.05 and b["nsh"] >= 2:                   # series capacitor (pF) in every second shunt
+        short["cap"] = e24(p["csh"])
+cage = dict(n=n, r=r, hub=F10.HUB_R, **({"short": short} if short else {}))
+if p.get("cser", 0) > 0.05:
+    cage["pinCap"] = e24(p["cser"])                                  # series capacitor (pF) in the centre pin
 out = dict(fLo=f_lo, fHi=f_hi, gap=p["g"], upper=[np.round(a, 6).tolist() for a in up],
-           lower=[np.round(a, 6).tolist() for a in lo], els=els.tolist(), f=[], r=[], x=[], g=[],
-           cage=dict(n=n, r=r, hub=F10.HUB_R, **({"short": short} if short else {})))
+           lower=[np.round(a, 6).tolist() for a in lo], els=els.tolist(), f=[], r=[], x=[], g=[], cage=cage)
 for f in D.logf(nf, 0.9 * f_lo, 1.1 * f_hi):
     z, gg = F10.model(p, f, seg=1.5e-3, els=els, nphi=8)
     g = 10 * np.log10(np.mean(10 ** (gg / 10), axis=1))[::-1]        # rows come theta-ascending = elevation descending
@@ -52,7 +70,7 @@ for f in D.logf(16, 0.95 * f_lo, 1.05 * f_hi):
     sc = c.get_structure_currents(0)
     tags, cur = np.array(sc.get_current_segment_tag()), np.array(sc.get_current())
     segs, ii, ks = [], [], 0
-    picks = [(t, n) for t in info["frame0"]] + [(t + 1, 1) for t, w in enumerate(info["wires"]) if w[0] == "shunt"][:1]
+    picks = [(t, n) for t in info["frame0"]] + ([] if coiled else [(t + 1, 1) for t, w in enumerate(info["wires"]) if w[0] == "shunt"][:1])
     for tag, mult in picks:
         kind, a, bb, _ = info["wires"][tag - 1]
         a2 = (math.hypot(a[0], a[1]), a[2])
