@@ -12,7 +12,7 @@ export type MainTab = "design" | "sim" | "build" | "synth";
 
 export interface State {
   type: string;
-  /** Params per antenna type, so switching type keeps your edits. */
+  /** Params per antenna type, so switching type keeps your edits. "bands" is the exception: an edit applies to every type. */
   params: Record<string, Params>;
   unit: Unit;
   lang: Lang;
@@ -80,12 +80,19 @@ function applyHash(s: State): State {
   if (!t || !ANTENNA_BY_ID[t]) return s;
   const def = ANTENNA_BY_ID[t];
   const p: Params = { ...def.defaults };
+  let bands: number | string | undefined;
   for (const pd of def.params) {
     const raw = q.get(pd.key);
     const v = raw == null ? undefined : sanitizeParam(pd, raw);
     if (v !== undefined) p[pd.key] = v;
+    if (v !== undefined && pd.key === "bands") bands = v;
   }
-  return { ...s, type: t, params: { ...s.params, [t]: p } };
+  return { ...s, type: t, params: { ...(bands === undefined ? s.params : withBands(s.params, bands)), [t]: p } };
+}
+
+/** The band list is shared: every antenna type designs for the bands you set. */
+function withBands(params: Record<string, Params>, bands: number | string): Record<string, Params> {
+  return Object.fromEntries(Object.entries(params).map(([id, p]) => [id, "bands" in p ? { ...p, bands } : p]));
 }
 
 export function shareHash(s: State): string {
@@ -107,6 +114,7 @@ export function set(patch: Partial<State> | ((s: State) => Partial<State>)) {
   subs.forEach((f) => f());
 }
 export function setParam(key: string, value: number | string) {
+  if (key === "bands") return set((s) => ({ params: withBands(s.params, value) }));
   set((s) => ({ params: { ...s.params, [s.type]: { ...s.params[s.type], [key]: value } } }));
 }
 export function resetParams() {
