@@ -94,6 +94,10 @@ export interface Design {
     hot: [number, number][]; ground: [number, number][]; n: number; hoops: { hot: [number, number][]; ground: [number, number][] };
     short?: { hot: [number, number]; ground: [number, number] };
   };
+  /** Sky-tilted bicones: what goes on the coax below the ground cone (ferrite bead, 6-bead ferrite sleeve, metal choke
+   *  tubes of diameter d and length len in metres, or nothing) and, with nothing, the bare-cable row of the table that
+   *  the Simulation uses and that cable's length (m) at this size. */
+  coax?: { choke: "bead" | "sleeve" | "tube" | "none"; tubes?: { d: number; len: number }[]; bare?: { row: number; len: number } };
   /** false when a wire model would be meaningless (patch, coaxial collinear). */
   necSupported: boolean;
   /** Natural feed impedance the design is meant for (balun / transformer to 50 Ω assumed), default 50 Ω. */

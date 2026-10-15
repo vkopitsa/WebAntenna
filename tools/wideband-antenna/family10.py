@@ -486,11 +486,13 @@ def collisions(wires, k=7, r_hub=5e-3):
 COAX_R = 1.79e-3            # UT-141 jacket
 
 
-def model(p, f, n=NCAGE, r=RWIRE, per=20, els=None, info=None, seg=None, nphi=None, cable=0.0, beads=(), sleeve=None):
+def model(p, f, n=NCAGE, r=RWIRE, per=20, els=None, info=None, seg=None, nphi=None, cable=0.0, beads=(), sleeve=None,
+          cable_seg=5e-3):
     """NEC-2 at f: (Z at the pin gap, gain array). els (ascending, evenly spaced): pattern at those elevations, at
     phi 0, 90/n and 180/n deg, or at nphi cuts round the full circle (a cage with a shunt is not n-fold symmetric);
     default the cost's ELS at phi 0 and 180/n. info (dict) gets the NEC context, the wires and frame 0's tags.
-    cable (m): the coax jacket hanging down the axis from the coax end (common-mode path), 5 mm segments;
+    cable (m): the coax jacket hanging down the axis from the coax end (common-mode path), cable_seg segments (5 mm;
+    export_bare_table.py passes lambda / 20 near the top of a 7 GHz band);
     beads: [(depth below the coax end m, R ohm)] ferrite beads as series resistances on it;
     sleeve: (length m, radius m) a quarter-wave choke sleeve (bazooka) round the cable: 8 wires from 2 mm below the
     cage's lowest point down the length, shorted to the jacket at the bottom (open at the top), no ferrite."""
@@ -508,7 +510,7 @@ def model(p, f, n=NCAGE, r=RWIRE, per=20, els=None, info=None, seg=None, nphi=No
             frame0.append(tag)
     if cable > 0:
         ct = len(wires) + 1
-        ncs = max(1, int(math.ceil(cable / 5e-3)))
+        ncs = max(1, int(math.ceil(cable / cable_seg)))
         if not sleeve:
             G.wire(ct, ncs, 0, 0, 0, 0, 0, -cable, COAX_R, 1, 1)
         else:                       # one (length, radius) or a list of them, stacked down the cable (a two-section

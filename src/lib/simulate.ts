@@ -150,6 +150,8 @@ function loopSim(params: Params, d: Design, freqs: number[], fPat: number): SimR
 
 const SKYCONE_OUT = "Your bands go above the top of this shape's precomputed sweep: the charts stop where it ends. Lower the bands or pick a sky-tilted bicone with a wider ratio (the 21:1 one covers the most).";
 
+const SKYCONE_BARE = "Bare coax: the impedance includes the cable's outside as part of the antenna (precomputed with a straight cable of the length in Dimensions, no ferrite). The pattern is the free-space one without a cable.";
+
 /** Sky-tilted bicones: the study's body-of-revolution MoM sweep, scaled to the design's lowest frequency. */
 function skyconeSim(defId: string, d: Design, fPat: number): SimResult {
   const t = SKYCONE_TABLES[defId], s = d.sweeps[0];
@@ -157,12 +159,13 @@ function skyconeSim(defId: string, d: Design, fPat: number): SimResult {
   const z: ZPoint[] = [];
   // every table row inside the sweep (log-spaced, about 25 per octave), plus the sweep ends
   const fs = [s.start, ...t.f.map((u) => u * s.start).filter((f) => f > s.start && f < s.stop), s.stop].filter((f) => f >= lo && f <= hi);
-  for (const f of fs) { const q = skyconeZ(t, s.start, f); if (q) z.push({ f, ...q }); }
+  const bare = d.coax?.bare?.row;
+  for (const f of fs) { const q = skyconeZ(t, s.start, f, bare); if (q) z.push({ f, ...q }); }
   const fp = Math.min(Math.max(fPat, lo), hi);
   const g = skyconeGain(t, s.start, fp);
   return {
     method: "analytic", z, pattern: samplePattern(fp, (th) => g(th)),
-    notes: [...(s.stop > hi * 1.001 ? [SKYCONE_OUT] : []), t.cage
+    notes: [...(s.stop > hi * 1.001 ? [SKYCONE_OUT] : []), ...(bare != null ? [SKYCONE_BARE] : []), t.cage
       ? "Sky-tilted bicone, wire cage: precomputed NEC-2 sweep of this cage (free space, no cable), scaled to your size. The built-in solver's segment limit is too coarse for this much wire at the top of the band."
       : "Sky-tilted bicone: precomputed body-of-revolution MoM sweep of this shape (solid sheet metal, free space, no cable), scaled to your size. The thin-wire solver cannot model solid cones."],
   };
@@ -250,6 +253,7 @@ export const SIM_STRINGS = [
   "Small loop: analytic model (matched with Cs + Cp at the design frequency; magnetic-dipole pattern, efficiency included).",
   "Sky-tilted bicone: precomputed body-of-revolution MoM sweep of this shape (solid sheet metal, free space, no cable), scaled to your size. The thin-wire solver cannot model solid cones.",
   SKYCONE_OUT,
+  SKYCONE_BARE,
   "Sky-tilted bicone, wire cage: precomputed NEC-2 sweep of this cage (free space, no cable), scaled to your size. The built-in solver's segment limit is too coarse for this much wire at the top of the band.",
 ];
 

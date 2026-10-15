@@ -279,6 +279,15 @@ function plateSize(pts: Vec3[]): { disc: boolean; a: number; b: number } {
   return { disc, a: Math.max(...ss) - Math.min(...ss), b: Math.max(...ts) - Math.min(...ts) };
 }
 
+/** What goes on the coax below a sky-tilted bicone: a ferrite bead, the 6-bead sleeve, choke tubes or nothing. */
+function coaxChoke(d: Design): BomRow[] {
+  const c = d.coax ?? { choke: "bead" };
+  if (c.choke === "sleeve") return [{ item: M("Ferrite beads for the coax (material 43 or 61, inner Ø ≥ 3.7 mm)"), qty: M("{0} pc", 6), note: M("Stacked on the first 11 cm of coax below the ground cone (ferrite sleeve)") }];
+  if (c.choke === "bead") return [{ item: M("Clip-on ferrite for the coax (about 150 Ω at the lowest band)"), qty: M("{0} pc", 1) }];
+  if (c.choke === "tube") return (c.tubes ?? []).map((t) => ({ item: M("Brass or copper tube Ø{0}, {1} long (choke sleeve)", { len: t.d }, { len: t.len }), qty: M("{0} pc", 1), note: M("Over the coax below the ground cone, open towards the antenna, soldered to the jacket at its far end") }));
+  return [];
+}
+
 export function bom(def: AntennaDef, d: Design, cuts: CutRow[]): BomRow[] {
   const rows: BomRow[] = [];
   const pcb = d.pcb;
@@ -325,8 +334,7 @@ export function bom(def: AntennaDef, d: Design, cuts: CutRow[]): BomRow[] {
       rows.push({ item: M("Brass or copper sheet 0.3–0.5 mm, about {0} × {1}", { len: side }, { len: side }), qty: M("{0} pc", 1), note: M("Cut the flat patterns from the 1:1 template") });
       for (const x of d.sheets) rows.push({ item: x.kind === "sector" ? M("{0}: annular sector R {1} – {2}, {3}°", x.label, { len: x.r0 }, { len: x.r1 }, +x.angle.toFixed(1)) : x.kind === "strip" ? M("{0}: strip {1} × {2}", x.label, { len: x.w }, { len: x.h }) : M("{0}: disc Ø{1}, hole Ø{2}", x.label, { len: x.d }, { len: x.hole }), qty: M("{0} pc", 1) });
       rows.push({ item: M("Semi-rigid coax UT-141 / RG-402 (Ø3.6 mm) with an SMA plug"), qty: M("{0} pc", 1), note: M("The jacket is soldered into the ground cone apex") });
-      if (def.id === "skycone7") rows.push({ item: M("Ferrite beads for the coax (material 43 or 61, inner Ø ≥ 3.7 mm)"), qty: M("{0} pc", 6), note: M("Stacked on the first 11 cm of coax below the ground cone (ferrite sleeve)") });
-      else rows.push({ item: M("Clip-on ferrite for the coax (about 150 Ω at the lowest band)"), qty: M("{0} pc", 1) });
+      rows.push(...coaxChoke(d));
     }
     for (const pl of d.plates.filter((x) => x.material === "metal" && x.sheet == null)) {
       const s = plateSize(pl.pts);
@@ -336,7 +344,7 @@ export function bom(def: AntennaDef, d: Design, cuts: CutRow[]): BomRow[] {
       const washers = d.tables.find((t) => t.title.startsWith("Hub washers"))?.rows ?? [];
       for (const w of washers) rows.push({ item: M("{0}: disc Ø{1}, hole Ø{2}", String(w[0]), { len: +w[1] }, { len: +w[2] }), qty: M("{0} pc", 1), note: M("Brass or copper, 0.3–0.5 mm: the frames are soldered round its edge") });
       rows.push({ item: M("Semi-rigid coax UT-141 / RG-402 (Ø3.6 mm) with an SMA plug"), qty: M("{0} pc", 1), note: M("The ground collar is soldered onto its jacket") });
-      rows.push({ item: M("Ferrite beads for the coax (material 43 or 61, inner Ø ≥ 3.7 mm)"), qty: M("{0} pc", 6), note: M("Stacked on the first 11 cm of coax below the ground cone (ferrite sleeve)") });
+      rows.push(...coaxChoke(d));
     }
     if (!d.sheets?.length && !d.frames) rows.push({ item: connector(d.f, false, false), qty: M("{0} pc", 1) });
   }
@@ -500,6 +508,8 @@ export const BUILD_STRINGS = [
   "Clip-on ferrite for the coax (about 150 Ω at the lowest band)",
   "Ferrite beads for the coax (material 43 or 61, inner Ø ≥ 3.7 mm)",
   "Stacked on the first 11 cm of coax below the ground cone (ferrite sleeve)",
+  "Brass or copper tube Ø{0}, {1} long (choke sleeve)",
+  "Over the coax below the ground cone, open towards the antenna, soldered to the jacket at its far end",
   "Brass or copper, 0.3–0.5 mm: the frames are soldered round its edge", "The ground collar is soldered onto its jacket", "Bends: see the template", "Bend into a ring and solder the ends",
   "Print the 1:1 frame template (or the bending jig) and bend every frame over it with flat-nose pliers: all frames of a side must be identical.",
   "Solder the hot frames to the washer in the printed cradle and the ground frames to the collar on the coax jacket in the cup: one groove per frame keeps them at equal angles. Then solder the washer onto the coax centre pin at the listed gap.",

@@ -81,6 +81,8 @@ docs/FPV-DETECTOR-BUILD.md    home build guide for it; STL jigs/cover/cup in doc
                          in the app as skycone7 (compact S73, ferrite sleeve) / skyconecage (W16 wire cage, NEC-2 table, Design.cuts/frames) / skyconecagemini (W65: W16 + one shorting wire, cage.short) / skyconecage40 (W40: Ø39 × 40 mm, 1.4–6.4 GHz, `mini` notes) / skycone8 / skycone21 (antennas/skycone.ts): fixed profile scaled by the band,
                          Simulation = tabulated BoR-MoM results (skycone.data.ts, regenerate with the tools' export_app_table.py
                          + to_ts.py); `Design.sheets` = flat patterns (BOM rows + 1:1 template)
+                         "Coax below the antenna" param `coax`: as designed (ferrite / choke tubes, `Design.coax` → BOM + handle)
+                         or a bare cable of 0.5 / 0.8 / 1.1 λ (`SkyconeTable.bare`, from the tools' export_bare_table.py + add_bare.py)
 tools/wideband-antenna/  Python (numba) body-of-revolution MoM + FDTD, DE optimiser, tolerance/report scripts;
                          NOT part of the app; README.md there has setup, workflow and lessons (incl. the Ø40 × 40 mm
                          study: below the Chu floor for 960 MHz, bends don't help; W40 = 1.4–6.4 GHz is skyconecage40; the two-antenna split: B44f = 1.36–7 GHz is skyconecage44 with a

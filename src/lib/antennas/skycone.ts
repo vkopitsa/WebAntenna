@@ -2,7 +2,8 @@
 // ground cone on the coax jacket. Found by the body-of-revolution MoM + differential-evolution study in
 // docs/FPV-DETECTOR-ANTENNA.md (tools/wideband-antenna). The shape is fixed (it was optimised as a whole) and scales
 // with the lowest frequency; the Simulation tab shows that study's tabulated sweep, since thin wires cannot model it.
-import type { AntennaDef, Design, Plate, Sheet, Table, Vec3, Wire } from "../types";
+import type { AntennaDef, Design, ParamDef, Params, Plate, Sheet, Table, Vec3, Wire } from "../types";
+import { str } from "../types";
 import type { CurrentElement } from "../mom";
 import type { IdealCurrents } from "../idealcurrents";
 import { fmt, wavelength } from "../rf";
@@ -35,6 +36,27 @@ export interface SkyconeTable {
    *  turns / coilDia (m): the shorting wires are wound into coils (A55); cap: a series capacitor (pF) in every second
    *  shorting wire; pinCap: a series capacitor (pF) in the centre pin (the double-tuned match of A55). */
   cage?: { n: number; r: number; hub: number; pinCap?: number; short?: { n: number; rho: number; zHot: number; zGnd: number; frame: number; k: number; turns?: number; coilDia?: number; cap?: number } };
+  /** The same antenna with its coax jacket hanging bare down the axis (no ferrite, no choke tube), from
+   *  tools/wideband-antenna/export_bare_table.py: cable lengths in wavelengths at fLo, frequencies as a ratio to fLo,
+   *  R and X (Ω) at the coax end per length. */
+  bare?: { lensLam: number[]; f: number[]; r: number[][]; x: number[][] };
+}
+
+/** "Coax below the antenna": as designed (ferrite or choke tubes) or a bare cable of three lengths. */
+const BARE_ROWS: Record<string, number> = { bare1: 0, bare2: 1, bare3: 2 };
+const BARE_OPTIONS: [string, string][] = [["bare1", "Bare coax, short cable (0.5 λ)"], ["bare2", "Bare coax, medium cable (0.8 λ)"], ["bare3", "Bare coax, long cable (1.1 λ)"]];
+const COAX_HINT = "Without a ferrite or choke the outside of the cable carries current and becomes part of the antenna, so the SWR depends on its length (λ at the lowest frequency).";
+const coaxParam = (asDesigned: [string, string]): ParamDef => ({ key: "coax", label: "Coax below the antenna", kind: "select", options: [asDesigned, ...BARE_OPTIONS], hint: COAX_HINT });
+const COAX_FERRITE = coaxParam(["ferrite", "Ferrite on the coax (as designed)"]);
+const COAX_TUBE = coaxParam(["choke", "Choke tube on the coax (as designed)"]);
+const COAX_TUBES = coaxParam(["choke", "Choke tubes on the coax (as designed)"]);
+const BARE_NOTE = "No ferrite or choke: the outside of the coax carries current and is part of the antenna, so the SWR depends on the cable length and on how the cable runs. The Simulation tab shows a straight bare cable of the listed length hanging down the axis (precomputed); the radiation pattern there is still the one without a cable.";
+
+/** The bare-cable table row for the "coax" param, with that cable's length (m) for a design starting at fLow. */
+function bareOf(t: SkyconeTable, p: Params, fLow: number): { row: number; len: number } | undefined {
+  const row = BARE_ROWS[str(p, "coax", "")];
+  if (row == null || !t.bare) return undefined;
+  return { row, len: (t.bare.lensLam[row] * 3e8) / fLow };
 }
 
 /** Facets round the axis for the drawing and CAD (each facet is a planar trapezoid). */
@@ -79,12 +101,12 @@ function sheetOf(q: ReturnType<typeof segments>[number]): Sheet {
 const at = (r: number, z: number, ph: number): Vec3 => v(r * Math.cos(ph), r * Math.sin(ph), z);
 
 /** Performance over the user's bands, from the table. */
-function tablePerf(t: SkyconeTable, bands: [number, number][], fLow: number, swrLabel: string) {
+function tablePerf(t: SkyconeTable, bands: [number, number][], fLow: number, swrLabel: string, bare?: number) {
   let worst = 0, gMin = Infinity, gSum = 0, gN = 0;
   for (const [a, b] of bands) {
     for (let i = 0; i <= 40; i++) {
       const f = a * (b / a) ** (i / 40);
-      const z = skyconeZ(t, fLow, f);
+      const z = skyconeZ(t, fLow, f, bare);
       if (!z) continue;
       const gm = Math.hypot(z.r - 50, z.x) / Math.hypot(z.r + 50, z.x);
       worst = Math.max(worst, (1 + gm) / (1 - gm));
@@ -102,22 +124,26 @@ function tablePerf(t: SkyconeTable, bands: [number, number][], fLow: number, swr
   ];
 }
 
-/** Linear interpolation in log f between the table rows; values outside the table are clamped to its ends. */
-function bracket(t: SkyconeTable, u: number): [number, number, number] {
-  if (u <= t.f[0]) return [0, 0, 0];
-  const n = t.f.length - 1;
-  if (u >= t.f[n]) return [n, n, 0];
+/** Linear interpolation in log f between the rows of fs (ratios to fLo); values outside are clamped to its ends. */
+function bracketF(fs: number[], u: number): [number, number, number] {
+  if (u <= fs[0]) return [0, 0, 0];
+  const n = fs.length - 1;
+  if (u >= fs[n]) return [n, n, 0];
   let i = 1;
-  while (t.f[i] < u) i++;
-  return [i - 1, i, Math.log(u / t.f[i - 1]) / Math.log(t.f[i] / t.f[i - 1])];
+  while (fs[i] < u) i++;
+  return [i - 1, i, Math.log(u / fs[i - 1]) / Math.log(fs[i] / fs[i - 1])];
 }
+const bracket = (t: SkyconeTable, u: number) => bracketF(t.f, u);
 
-/** Impedance at the coax end for a design whose band starts at fLow (Hz); null outside the table. */
-export function skyconeZ(t: SkyconeTable, fLow: number, f: number): { r: number; x: number } | null {
+/** Impedance at the coax end for a design whose band starts at fLow (Hz); null outside the table. `bare`: the
+ *  bare-cable row (no ferrite) instead of the free-space one. */
+export function skyconeZ(t: SkyconeTable, fLow: number, f: number, bare?: number): { r: number; x: number } | null {
   const u = f / fLow;
-  if (u < t.f[0] * 0.999 || u > t.f[t.f.length - 1] * 1.001) return null;
-  const [i, j, w] = bracket(t, u);
-  return { r: t.r[i] + (t.r[j] - t.r[i]) * w, x: t.x[i] + (t.x[j] - t.x[i]) * w };
+  const b = bare != null ? t.bare : undefined;
+  const fs = b ? b.f : t.f, rs = b ? b.r[bare!] : t.r, xs = b ? b.x[bare!] : t.x;
+  if (u < fs[0] * 0.999 || u > fs[fs.length - 1] * 1.001) return null;
+  const [i, j, w] = bracketF(fs, u);
+  return { r: rs[i] + (rs[j] - rs[i]) * w, x: xs[i] + (xs[j] - xs[i]) * w };
 }
 
 /** Gain (dBi) at θ from +z (rad); the pattern is omnidirectional in φ. */
@@ -166,9 +192,10 @@ export function skyconeCurrents(defId: string, d: Design): IdealCurrents | null 
 export const skyconeRange = (t: SkyconeTable, fLow: number): [number, number] => [t.f[0] * fLow, t.f[t.f.length - 1] * fLow];
 
 /** `sleeve`: the compact shape couples to the coax so strongly that one ferrite bead is not enough. */
-function build(t: SkyconeTable, bandsP: Parameters<typeof band>[0], sleeve = false): Design {
+function build(t: SkyconeTable, bandsP: Params, sleeve = false): Design {
   const { bands } = band(bandsP);
   const fLow = Math.min(...bands.map((b) => b[0])), fHigh = Math.max(...bands.map((b) => b[1]));
+  const bare = bareOf(t, bandsP, fLow);
   const ratio = t.fHi / t.fLo, fTop = fLow * ratio;
   const s = t.fLo / fLow;
   const segs = segments(t, s);
@@ -216,19 +243,21 @@ function build(t: SkyconeTable, bandsP: Parameters<typeof band>[0], sleeve = fal
       { key: "g", label: "Gap: coax end to the washer", value: g, at: [v(0, 0, 0), v(0, 0, g)] },
       ...(rim ? [{ key: "R", label: "Rim height", value: Math.abs(rim.b[1] - rim.a[1]), at: [v(rim.a[0], 0, rim.a[1]), v(rim.b[0], 0, rim.b[1])] as [Vec3, Vec3] }] : []),
       ...(skirt ? [{ key: "S", label: "Ground skirt length", value: Math.abs(skirt.b[1] - skirt.a[1]), at: [v(skirt.a[0], 0, skirt.a[1]), v(skirt.b[0], 0, skirt.b[1])] as [Vec3, Vec3] }] : []),
+      ...(bare ? [{ label: "Bare cable length (Simulation)", value: bare.len }] : []),
     ],
     tables,
-    perf: tablePerf(t, bands, fLow, "Worst SWR in your bands (precomputed MoM, no cable)"),
+    perf: tablePerf(t, bands, fLow, bare ? "Worst SWR in your bands (precomputed MoM, bare cable)" : "Worst SWR in your bands (precomputed MoM, no cable)", bare?.row),
     notes: [
       "Hot element (cones, rim, lid) on the coax centre pin, ground cone on the coax jacket. Hold it by the coax with the cones up: the beam is tilted toward the sky (15–50° elevation).",
       "The shape is fixed (it was optimised as a whole); all dimensions scale with your lowest frequency. The Simulation tab shows the precomputed body-of-revolution MoM sweep of this shape, scaled to your size.",
       "Feed through UT-141 (RG-402) semi-rigid coax: solder the jacket into the ground cone apex and the centre pin into the washer. Keep the pin gap as listed: it sets the top of the band.",
-      sleeve
+      bare ? BARE_NOTE : sleeve
         ? "Ferrite sleeve required: stack about 6 ferrite beads (material 43 or 61, about 150 Ω each) on the first 11 cm of coax below the ground cone. This small antenna couples strongly to the cable: with one bead a 15–35 cm cable still lifts the SWR to 2.7 at the bottom of the band, with the sleeve it stays below 1.9."
         : "Clip a ferrite (about 150 Ω) onto the coax just below the ground cone: at the bottom of the band the cable otherwise carries current and the SWR depends on its length.",
       ...(fHigh > fTop * 1.001 ? ["Warning: your highest band is above this shape's range; the SWR there is not computed. Lower the bands or use the 21:1 version."] : []),
       "Full study, build steps, tolerances and solver checks: docs/FPV-DETECTOR-ANTENNA.md in the project repository.",
     ],
+    coax: bare ? { choke: "none", bare } : { choke: sleeve ? "sleeve" : "bead" },
     necSupported: false,
     f,
     sweeps: [{ start: fLow, stop: Math.max(fHigh, fLow * 1.5), steps: 101 }],
@@ -334,9 +363,10 @@ function coilPath(a: Vec3, b: Vec3, turns: number, rc: number, ph: number, s: nu
   return out;
 }
 
-function buildCage(t: SkyconeTable, bandsP: Parameters<typeof band>[0], mini: false | "w40" | "b44" | "a55" = false): Design {
+function buildCage(t: SkyconeTable, bandsP: Params, mini: false | "w40" | "b44" | "a55" = false): Design {
   const { bands } = band(bandsP);
   const fLow = Math.min(...bands.map((b) => b[0])), fHigh = Math.max(...bands.map((b) => b[1]));
+  const bare = bareOf(t, bandsP, fLow);
   const fTop = fLow * (t.fHi / t.fLo), s = t.fLo / fLow;
   const { n, r: r0, short: sh } = t.cage!, r = r0 * s, g = t.gap * s;
   const fr = cageFrames(t, s);
@@ -435,10 +465,11 @@ function buildCage(t: SkyconeTable, bandsP: Parameters<typeof band>[0], mini: fa
       { key: "g", label: "Gap: coax end to the washer", value: g, at: [v(0, 0, 0), v(0, 0, g)] },
       ...(sh && hotN && gndN && !turns ? [{ key: "S", label: "Shorting wire length", value: shortLen, at: [at(hotN.q[0], hotN.q[1], ang[sh.frame]), at(gndN.q[0], gndN.q[1], ang[sh.frame])] as [Vec3, Vec3] }] : []),
       { label: "Wire diameter", value: 2 * r },
+      ...(bare ? [{ label: "Bare cable length (Simulation)", value: bare.len }] : []),
     ],
     tables,
     perf: [
-      ...tablePerf(t, bands, fLow, "Worst SWR in your bands (precomputed NEC-2, no cable)"),
+      ...tablePerf(t, bands, fLow, bare ? "Worst SWR in your bands (precomputed NEC-2, bare cable)" : "Worst SWR in your bands (precomputed NEC-2, no cable)", bare?.row),
       { label: "Wire frames (hot + ground)", value: `${n} + ${n}` },
     ],
     notes: [
@@ -459,7 +490,7 @@ function buildCage(t: SkyconeTable, bandsP: Parameters<typeof band>[0], mini: fa
       "Feed through UT-141 (RG-402) semi-rigid coax: the hot frames are soldered round a washer on the centre pin (keep the listed gap above the coax end), the ground frames round a collar on the coax jacket.",
       ...(sh ? ["The shorting wire is a DC short across the coax. That is fine for a receiver, but switch off any antenna power (bias-tee) on the receiver input, or put a DC block in the line."] : []),
       ...(mini === "a55" ? ["Capacitors (C0G ceramic, 0402 or 0603, in series): 2.2 pF in the centre pin between the coax and the hot washer, ±5 % or better (±10 % puts the worst SWR at 2.06), and 3.6 pF at the ground end of the second shorting wire (±10 % is fine). Wind both coils to the count: a quarter turn more raises the worst SWR to 2.2, a quarter turn less changes nothing."] : []),
-      mini === "a55"
+      bare ? BARE_NOTE : mini === "a55"
         ? "No ferrite needed, but a bare coax is half of this small antenna (SWR up to 10 with 15 cm of cable). Slide two metal tubes over the coax under the ground cone, Ø20 mm, 70 mm and then 50 mm long, each open towards the antenna and soldered to the coax jacket at its far end (scale them with the antenna). With them a 15–35 cm cable keeps the SWR at or below 1.8 over the band; a 6-bead ferrite sleeve would also do it (≤ 1.85)."
         : mini === "b44"
         ? "No ferrite needed: a quarter-wave choke sleeve does the job. Slide a Ø10 × 50 mm metal tube over the coax just below the ground cone, open towards the antenna and soldered to the coax jacket at its far end (scale the tube with the antenna). With it a 15–35 cm cable keeps the SWR at or below 2.0 over the band (bare cable: up to 3.2); a 6-bead ferrite sleeve would also do it (≤ 1.8)."
@@ -469,13 +500,21 @@ function buildCage(t: SkyconeTable, bandsP: Parameters<typeof band>[0], mini: fa
       ...(fHigh > fTop * 1.001 ? ["Warning: your highest band is above this shape's range; the SWR there is not computed. Lower the bands or use the 21:1 version."] : []),
       "Full study, build steps, tolerances and solver checks: docs/FPV-DETECTOR-ANTENNA.md in the project repository.",
     ],
+    // the choke tubes were sized at the study's scale (fLo); they scale with the antenna
+    coax: bare ? { choke: "none", bare }
+      : mini === "a55" ? { choke: "tube", tubes: [{ d: 20e-3 * s, len: 70e-3 * s }, { d: 20e-3 * s, len: 50e-3 * s }] }
+      : mini === "b44" ? { choke: "tube", tubes: [{ d: 10e-3 * s, len: 50e-3 * s }] }
+      : { choke: "sleeve" },
     necSupported: true,
     f,
     sweeps: [{ start: fLow, stop: Math.max(fHigh, fLow * 1.5), steps: 101 }],
   };
 }
 
-const PARAMS = [{ ...BANDS, label: "Frequency bands (all must fit in the range)" }];
+const BANDS_P = { ...BANDS, label: "Frequency bands (all must fit in the range)" };
+const PARAMS = [BANDS_P, COAX_FERRITE];
+const PARAMS_TUBE = [BANDS_P, COAX_TUBE];
+const PARAMS_TUBES = [BANDS_P, COAX_TUBES];
 
 export const skycone7: AntennaDef = {
   id: "skycone7",
@@ -485,7 +524,7 @@ export const skycone7: AntennaDef = {
   summary: "The 8:1 shape re-optimised smaller: 960 MHz–6.4 GHz at Ø73 × 71 mm, beam tilted up. Needs a ferrite sleeve (6 beads) on the coax.",
   multiband: "broadband",
   params: PARAMS,
-  defaults: { bands: "960e6-6400e6" },
+  defaults: { bands: "960e6-6400e6", coax: "ferrite" },
   build: (p) => build(SKYCONE_7, p, true),
 };
 
@@ -497,7 +536,7 @@ export const skycone8: AntennaDef = {
   summary: "Solid inverted discone with a capped top: 800 MHz–6.4 GHz at Ø113 × 110 mm, beam tilted up to 15–50°. For handheld FPV and drone detectors.",
   multiband: "broadband",
   params: PARAMS,
-  defaults: { bands: "800e6-6400e6" },
+  defaults: { bands: "800e6-6400e6", coax: "ferrite" },
   build: (p) => build(SKYCONE_8, p),
 };
 
@@ -509,7 +548,7 @@ export const skycone21: AntennaDef = {
   summary: "The same idea with a ground skirt: 300 MHz–6.4 GHz at Ø275 × 294 mm, beam tilted up toward the sky.",
   multiband: "broadband",
   params: PARAMS,
-  defaults: { bands: "300e6-6400e6" },
+  defaults: { bands: "300e6-6400e6", coax: "ferrite" },
   build: (p) => build(SKYCONE_21, p),
 };
 
@@ -521,7 +560,7 @@ export const skyconecage: AntennaDef = {
   summary: "The compact bicone bent from Ø1 mm wire instead of sheet: 16 frames per side and a few hoops, 960 MHz–6.4 GHz at Ø72 × 75 mm, beam tilted up. Needs a ferrite sleeve (6 beads) on the coax.",
   multiband: "broadband",
   params: PARAMS,
-  defaults: { bands: "960e6-6400e6" },
+  defaults: { bands: "960e6-6400e6", coax: "ferrite" },
   build: (p) => buildCage(SKYCONE_W16, p),
 };
 
@@ -533,7 +572,7 @@ export const skyconecagemini: AntennaDef = {
   summary: "The wire cage made smaller by one shorting wire from a hot frame to the ground frame: 960 MHz–6.4 GHz at Ø65 × 65 mm, beam tilted up. Needs a ferrite sleeve (6 beads) on the coax.",
   multiband: "broadband",
   params: PARAMS,
-  defaults: { bands: "960e6-6400e6" },
+  defaults: { bands: "960e6-6400e6", coax: "ferrite" },
   build: (p) => buildCage(SKYCONE_W65, p),
 };
 
@@ -545,7 +584,7 @@ export const skyconecage40: AntennaDef = {
   summary: "The small wire cage shrunk to Ø39 × 40 mm (16 frames per side, one shorting wire). A box this small fits a sphere of radius 28 mm, below the Chu limit for 960 MHz, so the band starts at 1.4 GHz: 1.4–6.4 GHz at SWR ≤ 2.1, beam tilted up. Needs a ferrite sleeve (6 beads) on the coax.",
   multiband: "broadband",
   params: PARAMS,
-  defaults: { bands: "1400e6-6400e6" },
+  defaults: { bands: "1400e6-6400e6", coax: "ferrite" },
   build: (p) => buildCage(SKYCONE_W40, p, "w40"),
 };
 
@@ -556,8 +595,8 @@ export const skyconecage44: AntennaDef = {
   traits: { pol: "vertical", pattern: "omni" },
   summary: "The mini wire cage one size up, re-tuned for 1.36–7 GHz: Ø43 × 44 mm, 16 frames per side, one shorting wire, SWR ≤ 1.75, beam tilted up. No ferrite: a Ø10 × 50 mm choke sleeve on the coax keeps the cable out of the match.",
   multiband: "broadband",
-  params: PARAMS,
-  defaults: { bands: "1360e6-7000e6" },
+  params: PARAMS_TUBE,
+  defaults: { bands: "1360e6-7000e6", coax: "choke" },
   build: (p) => buildCage(SKYCONE_B44, p, "b44"),
 };
 
@@ -568,8 +607,8 @@ export const skyconecage55: AntennaDef = {
   traits: { pol: "vertical", pattern: "omni" },
   summary: "The low-band half of the two-antenna set: Ø51 × 54 mm for 960 MHz–1.36 GHz, 16 frames per side, two coiled shorting wires, two small capacitors (double-tuned match), SWR ≤ 1.9, beam tilted up. No ferrite: two choke-sleeve tubes on the coax.",
   multiband: "broadband",
-  params: PARAMS,
-  defaults: { bands: "960e6-1360e6" },
+  params: PARAMS_TUBES,
+  defaults: { bands: "960e6-1360e6", coax: "choke" },
   build: (p) => buildCage(SKYCONE_A55, p, "a55"),
 };
 

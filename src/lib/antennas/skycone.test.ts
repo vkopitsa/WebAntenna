@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { ANTENNA_BY_ID } from "./index";
 import { SKYCONE_8, SKYCONE_W16, SKYCONE_A55, SKYCONE_B44, SKYCONE_W40, SKYCONE_W65 } from "./skycone.data";
-import { skyconeCurrents, skyconeGain, skyconeZ } from "./skycone";
+import { SKYCONE_TABLES, skyconeCurrents, skyconeGain, skyconeZ } from "./skycone";
+import { buildPack } from "../build";
 import { radiationEligible, s11, simulate } from "../simulate";
 import { partsFor } from "../print";
 import { templatePages } from "../template";
@@ -225,5 +226,59 @@ describe("sky-tilted capped bicones", () => {
     expect(ids("skycone8")).toEqual(expect.arrayContaining(["shell", "skycone-cup", "skycone-handle", "skycone-stand", "skycone-former", "skycone-wedge", "skycone-fork", "skycone-tpl-1"]));
     expect(ids("skycone21")).toContain("shell");
     expect(ids("skycone21")).not.toContain("skycone-cup");               // Ø279 mm: larger than the bed
+  });
+});
+
+describe("coax below the antenna: ferrite, choke tubes or a bare cable", () => {
+  const worst = (id: string, coax: string) => {
+    const def = ANTENNA_BY_ID[id], p = { ...def.defaults, coax }, d = def.build(p), r = simulate(def, p, d);
+    const [a, b] = [d.sweeps[0].start, d.sweeps[0].stop];
+    return { d, r, swr: Math.max(...r.z.filter((q) => q.f >= a && q.f <= b).map((q) => s11(q, 50).swr)) };
+  };
+
+  it("every type has a bare-cable table: 0.5, 0.8 and 1.1 λ at fLo on its own grid from 0.9 fLo", () => {
+    for (const [id, t] of Object.entries(SKYCONE_TABLES)) {
+      expect(t.bare, id).toBeDefined();
+      expect(t.bare!.lensLam, id).toEqual([0.5, 0.8, 1.1]);
+      for (const row of [...t.bare!.r, ...t.bare!.x]) expect(row, id).toHaveLength(t.bare!.f.length);
+      expect(t.bare!.f[0], id).toBeCloseTo(0.9, 3);
+    }
+  });
+
+  it("as designed by default: the free-space table, the study's ferrite or choke in the parts list", () => {
+    for (const id of Object.keys(SKYCONE_TABLES)) {
+      const def = ANTENNA_BY_ID[id], d = def.build(def.defaults);
+      expect(d.coax!.choke, id).not.toBe("none");
+      expect(simulate(def, def.defaults, d).notes.some((n) => n.startsWith("Bare coax")), id).toBe(false);
+    }
+    const items = (id: string, coax?: string) => buildPack(ANTENNA_BY_ID[id], { ...ANTENNA_BY_ID[id].defaults, ...(coax ? { coax } : {}) }).bom.map((r) => r.item.s);
+    expect(items("skycone7")).toContain("Ferrite beads for the coax (material 43 or 61, inner Ø ≥ 3.7 mm)");
+    expect(items("skycone8")).toContain("Clip-on ferrite for the coax (about 150 Ω at the lowest band)");
+    // the choke-tube cages list their tubes, not ferrite
+    const b44 = buildPack(ANTENNA_BY_ID.skyconecage44, ANTENNA_BY_ID.skyconecage44.defaults).bom.filter((r) => r.item.s.startsWith("Brass or copper tube"));
+    expect(b44.map((r) => (r.item.a ?? []).map((x) => +((x as { len: number }).len * 1e3).toFixed(1)))).toEqual([[10, 50]]);
+    expect(items("skyconecage55").filter((s) => s.startsWith("Brass or copper tube"))).toHaveLength(2);
+    for (const id of ["skyconecage44", "skyconecage55"]) expect(items(id).some((s) => s.includes("errite")), id).toBe(false);
+    // without: nothing on the coax, the short handle
+    for (const id of Object.keys(SKYCONE_TABLES)) expect(items(id, "bare2").some((s) => s.includes("errite") || s.startsWith("Brass or copper tube")), id).toBe(false);
+    const d7 = ANTENNA_BY_ID.skycone7.build({ ...ANTENNA_BY_ID.skycone7.defaults, coax: "bare1" });
+    expect(partsFor("skycone7", d7 && { ...ANTENNA_BY_ID.skycone7.defaults, coax: "bare1" }, d7).find((q) => q.id === "skycone-handle")!.purpose.s).not.toContain("ferrite sleeve");
+  });
+
+  it("bare cable: its length in Dimensions scales with the band, the Simulation uses the bare rows", () => {
+    const { d, r } = worst("skycone7", "bare1");
+    expect(d.dims.find((x) => x.label === "Bare cable length (Simulation)")!.value).toBeCloseTo(0.5 * 3e8 / 960e6, 6);
+    expect(d.notes.some((n) => n.startsWith("No ferrite or choke"))).toBe(true);
+    expect(r.notes.some((n) => n.startsWith("Bare coax"))).toBe(true);
+    const t = SKYCONE_TABLES.skycone7, k = 5;
+    expect(skyconeZ(t, 960e6, t.bare!.f[k] * 960e6, 0)!.r).toBeCloseTo(t.bare!.r[0][k], 6);
+    // reference: tools/wideband-antenna README, A55 with a bare 35 cm cable worst SWR 3.9 over the band (cage_sleeve.py)
+    const a55 = worst("skyconecage55", "bare3");
+    expect(a55.d.dims.find((x) => x.label === "Bare cable length (Simulation)")!.value).toBeCloseTo(0.344, 2);
+    expect(a55.swr).toBeGreaterThan(3.4);
+    expect(a55.swr).toBeLessThan(4.4);
+    expect(worst("skyconecage55", "").swr).toBeLessThan(2.3);
+    const half = ANTENNA_BY_ID.skycone7.build({ bands: "1920e6-12800e6", coax: "bare1" });
+    expect(half.dims.find((x) => x.label === "Bare cable length (Simulation)")!.value).toBeCloseTo(0.5 * 3e8 / 1920e6, 6);
   });
 });
