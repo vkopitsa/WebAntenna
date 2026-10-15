@@ -43,6 +43,21 @@ export function sweepFreqs(d: Design, perBand = 21, exact = false): number[] {
   return [...new Set(out)].sort((a, b) => a - b);
 }
 
+/**
+ * Indices i where frequency fs[i] starts a new piece of line: fs[i − 1] and fs[i] both lie in sweeps but in no
+ * common one (separate bands with nothing computed between them). Points outside every sweep never break.
+ */
+export function sweepBreaks(fs: number[], sweeps: { start: number; stop: number }[]): number[] {
+  const tol = (f: number) => f * 1e-9;
+  const inS = (f: number) => sweeps.filter((s) => f >= s.start - tol(f) && f <= s.stop + tol(f));
+  const out: number[] = [];
+  for (let i = 1; i < fs.length; i++) {
+    const a = inS(fs[i - 1]), b = inS(fs[i]);
+    if (a.length && b.length && !a.some((s) => b.includes(s))) out.push(i);
+  }
+  return out;
+}
+
 /** Sample a gain function into cuts, a 3D grid and summary numbers. θ from +z, φ from +x. */
 export function samplePattern(f: number, g: (th: number, ph: number) => number): Pattern {
   const step = 2;

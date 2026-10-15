@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { AntennaDef, Design, Params } from "../lib/types";
-import { patternChoices, s11, toS1P, type SimResult, type ZPoint } from "../lib/simulate";
+import { patternChoices, s11, sweepBreaks, toS1P, type SimResult, type ZPoint } from "../lib/simulate";
 import { parseBands } from "../lib/bands";
 import { parseOpenEMS, parseTouchstone, type Imported } from "../lib/importers";
 import { fmtHz } from "../lib/units";
@@ -63,15 +63,16 @@ export function SimPanel({ def, params, design }: { def: AntennaDef; params: Par
   const win = bandIdx < bands.length && bands.length > 1 ? (() => { const [a, b] = bands[bandIdx]; const m = 0.03 * (a + b) / 2; return [a - m, b + m] as const; })() : null;
   const clip = (z: ZPoint[]) => (win ? z.filter((p) => p.f >= win[0] && p.f <= win[1]) : z);
   const curves = useMemo(() => {
-    const out: { name: string; cls: string; z: ZPoint[] }[] = [];
-    if (own.length) out.push({ name: "Simulated", cls: "s1", z: clip(own) });
+    const out: { name: string; cls: string; z: ZPoint[]; breaks?: number[] }[] = [];
+    // separate band sweeps: lift the pen between them instead of drawing a line over frequencies never computed
+    if (own.length) { const z = clip(own); out.push({ name: "Simulated", cls: "s1", z, breaks: sweepBreaks(z.map((p) => p.f), design.sweeps) }); }
     if (imp) out.push({ name: imp.name, cls: own.length ? "s2" : "s1", z: clip(imp.z) });
     return out.filter((c) => c.z.length > 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [own, imp, win?.[0], win?.[1]]);
+  }, [own, imp, design.sweeps, win?.[0], win?.[1]]);
   // x axis: the selected band's window, or every band (parts the model doesn't reach stay visible, empty)
   const span = win ?? (bands.length ? [Math.min(...bands.map((b) => b[0])), Math.max(...bands.map((b) => b[1]))] as const : undefined);
-  const ser = (fn: (p: ZPoint) => number): Series[] => curves.map((c) => ({ name: c.name, cls: c.cls, f: c.z.map((p) => p.f), values: c.z.map(fn) }));
+  const ser = (fn: (p: ZPoint) => number): Series[] => curves.map((c) => ({ name: c.name, cls: c.cls, f: c.z.map((p) => p.f), values: c.z.map(fn), breaks: c.breaks }));
   const zMain = curves[0];
 
   const onFile = async (file: File) => {
@@ -190,10 +191,10 @@ export function SimPanel({ def, params, design }: { def: AntennaDef; params: Par
         {zMain && <>
           <FreqChart title="Return loss S11" unit="dB" bands={bands} span={span} yMax={0} refLine={-9.54} series={ser((p) => s11(p, z0).db)} cursor={cursor} />
           <FreqChart title="Input impedance" unit="Ω" bands={bands} span={span} refLine={0} series={[
-            { name: "Re Zin", cls: "s1", f: zMain.z.map((p) => p.f), values: zMain.z.map((p) => p.r) },
-            { name: "Im Zin", cls: "s2", f: zMain.z.map((p) => p.f), values: zMain.z.map((p) => p.x) }]} cursor={cursor} />
+            { name: "Re Zin", cls: "s1", f: zMain.z.map((p) => p.f), values: zMain.z.map((p) => p.r), breaks: zMain.breaks },
+            { name: "Im Zin", cls: "s2", f: zMain.z.map((p) => p.f), values: zMain.z.map((p) => p.x), breaks: zMain.breaks }]} cursor={cursor} />
           <FreqChart title="SWR" unit="" bands={bands} span={span} yMin={1} refLine={2} digits={2} series={ser((p) => Math.min(s11(p, z0).swr, 20))} cursor={cursor} />
-          <SmithChart z={zMain.z} z0={z0} bands={bands} overlay={curves[1] ? { name: curves[1].name, z: curves[1].z } : undefined} cursor={cursor} />
+          <SmithChart z={zMain.z} z0={z0} bands={bands} breaks={zMain.breaks} overlay={curves[1] ? { name: curves[1].name, z: curves[1].z } : undefined} cursor={cursor} />
           <CursorReadout curves={curves} z0={z0} cursor={cursor} pattern={pat} />
         </>}
         {pat && pat.cuts.map((c) => <PolarChart key={c.id} cut={c} top={Math.max(pat.max.dbi, patOverlay?.max.dbi ?? -Infinity)}

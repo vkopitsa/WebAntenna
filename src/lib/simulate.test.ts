@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ANTENNA_BY_ID } from "./antennas";
 import { buildMesh, cpGainFn, gainFn, solve } from "./mom";
-import { s11, simulate, sweepFreqs, toS1P } from "./simulate";
+import { s11, simulate, sweepBreaks, sweepFreqs, toS1P } from "./simulate";
 import { wavelength } from "./rf";
 
 const run = (id: string, extra = {}) => {
@@ -113,5 +113,19 @@ describe("bands outside a model's range", () => {
     const wide = sim("skycone21", "600e6-9e9"), rw = wide.r(wide.d);
     expect(rw.z[rw.z.length - 1].f).toBeCloseTo(9e9, -6);
     expect(rw.notes.some((n) => n.startsWith("Your bands go above"))).toBe(false);
+  });
+});
+
+describe("sweepBreaks", () => {
+  it("lifts the pen only between separate band sweeps", () => {
+    const d = ANTENNA_BY_ID.dipole.build({ ...ANTENNA_BY_ID.dipole.defaults, bands: "144e6-146e6;430e6-440e6" });
+    const fs = sweepFreqs(d);
+    const br = sweepBreaks(fs, d.sweeps);
+    expect(br).toHaveLength(1);
+    expect(fs[br[0] - 1]).toBeLessThan(200e6);
+    expect(fs[br[0]]).toBeGreaterThan(400e6);
+    // one wide sweep (discone) or points outside every sweep (measured data): no breaks
+    expect(sweepBreaks(fs, [{ start: 100e6, stop: 500e6 }])).toEqual([]);
+    expect(sweepBreaks([1e9, 2e9], d.sweeps)).toEqual([]);
   });
 });

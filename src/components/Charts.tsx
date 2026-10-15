@@ -41,7 +41,11 @@ function Frame({ title, legend, children, tip, foot }: { title: string; legend?:
 /** Shared frequency cursor (hover or pinned) driven by SimPanel. */
 export interface FCursor { f: number | null; pinned: boolean; hover: (f: number | null) => void; toggle: () => void }
 
-export interface Series { name: string; cls: string; f: number[]; values: number[] }
+export interface Series {
+  name: string; cls: string; f: number[]; values: number[];
+  /** Indices where the line starts again (separate sweeps: nothing was computed between them). */
+  breaks?: number[];
+}
 
 /** Value vs frequency with crosshair tooltip. One y-axis only. */
 export function FreqChart({ title, unit, series, bands, span, yMin, yMax, refLine, digits = 1, cursor }: {
@@ -68,7 +72,7 @@ export function FreqChart({ title, unit, series, bands, span, yMin, yMax, refLin
   const yt = ticks(lo, hi), xt = ticks(f0, f1, 5);
   const path = (s: Series) => {
     let d = "", pen = false;
-    s.values.forEach((v, i) => { if (!Number.isFinite(v) || s.f[i] < f0 || s.f[i] > f1) { pen = false; return; } d += `${pen ? "L" : "M"}${X(s.f[i]).toFixed(1)},${Y(v).toFixed(1)}`; pen = true; });
+    s.values.forEach((v, i) => { if (s.breaks?.includes(i)) pen = false; if (!Number.isFinite(v) || s.f[i] < f0 || s.f[i] > f1) { pen = false; return; } d += `${pen ? "L" : "M"}${X(s.f[i]).toFixed(1)},${Y(v).toFixed(1)}`; pen = true; });
     return d;
   };
   /** Index of the sample of series s nearest to frequency fx (null if fx is outside its range). */
@@ -114,14 +118,14 @@ export function FreqChart({ title, unit, series, bands, span, yMin, yMax, refLin
 }
 
 /** Smith chart of the input impedance, normalised to z0, with the SWR 2 circle. */
-export function SmithChart({ z, z0, bands, overlay, cursor }: { z: ZPoint[]; z0: number; bands: [number, number][]; overlay?: { name: string; z: ZPoint[] }; cursor?: FCursor }) {
+export function SmithChart({ z, z0, bands, breaks, overlay, cursor }: { z: ZPoint[]; z0: number; bands: [number, number][]; breaks?: number[]; overlay?: { name: string; z: ZPoint[] }; cursor?: FCursor }) {
   const t = useT();
   const S = 300, c = S / 2, Rr = S / 2 - 14;
   const [localHover, setHover] = useState<number | null>(null);
   const P = (gr: number, gi: number) => [c + gr * Rr, c - gi * Rr] as const;
   const g = z.map((p) => s11(p, z0));
   const inBand = (f: number) => bands.some(([a, b]) => f >= a && f <= b);
-  const pts = g.map((s) => P(s.gr, s.gi).join(",")).join(" ");
+  const d = g.map((s, i) => `${i === 0 || breaks?.includes(i) ? "M" : "L"}${P(s.gr, s.gi).map((v) => v.toFixed(1)).join(",")}`).join("");
   const onMove = (e: React.PointerEvent<SVGSVGElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - r.left) / r.width) * S, y = ((e.clientY - r.top) / r.height) * S;
@@ -153,7 +157,7 @@ export function SmithChart({ z, z0, bands, overlay, cursor }: { z: ZPoint[]; z0:
         </g>
         <circle className="ref" cx={c} cy={c} r={Rr / 3} fill="none" />
         <text className="axis-label" x={c + Rr / 3 + 3} y={c - 4}>SWR 2</text>
-        <polyline className="line s1" points={pts} fill="none" />
+        <path className="line s1" d={d} fill="none" />
         {overlay && <polyline className="line s2" fill="none" points={overlay.z.map((p) => { const q = s11(p, z0); return P(q.gr, q.gi).join(","); }).join(" ")} />}
         {g.map((s, i) => inBand(z[i].f) && <circle key={i} className="dot s1 small" cx={P(s.gr, s.gi)[0]} cy={P(s.gr, s.gi)[1]} r={2.2} />)}
         {co && <circle className="dot s2" cx={mark(co)[0]} cy={mark(co)[1]} r={5} />}
