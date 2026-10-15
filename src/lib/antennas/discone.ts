@@ -20,11 +20,13 @@ export const discone: AntennaDef = {
   ],
   defaults: { bands: "100e6-800e6", d: 3e-3, rods: 16, half: 30, mast: 25e-3 },
   build(p): Design {
-    const { bands } = band(p);
+    const { bands, sweeps: perBand } = band(p);
     const fLow = Math.min(...bands.map((b) => b[0])), fHigh = Math.max(...bands.map((b) => b[1]));
     // NEC-2: SWR ≲ 2 from ≈ 1.25 × the λ/4 frequency upwards, so size the cone for fLow / 1.25.
     const f = fLow / 1.25;
-    const sweeps = [{ start: fLow * 0.9, stop: Math.max(fHigh * 1.05, fLow * 1.5), steps: 41 }];
+    // one sweep over the whole range, plus each band's own when there are several (a narrow band can fall
+    // between the wide sweep's points)
+    const sweeps = [{ start: fLow * 0.9, stop: Math.max(fHigh * 1.05, fLow * 1.5), steps: 41 }, ...(bands.length > 1 ? perBand : [])];
     const d = num(p, "d"), n = Math.round(num(p, "rods", 16)), half = deg(num(p, "half", 30));
     const lam = wavelength(f), r = d / 2;
     const slant = 0.25 * lam;

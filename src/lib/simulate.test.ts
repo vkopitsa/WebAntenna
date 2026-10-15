@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ANTENNA_BY_ID } from "./antennas";
 import { buildMesh, cpGainFn, gainFn, solve } from "./mom";
-import { s11, simulate, toS1P } from "./simulate";
+import { s11, simulate, sweepFreqs, toS1P } from "./simulate";
 import { wavelength } from "./rf";
 
 const run = (id: string, extra = {}) => {
@@ -95,4 +95,23 @@ describe("circular polarisation (cpGainFn)", () => {
       }
     }
   }, 60_000);
+});
+
+describe("bands outside a model's range", () => {
+  const sim = (id: string, bands: string) => {
+    const def = ANTENNA_BY_ID[id], p = { ...def.defaults, bands };
+    return { d: def.build(p), r: (d: ReturnType<typeof def.build>) => simulate(def, p, d) };
+  };
+  it("discone: a narrow band among wide ones still gets sweep points", () => {
+    const { d } = sim("discone", "433e6-435e6;2.4e9-2.5e9;5.7e9-5.9e9");
+    expect(sweepFreqs(d).some((f) => f >= 433e6 && f <= 435e6)).toBe(true);
+  });
+  it("sky-cone: bands above the precomputed sweep are flagged, not silently dropped", () => {
+    const cage = sim("skyconecage44", "600e6-9e9"), rc = cage.r(cage.d);
+    expect(rc.z[rc.z.length - 1].f).toBeLessThan(4e9);
+    expect(rc.notes.some((n) => n.startsWith("Your bands go above"))).toBe(true);
+    const wide = sim("skycone21", "600e6-9e9"), rw = wide.r(wide.d);
+    expect(rw.z[rw.z.length - 1].f).toBeCloseTo(9e9, -6);
+    expect(rw.notes.some((n) => n.startsWith("Your bands go above"))).toBe(false);
+  });
 });

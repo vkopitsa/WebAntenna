@@ -207,7 +207,7 @@ describe("bands", () => {
   it("discone is sized 25 % below the lowest band and covers all bands", () => {
     const d = ANTENNA_BY_ID.discone.build({ ...ANTENNA_BY_ID.discone.defaults, bands: "430e6-440e6;144e6-146e6" });
     expect(d.f).toBeCloseTo(144e6 / 1.25, 0);
-    expect(d.sweeps).toHaveLength(1);
+    expect(d.sweeps).toHaveLength(3); // the whole range, then each band (a narrow band can fall between the wide points)
     expect(d.sweeps[0].start).toBeLessThan(144e6);
     expect(d.sweeps[0].stop).toBeGreaterThan(440e6);
   });

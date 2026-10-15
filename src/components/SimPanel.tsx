@@ -23,10 +23,12 @@ function bandSummary(z: ZPoint[], z0: number, bands: [number, number][]) {
   return bands.map(([a, b]) => {
     // a NaN point (solver blow-up, odd .s1p) would make indexOf(min) −1
     const pts = z.filter((p) => p.f >= a && p.f <= b && Number.isFinite(p.r) && Number.isFinite(p.x));
-    if (!pts.length) return null;
+    if (!pts.length) return { a, b, none: true as const };
     const sw = pts.map((p) => s11(p, z0).swr);
     const best = sw.indexOf(Math.min(...sw));
-    return { a, b, minSwr: sw[best], fBest: pts[best].f, maxSwr: Math.max(...sw), zMid: pts[Math.floor(pts.length / 2)] };
+    // the model stops inside the band (a fixed-shape table): say how far the numbers go
+    const top = z[z.length - 1].f, upTo = top < b - (b - a) * 0.01 ? top : null;
+    return { a, b, none: false as const, minSwr: sw[best], fBest: pts[best].f, maxSwr: Math.max(...sw), zMid: pts[Math.floor(pts.length / 2)], upTo };
   });
 }
 
@@ -67,6 +69,8 @@ export function SimPanel({ def, params, design }: { def: AntennaDef; params: Par
     return out.filter((c) => c.z.length > 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [own, imp, win?.[0], win?.[1]]);
+  // x axis: the selected band's window, or every band (parts the model doesn't reach stay visible, empty)
+  const span = win ?? (bands.length ? [Math.min(...bands.map((b) => b[0])), Math.max(...bands.map((b) => b[1]))] as const : undefined);
   const ser = (fn: (p: ZPoint) => number): Series[] => curves.map((c) => ({ name: c.name, cls: c.cls, f: c.z.map((p) => p.f), values: c.z.map(fn) }));
   const zMain = curves[0];
 
@@ -145,9 +149,10 @@ export function SimPanel({ def, params, design }: { def: AntennaDef; params: Par
               <span>{t("Beamwidth (−3 dB)")}</span><span>{Number.isFinite(pat.hpbw) ? `${pat.hpbw.toFixed(0)}°` : "—"}</span>
             </>}
             {pat && !Number.isFinite(pat.max.theta) && <><span>{t("Directivity (openEMS)")}</span><span><b>{pat.max.dbi.toFixed(2)} dBi</b></span></>}
-            {summary.map((s, i) => s && <span key={i} className="kv-pair">
+            {summary.map((s, i) => <span key={i} className="kv-pair">
               <span>{t("Band {0}", i + 1)} · {fmtHz(s.a, 3)}–{fmtHz(s.b, 3)}</span>
-              <span>{t("SWR {0}–{1} (best at {2}), Z ≈ {3}", s.minSwr.toFixed(2), Number.isFinite(s.maxSwr) ? s.maxSwr.toFixed(2) : "∞", fmtHz(s.fBest, 3), `${s.zMid.r.toFixed(0)} ${s.zMid.x >= 0 ? "+" : "−"} j${Math.abs(s.zMid.x).toFixed(0)} Ω`)}</span>
+              {s.none ? <span className="muted">{t("Not computed: outside the model's range")}</span>
+                : <span>{t("SWR {0}–{1} (best at {2}), Z ≈ {3}", s.minSwr.toFixed(2), Number.isFinite(s.maxSwr) ? s.maxSwr.toFixed(2) : "∞", fmtHz(s.fBest, 3), `${s.zMid.r.toFixed(0)} ${s.zMid.x >= 0 ? "+" : "−"} j${Math.abs(s.zMid.x).toFixed(0)} Ω`)}{s.upTo != null && <span className="muted"> · {t("computed up to {0}", fmtHz(s.upTo, 3))}</span>}</span>}
             </span>)}
           </div>
           {r?.notes.map((n) => <p key={n} className="hint">{n.startsWith("FDTD (") ? n : t(n)}</p>)}
@@ -183,11 +188,11 @@ export function SimPanel({ def, params, design }: { def: AntennaDef; params: Par
       )}
       <div className="chart-grid">
         {zMain && <>
-          <FreqChart title="Return loss S11" unit="dB" bands={bands} yMax={0} refLine={-9.54} series={ser((p) => s11(p, z0).db)} cursor={cursor} />
-          <FreqChart title="Input impedance" unit="Ω" bands={bands} refLine={0} series={[
+          <FreqChart title="Return loss S11" unit="dB" bands={bands} span={span} yMax={0} refLine={-9.54} series={ser((p) => s11(p, z0).db)} cursor={cursor} />
+          <FreqChart title="Input impedance" unit="Ω" bands={bands} span={span} refLine={0} series={[
             { name: "Re Zin", cls: "s1", f: zMain.z.map((p) => p.f), values: zMain.z.map((p) => p.r) },
             { name: "Im Zin", cls: "s2", f: zMain.z.map((p) => p.f), values: zMain.z.map((p) => p.x) }]} cursor={cursor} />
-          <FreqChart title="SWR" unit="" bands={bands} yMin={1} refLine={2} digits={2} series={ser((p) => Math.min(s11(p, z0).swr, 20))} cursor={cursor} />
+          <FreqChart title="SWR" unit="" bands={bands} span={span} yMin={1} refLine={2} digits={2} series={ser((p) => Math.min(s11(p, z0).swr, 20))} cursor={cursor} />
           <SmithChart z={zMain.z} z0={z0} bands={bands} overlay={curves[1] ? { name: curves[1].name, z: curves[1].z } : undefined} cursor={cursor} />
           <CursorReadout curves={curves} z0={z0} cursor={cursor} pattern={pat} />
         </>}

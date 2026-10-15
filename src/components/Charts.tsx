@@ -44,8 +44,10 @@ export interface FCursor { f: number | null; pinned: boolean; hover: (f: number 
 export interface Series { name: string; cls: string; f: number[]; values: number[] }
 
 /** Value vs frequency with crosshair tooltip. One y-axis only. */
-export function FreqChart({ title, unit, series, bands, yMin, yMax, refLine, digits = 1, cursor }: {
+export function FreqChart({ title, unit, series, bands, span, yMin, yMax, refLine, digits = 1, cursor }: {
   title: string; unit: string; series: Series[]; bands: [number, number][];
+  /** Frequencies the x axis must include (the requested bands), so a part with no data still shows. */
+  span?: readonly [number, number];
   yMin?: number; yMax?: number; refLine?: number; digits?: number; cursor?: FCursor;
 }) {
   const t = useT();
@@ -53,7 +55,7 @@ export function FreqChart({ title, unit, series, bands, yMin, yMax, refLine, dig
   const [localHover, setHover] = useState<number | null>(null); // hovered frequency (when not linked)
   const hover = cursor ? cursor.f : localHover;
   const allF = series.flatMap((x) => x.f);
-  const f0 = Math.min(...allF), f1 = Math.max(...allF);
+  const f0 = Math.min(...allF, ...(span ? [span[0]] : [])), f1 = Math.max(...allF, ...(span ? [span[1]] : []));
   const all = series.flatMap((s) => s.values).filter(Number.isFinite);
   let lo = yMin ?? Math.min(...all), hi = yMax ?? Math.max(...all);
   if (yMin == null && yMax != null) lo = Math.min(...all);
