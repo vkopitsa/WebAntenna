@@ -70,8 +70,16 @@ export function SimPanel({ def, params, design }: { def: AntennaDef; params: Par
     return out.filter((c) => c.z.length > 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [own, imp, design.sweeps, win?.[0], win?.[1]]);
-  // x axis: the selected band's window, or every band (parts the model doesn't reach stay visible, empty)
-  const span = win ?? (bands.length ? [Math.min(...bands.map((b) => b[0])), Math.max(...bands.map((b) => b[1]))] as const : undefined);
+  // x axis: the selected band's window, or every band (parts the model doesn't reach stay visible, empty).
+  // The empty part is capped at the computed width, so a model that stops early isn't squashed into a sliver.
+  const span = useMemo(() => {
+    const all = win ?? (bands.length ? [Math.min(...bands.map((b) => b[0])), Math.max(...bands.map((b) => b[1]))] as const : undefined);
+    const fs = curves.flatMap((c) => c.z.map((p) => p.f));
+    if (!all || !fs.length) return all;
+    const d0 = Math.min(...fs), d1 = Math.max(...fs), w = d1 - d0;
+    return [Math.max(all[0], d0 - w), Math.min(all[1], d1 + w)] as const;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [curves, win?.[0], win?.[1], params.bands]);
   const ser = (fn: (p: ZPoint) => number): Series[] => curves.map((c) => ({ name: c.name, cls: c.cls, f: c.z.map((p) => p.f), values: c.z.map(fn), breaks: c.breaks }));
   const zMain = curves[0];
 
