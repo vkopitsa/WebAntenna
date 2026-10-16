@@ -58,8 +58,11 @@ export function SynthPanel() {
           list = [...scored, ...list.filter((x) => !Number.isFinite(x.score))];
           if (alive) setRows(list);
         } catch (e) {
-          if (alive) setFdNote(String(e instanceof Error ? e.message : e));
-          return;
+          // one candidate the FDTD can't run (e.g. a grid too large for a very wide band) must not stop the others
+          if (!alive) return;
+          const msg = `FDTD (${t("not run")}): ${e instanceof Error ? e.message : String(e)}`;
+          list = list.map((x) => (x.id === c.id ? { ...x, note: msg } : x));
+          setRows(list);
         }
       }
       if (alive) setFdNote("");

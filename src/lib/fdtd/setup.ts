@@ -20,12 +20,16 @@ export interface Setup {
   fmin: number; fmax: number;
 }
 
+export const MAX_CELLS = 30e6;
+
 export const id3 = (s: { nx: number; ny: number }, i: number, j: number, k: number) => (k * s.ny + j) * s.nx + i;
 
 export function setup(p: Pcb, fmin: number, fmax: number): Setup {
   const mesh = buildMesh(p, { fmin, fmax });
   const { x, y, z } = mesh;
   const nx = x.length, ny = y.length, nz = z.length, N = nx * ny * nz;
+  // ~60 bytes per cell on the CPU engine; a 100:1 band asks for λ/20 at the top over λ/2 at the bottom (10^11 cells)
+  if (N > MAX_CELLS) throw new Error(`FDTD grid too large: ${nx}×${ny}×${nz} cells (limit ${MAX_CELLS / 1e6} M). Narrow the frequency range.`);
   const d = (a: Float64Array) => Float64Array.from({ length: a.length - 1 }, (_, i) => a[i + 1] - a[i]);
   const dx = d(x), dy = d(y), dz = d(z);
   const dual = (dd: Float64Array, n: number) => Float64Array.from({ length: n }, (_, i) => ((dd[i - 1] ?? dd[i]) + (dd[i] ?? dd[i - 1])) / 2);

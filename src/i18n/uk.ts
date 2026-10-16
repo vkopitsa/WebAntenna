@@ -482,6 +482,7 @@ export const UK: Record<string, string> = {
   "Length trim (%)": "Підрізання довжини (%)",
   "Maximum gain": "Максимальне підсилення",
   "No antenna type here covers {0}:1 in one piece. The widest, “{1}”, covers {2}–{3}. Split the range between two or more antennas (one set of bands each) and synthesize each part.": "Жоден тип антени тут не покриває {0}:1 однією антеною. Найширший, «{1}», покриває {2}–{3}. Розділіть діапазон між двома чи більше антенами (кожна зі своїми діапазонами) і синтезуйте кожну частину.",
+  "not run": "не запущено",
   "No antenna type passes these filters for these bands.": "Жоден тип антени не проходить ці фільтри для цих діапазонів.",
   "Omnidirectional": "Всеспрямована",
   "Printed (PCB)": "Друковані (PCB)",
