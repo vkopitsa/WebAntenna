@@ -5,6 +5,7 @@ import { ANTENNAS } from "./antennas";
 import { buildMesh, gainFn, solve } from "./mom";
 import { patchDesign } from "./antennas/patch";
 import { loopModel, loopZin } from "./antennas/pcbloop";
+import { SKYCONE_TABLES, skyconeGain, skyconeZ } from "./antennas/skycone";
 import { centre, formatBands, type Band } from "./bands";
 import { num } from "./types";
 import { wavelength } from "./rf";
@@ -119,11 +120,24 @@ function evaluate(def: AntennaDef, p: Params, o: SynthOptions, withGain: boolean
     const swr = o.bands.map((b) => Math.max(...pts(b).map((f) => { const [r, x] = loopZin(f, m, d.f); return swrOf(r, x, 50); })));
     return { swr, gain: 1.76 + 10 * Math.log10(Math.max(m.eff, 1e-6)), size: sizeOf(d, lamLow), z0: 50 };
   }
+  const tab = SKYCONE_TABLES[def.id];
+  if (tab) {
+    // sky-tilted bicones: their precomputed sweep (every row inside the band); a frequency past it counts as no match
+    const fLow = d.sweeps[0].start, bare = d.coax?.bare?.row;
+    const at = (b: Band) => [...pts(b), ...tab.f.map((u) => u * fLow).filter((f) => f > b[0] && f < b[1])];
+    const swr = o.bands.map((b) => Math.max(...at(b).map((f) => { const q = skyconeZ(tab, fLow, f, bare); return q ? swrOf(q.r, q.x, z0) : 99; })));
+    let gain = NaN;
+    if (withGain) gain = Math.min(...o.bands.map((b) => { const g = skyconeGain(tab, fLow, centre(b)); let pk = -Infinity; for (let th = 10; th <= 170; th += 20) pk = Math.max(pk, g((th * Math.PI) / 180)); return pk; }));
+    return { swr, gain, size: sizeOf(d, lamLow), z0 };
+  }
   if (!d.necSupported) return null;
+  // above a broadband type's range the coarse solve can still look matched; count it as no match
+  const top = def.maxRatio ? Math.min(...o.bands.map((b) => b[0])) * def.maxRatio * 1.001 : Infinity;
   const swr: number[] = [];
   for (const b of o.bands) {
     let worst = 1;
     for (const f of pts(b)) {
+      if (f > top) { worst = 99; continue; }
       const m = buildMesh(d, wavelength(f), 24, 220);
       const s = m && solve(m, f);
       if (!s) return null;

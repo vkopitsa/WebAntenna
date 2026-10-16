@@ -132,6 +132,9 @@ export interface AntennaDef {
   traits?: { pol: "vertical" | "horizontal" | "circular" | "linear"; pattern: "omni" | "bi" | "beam" };
   /** How the antenna treats several bands: one element set per band, or one broadband structure. Absent: single band. */
   multiband?: "per-band" | "broadband";
+  /** Broadband types: the widest highest/lowest frequency ratio one antenna covers (its own model's SWR ≲ 2 range).
+   *  Wider bands are warned about in the sidebar and fail in synthesis. */
+  maxRatio?: number;
   params: ParamDef[];
   defaults: Params;
   build: (p: Params) => Design;

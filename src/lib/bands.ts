@@ -18,6 +18,8 @@ export function parseBands(s: string): Band[] {
 export const formatBands = (b: Band[]) => b.map(([a, c]) => `${+a.toPrecision(9)}-${+c.toPrecision(9)}`).join(";");
 
 export const centre = ([a, b]: Band) => (a + b) / 2;
+/** Highest / lowest frequency over all bands. */
+export const spanRatio = (b: Band[]) => (b.length ? Math.max(...b.map((x) => x[1])) / Math.min(...b.map((x) => x[0])) : 1);
 /** Relative width, % of the centre frequency. */
 export const widthPct = ([a, b]: Band) => (200 * (b - a)) / (a + b);
 

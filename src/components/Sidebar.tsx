@@ -4,7 +4,7 @@ import { get, resetParams, set, setParam, useStore } from "../store";
 import { useT } from "../i18n";
 import { fromUnit, toUnit } from "../format";
 import { FreqInput, Num, Section, Select } from "./inputs";
-import { BAND_PRESETS, WIDE_PRESETS, formatBands, parseBands, type Band } from "../lib/bands";
+import { BAND_PRESETS, WIDE_PRESETS, formatBands, parseBands, spanRatio, type Band } from "../lib/bands";
 import { fmtHz } from "../lib/units";
 import { MAX_BANDS } from "../lib/sanitize";
 import { affected } from "../lib/affects";
@@ -19,6 +19,7 @@ function BandsInput({ def, value }: { def: ParamDef; value: string }) {
   const bands = parseBands(value);
   const type = useStore((s) => s.type);
   const multi = !!ANTENNA_BY_ID[type].multiband;
+  const maxRatio = ANTENNA_BY_ID[type].maxRatio, ratio = spanRatio(bands), lo = bands.length ? Math.min(...bands.map((b) => b[0])) : 0;
   const commit = (b: Band[]) => setParam(def.key, formatBands(b.length ? b : [[145e6, 145e6]]));
   const update = (i: number, j: 0 | 1, v: number) => {
     const next = bands.map((b) => [...b] as Band);
@@ -53,6 +54,9 @@ function BandsInput({ def, value }: { def: ParamDef; value: string }) {
         <button className="small primary" onClick={() => set({ tab: "synth" })} title={t("Find the best antenna type and dimensions for these bands")}>⚡ {t("Synthesize")}</button>
       </div>
       <div className="hint">{multi ? t("Every band is used in the design.") : t("Band 1 sets the dimensions; extra bands are swept in the NEC export.")}</div>
+      {maxRatio && ratio > maxRatio * 1.001 && (
+        <div className="hint warn-text">{t("These bands span {0}:1 but this type covers about {1}:1, so it is designed for {2}–{3} only. Narrow the bands, or press Synthesize to compare the types.", +ratio.toPrecision(3), +maxRatio.toPrecision(2), fmtHz(lo, 3), fmtHz(lo * maxRatio, 3))}</div>
+      )}
     </div>
   );
 }

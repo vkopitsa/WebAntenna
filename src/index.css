@@ -231,6 +231,7 @@ table.data td.key { color: var(--accent); font-weight: 700; width: 1.5em; }
 .sim-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .sim-bar .spacer { flex: 1; }
 .badge { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid currentColor; }
+.warn-text { color: var(--warn); }
 .badge.ok { color: var(--ok); } .badge.warn { color: var(--warn); } .badge.err { color: var(--err); }
 .muted { color: var(--muted); }
 .small { font-size: 12px; }

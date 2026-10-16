@@ -11,6 +11,7 @@ export const discone: AntennaDef = {
   traits: { pol: "vertical", pattern: "omni" },
   summary: "Disc over a cone: about 10:1 bandwidth, vertical, omnidirectional. Built from rods.",
   multiband: "broadband",
+  maxRatio: 8 / 1.25, // the cone is sized for fLow / 1.25; SWR ≲ 2 up to ≈ 8 × that (NEC-2)
   params: [
     { ...BANDS, label: "Frequency bands (all must fit in the range)" },
     { key: "d", label: "Rod diameter", kind: "length", min: 0.1e-3, max: 0.05 },

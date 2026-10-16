@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import type { Candidate } from "../lib/synth";
 import { useFdtd } from "../useFdtd";
-import { ANTENNA_BY_ID } from "../lib/antennas";
-import { parseBands } from "../lib/bands";
+import { ANTENNA_BY_ID, WIDEST } from "../lib/antennas";
+import { parseBands, spanRatio } from "../lib/bands";
 import type { Goal, SynthOptions } from "../lib/synth";
 import { fmtHz } from "../lib/units";
 import { wavelength } from "../lib/rf";
@@ -81,6 +81,10 @@ export function SynthPanel() {
           <span>{t("Frequency bands")}</span>
           <span>{bands.map((b, i) => <span key={i} className="chip">{fmtHz(b[0], 3)} – {fmtHz(b[1], 3)}</span>)} <span className="hint">{t("(edit them in the sidebar)")}</span></span>
         </div>
+        {spanRatio(bands) > WIDEST.maxRatio! * 1.001 && (() => {
+          const lo = Math.min(...bands.map((b) => b[0]));
+          return <p className="hint warn-text">{t("No antenna type here covers {0}:1 in one piece. The widest, “{1}”, covers {2}–{3}. Split the range between two or more antennas (one set of bands each) and synthesize each part.", +spanRatio(bands).toPrecision(3), t(WIDEST.name), fmtHz(lo, 3), fmtHz(lo * WIDEST.maxRatio!, 3))}</p>;
+        })()}
         <div className="synth-grid">
           <label>{t("Goal")}<Select value={goal} onChange={setGoal} options={[["balanced", "Balanced (match, gain, size)"], ["match", "Best match over the bands"], ["gain", "Maximum gain"], ["small", "Smallest antenna"]]} /></label>
           <label>{t("Family")}<Select value={family} onChange={setFamily} options={[["any", "Any"], ["wire", "Wire / rod"], ["printed", "Printed (PCB)"]]} /></label>
