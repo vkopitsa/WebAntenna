@@ -41,7 +41,8 @@ export function PrintPanel({ def, params, design, base }: { def: AntennaDef; par
               <tbody>
                 {specs.map((s, i) => {
                   const b = built(s.id);
-                  const size = b?.ok ? b.segments[0].size.map((x) => fmtLen(x / 1000, unit)).join(" × ") : b ? fmtMsg(t, unit, b.error) : "…";
+                  const dims = (z: number[]) => z.map((x) => fmtLen(x / 1000, unit)).join(" × ");
+                  const size = b?.ok ? (b.segments.length > 1 ? t("{0} pieces, largest {1}", b.segments.length, dims(b.segments.reduce((m, g) => (g.size[0] * g.size[1] * g.size[2] > m.size[0] * m.size[1] * m.size[2] ? g : m)).size)) : dims(b.segments[0].size)) : b ? fmtMsg(t, unit, b.error) : "…";
                   return (
                     <tr key={s.id} className={i === sel ? "on" : undefined} tabIndex={0} aria-selected={i === sel} onClick={() => setSel(i)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSel(i); } }}>
                       <td>{t(s.title)}</td><td>{t(USE_LABELS[s.use])}</td><td className="num">{s.qty}</td>

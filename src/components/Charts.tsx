@@ -42,7 +42,7 @@ function Frame({ title, legend, children, tip, foot }: { title: string; legend?:
 export interface FCursor { f: number | null; pinned: boolean; hover: (f: number | null) => void; toggle: () => void }
 
 export interface Series {
-  name: string; cls: string; f: number[]; values: number[];
+  name: string; cls: string; f: number[]; values: number[]; /** true values for the tooltip when `values` is capped for drawing */ raw?: number[];
   /** Indices where the line starts again (separate sweeps: nothing was computed between them). */
   breaks?: number[];
 }
@@ -94,7 +94,7 @@ export function FreqChart({ title, unit, series, bands, span, yMin, yMax, refLin
     x: (X(hover) / W) * 100, y: 4,
     rows: <>
       <div className="tip-h">{fmtHz(hover, 3)}{cursor?.pinned ? ` · ${t("Pinned")}` : ""}</div>
-      {series.map((s) => { const i = near(s, hover); return i == null ? null : <div key={s.name} className="tip-r"><span className={`key ${s.cls}`} /><b>{fmt(s.values[i], digits)} {unit}</b> <span className="muted">{t(s.name)}</span></div>; })}
+      {series.map((s) => { const i = near(s, hover); return i == null ? null : <div key={s.name} className="tip-r"><span className={`key ${s.cls}`} /><b>{(() => { const v = (s.raw ?? s.values)[i]; return Number.isFinite(v) ? fmt(v, digits) : "∞"; })()} {unit}</b> <span className="muted">{t(s.name)}</span></div>; })}
     </>,
   };
   return (
@@ -167,7 +167,7 @@ export function SmithChart({ z, z0, bands, breaks, overlay, cursor }: { z: ZPoin
   );
 }
 
-const CUT_ZERO: Record<Cut["id"], string> = { xy: "0° = +x, 90° = +y", xz: "0° = +z (up), 90° = +x", yz: "0° = +z (up), 90° = +y" };
+const cutZero = (t: (s: string) => string, id: Cut["id"]) => id === "xy" ? t("0° = +x, 90° = +y") : id === "xz" ? t("0° = +z (up), 90° = +x") : t("0° = +z (up), 90° = +y");
 
 /** Polar far-field cut, dBi, 30 dB range below the overall maximum. 0° at the top, clockwise. */
 export function PolarChart({ cut, top, overlay, names }: { cut: Cut; top: number; overlay?: Cut; names?: [string, string] }) {
@@ -190,7 +190,7 @@ export function PolarChart({ cut, top, overlay, names }: { cut: Cut; top: number
     return { x: (px / S) * 100, y: (py / S) * 100, rows: <><div className="tip-h">{cut.deg[hover]}°</div><div className="tip-r"><b>{fmt(cut.dbi[hover])} dBi</b></div></> };
   })();
   return (
-    <Frame title={cut.label} tip={tip} foot={`dBi · ${CUT_ZERO[cut.id]}`} legend={overlay && names ? [{ name: names[0], cls: "s1" }, { name: names[1], cls: "s2" }] : undefined}>
+    <Frame title={cut.label} tip={tip} foot={`dBi · ${cutZero(t, cut.id)}`} legend={overlay && names ? [{ name: names[0], cls: "s1" }, { name: names[1], cls: "s2" }] : undefined}>
       <svg viewBox={`0 0 ${S} ${S}`} className="plot polar" onPointerMove={onMove} onPointerLeave={() => setHover(null)} role="img" aria-label={t(cut.label)}>
         {[0, 10, 20, 30].map((k) => <g key={k}>
           <circle className={k === 0 ? "axis" : "grid"} cx={c} cy={c} r={((range - k) / range) * Rr} fill="none" />

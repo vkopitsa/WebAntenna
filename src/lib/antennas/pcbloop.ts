@@ -14,6 +14,9 @@ const MU0 = 4e-7 * Math.PI;
  *   L  (Grover, rectangle of a × b, equivalent strip radius ρ = 0.2235 (w + t))
  *   Rr = 31171 (A/λ²)² Ω,  Rloss = perimeter/(2w) · Rs,  Rs = √(π f μ0 / σ)
  */
+/** Trace width actually used: the sides must stay inside the loop rectangle. */
+export const loopTraceW = (a: number, b: number, w: number) => Math.min(w, 0.4 * Math.min(a, b));
+
 export function loopModel(f: number, a: number, b: number, w: number, t: number, sigma: number, qCap: number) {
   const rho = 0.2235 * (w + t);
   const d = Math.hypot(a, b);
@@ -66,11 +69,13 @@ export const pcbloop: AntennaDef = {
   defaults: { bands: "433.05e6-434.79e6", a: 30e-3, b: 20e-3, w: 2e-3, t: 35e-6, qc: 300, h: 1.6e-3 },
   build(p): Design {
     const { f, sweeps } = band(p);
-    const a = num(p, "a", 0.03), b = num(p, "b", 0.02), w = num(p, "w", 2e-3), t = num(p, "t", 35e-6), qc = num(p, "qc", 300), h = num(p, "h", 1.6e-3);
+    const a = num(p, "a", 0.03), b = num(p, "b", 0.02), wIn = num(p, "w", 2e-3), t = num(p, "t", 35e-6), qc = num(p, "qc", 300), h = num(p, "h", 1.6e-3);
+    const w = loopTraceW(a, b, wIn);
     const m = loopModel(f, a, b, w, t, 5.8e7, qc);
     const lam = wavelength(f);
     // Drawing: substrate + the four loop sides with gaps for Cp (bottom, feed) and Cs (top).
-    const g = Math.max(1e-3, w);
+    const g0 = Math.max(1e-3, w), g = Math.min(g0, 0.5 * a); // the gaps must leave copper on both sides
+    const clamped = w < wIn || g < g0;
     const z = h;
     const strip = (x0: number, y0: number, x1: number, y1: number, label: string): Plate =>
       ({ pts: rect(v((x0 + x1) / 2, (y0 + y1) / 2, z), v(Math.abs(x1 - x0) / 2, 0, 0), v(0, Math.abs(y1 - y0) / 2, 0)), thickness: t, material: "metal", label });
@@ -116,6 +121,7 @@ export const pcbloop: AntennaDef = {
       ],
       notes: [
         ...(bad ? ["Warning: the loop cannot be matched with Cs + Cp at this size; make it larger or use a transformer match."] : []),
+        ...(clamped ? ["Warning: the trace width and capacitor gap are too large for this loop; they were reduced to fit."] : []),
         "Small loops are inefficient but robust to hand detuning. Use C0G/NP0 capacitors; fine-tune Cs on the bench (± 0.1 pF matters).",
         "Keep the ground pour at least one loop height away from the loop; nearby copper lowers the efficiency.",
         "Analytic small-loop model (no openEMS export: the lumped matching capacitors need a circuit co-simulation).",

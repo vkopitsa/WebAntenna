@@ -27,11 +27,13 @@ function svgText(svg: SVGSVGElement): string {
 export function Exports({ def, params, design, svgRef }: { def: AntennaDef; params: Params; design: Design; svgRef: React.RefObject<SVGSVGElement | null> }) {
   const t = useT();
   const [copied, setCopied] = useState(false);
+  const [failed, setFailed] = useState(false);
   const base = `${def.id}-${Math.round(design.f / 1e3) / 1e3}MHz`;
   const share = async () => {
     const url = location.href.split("#")[0] + shareHash(get());
     history.replaceState(null, "", shareHash(get()));
-    try { await navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* clipboard blocked: URL is in the address bar */ }
+    try { await navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 1500); }
+    catch { setFailed(true); setTimeout(() => setFailed(false), 4000); }   // clipboard blocked: the URL is in the address bar (set above)
   };
   return (
     <div className="exports">
@@ -43,7 +45,7 @@ export function Exports({ def, params, design, svgRef }: { def: AntennaDef; para
       <button onClick={() => download(`${base}.csv`, toCSV(def, design), "text/csv")}>CSV</button>
       <button onClick={() => download(`${base}.json`, toJSON(def, params, design, __APP_VERSION__), "application/json")}>JSON</button>
       <button onClick={() => window.print()}>{t("Print")}</button>
-      <button onClick={share}>{copied ? t("Link copied") : t("Copy share link")}</button>
+      <button onClick={share}>{copied ? t("Link copied") : failed ? t("Copy failed, the link is in the address bar") : t("Copy share link")}</button>
     </div>
   );
 }

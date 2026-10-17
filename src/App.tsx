@@ -12,6 +12,18 @@ import { SynthPanel } from "./components/SynthPanel";
 import { BuildPanel } from "./components/BuildPanel";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
+/** True on the narrow layout, where the sidebar is an off-canvas drawer. */
+function useMobile() {
+  const [m, setM] = useState(() => window.matchMedia("(max-width: 800px)").matches);
+  useEffect(() => {
+    const q = window.matchMedia("(max-width: 800px)");
+    const f = () => setM(q.matches);
+    q.addEventListener("change", f);
+    return () => q.removeEventListener("change", f);
+  }, []);
+  return m;
+}
+
 export default function App() {
   const t = useT();
   const type = useStore((s) => s.type);
@@ -21,6 +33,10 @@ export default function App() {
   const theme = useStore((s) => s.theme);
   const [drawer, setDrawer] = useState(false);
   const tab = useStore((s) => s.tab);
+  // Simulation / Synthesis stay mounted once opened so a running job and a loaded measurement survive a tab switch
+  const [visited, setVisited] = useState<MainTab[]>([]);
+  if (!visited.includes(tab)) setVisited([...visited, tab]);
+  const mobile = useMobile();
   const setTab = (v: MainTab) => set({ tab: v });
   const svgRef = useRef<SVGSVGElement | null>(null);
   const def = ANTENNA_BY_ID[type];
@@ -35,6 +51,12 @@ export default function App() {
     if (theme === "auto") document.documentElement.removeAttribute("data-theme");
     else document.documentElement.setAttribute("data-theme", theme);
   }, [theme]);
+  useEffect(() => {
+    if (!drawer) return;
+    const k = (e: KeyboardEvent) => { if (e.key === "Escape") setDrawer(false); };
+    window.addEventListener("keydown", k);
+    return () => window.removeEventListener("keydown", k);
+  }, [drawer]);
   useEffect(() => { document.title = `${t(def.name)} · ${t("Antenna Generator")}`; }, [def, t]);
 
   return (
@@ -51,7 +73,7 @@ export default function App() {
       </header>
       <div className="body">
         {drawer && <div className="backdrop" onClick={() => setDrawer(false)} aria-hidden="true" />}
-        <aside className={"side" + (drawer ? " open" : "")} aria-label={t("Antenna and parameters")}>
+        <aside className={"side" + (drawer ? " open" : "")} inert={mobile && !drawer} aria-label={t("Antenna and parameters")}>
           <div className="panel">
             <button className="mobile-only drawer-close" onClick={() => setDrawer(false)} aria-label={t("Close")}>✕</button>
             <ParamsPanel />
@@ -65,16 +87,22 @@ export default function App() {
             <button role="tab" aria-selected={tab === "build"} className={tab === "build" ? "on" : ""} onClick={() => setTab("build")}>{t("Build")}</button>
             <button role="tab" aria-selected={tab === "synth"} className={tab === "synth" ? "on" : ""} onClick={() => setTab("synth")}>{t("Synthesis")}</button>
           </div>
-          <ErrorBoundary key={type} resetKey={`${tab}|${JSON.stringify(params)}`}>
-          {tab === "synth" ? <SynthPanel /> : design ? (tab === "design" ? (
+          {visited.includes("synth") && (
+            <div hidden={tab !== "synth"}><ErrorBoundary resetKey={String(params.bands ?? "")}><SynthPanel /></ErrorBoundary></div>
+          )}
+          {tab !== "synth" && <ErrorBoundary key={type} resetKey={`${tab}|${JSON.stringify(params)}`}>
+          {design ? (tab === "design" ? (
             <>
               <Preview design={design} svgRef={svgRef} type={type} params={params} />
               <Exports def={def} params={params} design={design} svgRef={svgRef} />
               <Results design={design} />
               <p className="hint disclaimer">{t("Formulas give a starting point. Build slightly long, measure with an antenna analyser or VNA, then trim.")}</p>
             </>
-          ) : tab === "build" ? <BuildPanel def={def} params={params} design={design} /> : <SimPanel def={def} params={params} design={design} />) : <div className="box err-text">{error}</div>}
-          </ErrorBoundary>
+          ) : tab === "build" ? <BuildPanel def={def} params={params} design={design} /> : null) : <div className="box err-text">{error}</div>}
+          </ErrorBoundary>}
+          {visited.includes("sim") && design && (
+            <div hidden={tab !== "sim"}><ErrorBoundary key={type} resetKey={JSON.stringify(params)}><SimPanel def={def} params={params} design={design} active={tab === "sim"} /></ErrorBoundary></div>
+          )}
         </main>
       </div>
     </div>

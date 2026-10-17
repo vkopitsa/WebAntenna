@@ -26,7 +26,8 @@ export const printeddipole: AntennaDef = {
     const lam = wavelength(f), ee = printedEeff(er, h, w);
     const L = ((DIPOLE_K * lam) / 2 / Math.sqrt(ee)) * (1 + num(p, "trim", 0) / 100);
     const g = Math.max(1e-3, w);
-    const arm = (L - g) / 2;
+    const arm = Math.max((L - g) / 2, 0.5e-3); // a gap wider than the dipole would give negative arms
+    const tooShort = (L - g) / 2 < 0.5e-3;
     const m = 3e-3;
     const pcb: Pcb = {
       board: { x0: -w / 2 - m, y0: -L / 2 - m, x1: w / 2 + m, y1: L / 2 + m }, h, er, tanD, t: 35e-6,
@@ -49,6 +50,7 @@ export const printeddipole: AntennaDef = {
         { label: "Feed impedance", value: "≈ 70–75 Ω balanced (openEMS port: 75 Ω)" },
       ],
       notes: [
+        ...(tooShort ? ["Warning: the trace is too wide for this frequency; the arms were kept at 0.5 mm. Use a narrower trace."] : []),
         "Balanced antenna: feed it through a balun (or a differential RF output) and keep ground copper away from the arms.",
         "Dimensions come from an openEMS-calibrated εeff; run the exported openEMS script for your exact board.",
       ],

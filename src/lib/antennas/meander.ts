@@ -47,7 +47,8 @@ export const meander: AntennaDef = {
   defaults: { bands: "868e6-870e6", er: 4.4, h: 1.6e-3, tanD: 0.02, w: 1e-3, W: 20e-3, P: 3e-3, gl: 60e-3, bw: 40e-3, trim: 0 },
   build(p): Design {
     const { f, sweeps } = band(p);
-    const er = num(p, "er", 4.4), h = num(p, "h", 1.6e-3), w = num(p, "w", 1e-3), W = num(p, "W", 0.02), P = num(p, "P", 3e-3);
+    const er = num(p, "er", 4.4), h = num(p, "h", 1.6e-3), w = num(p, "w", 1e-3), W = num(p, "W", 0.02), Pin = num(p, "P", 3e-3);
+    const P = Math.max(Pin, w + 0.2e-3); // runs keep a 0.2 mm gap, or they merge into one blob
     const lam = wavelength(f), ee = printedEeff(er, h, w);
     const straight = (MONO_K * lam) / 4 / Math.sqrt(ee);
     const total = MEANDER_K * straight * (1 + num(p, "trim", 0) / 100);
@@ -73,7 +74,8 @@ export const meander: AntennaDef = {
         { label: "Feed impedance", value: "≈ 15–40 Ω: plan a matching network" },
       ],
       notes: [
-        ...(W > Number(p.bw ?? 0.04) - 2e-3 ? ["Warning: the meander is wider than the board."] : []),
+        ...(W + w > Number(p.bw ?? 0.04) - 2e-3 ? ["Warning: the meander is wider than the board."] : []),
+        ...(P > Pin ? ["Warning: the pitch is smaller than the trace width plus 0.2 mm, so the runs would touch; the pitch was widened."] : []),
         "Tune by trimming the last run. Bandwidth shrinks as the meander gets tighter.",
         "Dimensions are a starting point (openEMS-fitted factor); run the exported openEMS script for your exact board.",
       ],

@@ -12,5 +12,7 @@ export default defineConfig({
   base: './',
   test: {
     exclude: [...configDefaults.exclude, '.claude/**'],
+    // CSG and PDF tests take 1–3 s alone; on a busy machine (or a 2-core CI runner) the 5 s default is too tight
+    testTimeout: 30_000,
   },
 })

@@ -56,7 +56,7 @@ export const biquad: AntennaDef = {
       perf: [
         { label: "Gain", value: "≈ 10–11 dBi" },
         { label: "Beamwidth (−3 dB)", value: "≈ 50–70°" },
-        { label: "Feed impedance", value: "≈ 50 Ω" },
+        { label: "Feed impedance", value: "≈ 60 Ω (SWR ≈ 1.2 on 50 Ω)" },
         { label: "Polarisation", value: "Vertical (squares side by side)" },
       ],
       notes: [

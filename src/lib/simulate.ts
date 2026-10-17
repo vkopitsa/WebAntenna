@@ -3,7 +3,7 @@
 import type { AntennaDef, Design, Params } from "./types";
 import { buildMesh, gainFn, solve } from "./mom";
 import { patchDesign } from "./antennas/patch";
-import { loopModel, loopZin } from "./antennas/pcbloop";
+import { loopModel, loopTraceW, loopZin } from "./antennas/pcbloop";
 import { SKYCONE_TABLES, skyconeGain, skyconeRange, skyconeZ } from "./antennas/skycone";
 import { num } from "./types";
 import { C0, wavelength } from "./rf";
@@ -19,7 +19,7 @@ export interface Pattern {
   max: { dbi: number; theta: number; phi: number };
   /** Gain toward the opposite direction of the maximum. */
   back: number;
-  /** −3 dB beamwidth in the cut through the maximum (deg), NaN if not found. */
+  /** Narrowest −3 dB beamwidth among the great-circle cuts through the maximum (deg), NaN if no cut falls 3 dB on both sides. */
   hpbw: number;
 }
 export interface SimResult {
@@ -83,19 +83,33 @@ export function samplePattern(f: number, g: (th: number, ph: number) => number):
     grid.push(row);
   }
   const back = g((180 - max.theta) * DEG, (max.phi + 180) * DEG);
-  // Beamwidth: walk away from the maximum along φ (θ fixed) and along θ (φ fixed); report the narrower.
-  const walk = (fn: (d: number) => number) => {
-    let lo = NaN, hi = NaN;
-    for (let d = 0.5; d <= 180; d += 0.5) if (fn(d) < max.dbi - 3) { hi = d; break; }
-    for (let d = 0.5; d <= 180; d += 0.5) if (fn(-d) < max.dbi - 3) { lo = d; break; }
-    return lo + hi;
+  // Beamwidth: the narrowest −3 dB width among the great-circle cuts through the maximum direction (cut orientation in
+  // 15° steps, so the E-plane of a dipole is found wherever the maximum lands on its ridge). A cut that never falls 3 dB
+  // on both sides (an H-plane of a dipole, an omni ring) has no width and is skipped.
+  const mt = max.theta * DEG, mp = max.phi * DEG;
+  const m3: [number, number, number] = [Math.sin(mt) * Math.cos(mp), Math.sin(mt) * Math.sin(mp), Math.cos(mt)];
+  const eT: [number, number, number] = [Math.cos(mt) * Math.cos(mp), Math.cos(mt) * Math.sin(mp), -Math.sin(mt)];
+  const eP: [number, number, number] = [-Math.sin(mp), Math.cos(mp), 0];
+  const gAt = (psi: number, s: number) => {
+    const c = Math.cos(psi), sn = Math.sin(psi), cs = Math.cos(s), ss = Math.sin(s);
+    const x = cs * m3[0] + ss * (c * eT[0] + sn * eP[0]), y = cs * m3[1] + ss * (c * eT[1] + sn * eP[1]), z = cs * m3[2] + ss * (c * eT[2] + sn * eP[2]);
+    return g(Math.acos(Math.max(-1, Math.min(1, z))), Math.atan2(y, x));
   };
-  const bwPhi = walk((d) => g(max.theta * DEG, (max.phi + d) * DEG));
-  const bwTheta = walk((d) => {
-    const t = max.theta + d;
-    return t < 0 ? g(-t * DEG, (max.phi + 180) * DEG) : t > 180 ? g((360 - t) * DEG, (max.phi + 180) * DEG) : g(t * DEG, max.phi * DEG);
-  });
-  const hpbw = Math.min(...[bwPhi, bwTheta].filter((x) => Number.isFinite(x)), Infinity);
+  const half = (psi: number): number => {
+    let prev = max.dbi;
+    for (let a = 1; a <= 180; a++) {
+      const val = gAt(psi, a * DEG);
+      if (val < max.dbi - 3) return a - 1 + (prev - (max.dbi - 3)) / (prev - val);
+      prev = val;
+    }
+    return NaN;
+  };
+  let hpbw = Infinity;
+  for (let k = 0; k < 12; k++) {
+    const psi = (k * 15 * DEG);
+    const w = half(psi) + half(psi + Math.PI);
+    if (Number.isFinite(w) && w < hpbw) hpbw = w;
+  }
   return { f, cuts, grid: { dTheta: dT, dPhi: dP, dbi: grid }, max, back, hpbw: Number.isFinite(hpbw) ? hpbw : NaN };
 }
 
@@ -131,15 +145,20 @@ function patchSim(params: Params, d: Design, freqs: number[], fPat: number): Sim
   };
 }
 
-/** Coaxial collinear: N in-phase λ/2 dipoles stacked along z (array factor × dipole pattern). */
-function collinearSim(params: Params, fPat: number): SimResult {
-  const n = Math.round(num(params, "n", 8));
-  const k = (2 * Math.PI * fPat) / C0, dz = wavelength(fPat) / 2;
+/**
+ * Coaxial collinear: N λ/2 dipoles stacked along z (array factor × dipole pattern). The sections are `sec` = λ(f design)/2 × VF
+ * apart (the geometry in collinear.ts, fixed in metres); each coax section adds 2π f sec/(c VF) of phase and the crossed joint
+ * another π, so the elements are in phase at the design frequency and drift apart away from it.
+ */
+function collinearSim(params: Params, d: Design, fPat: number): SimResult {
+  const n = Math.round(num(params, "n", 8)), vf = num(params, "vf", 0.66);
+  const k = (2 * Math.PI * fPat) / C0, dz = 0.5 * wavelength(d.f) * vf;
+  const dPhase = (2 * Math.PI * fPat * dz) / (C0 * vf) + Math.PI; // net feed phase step between sections
   const raw = (th: number) => {
     const ct = Math.cos(th), st = Math.sin(th);
     const el = Math.abs(st) < 1e-9 ? 0 : Math.cos((Math.PI / 2) * ct) / st;
     let ar = 0, ai = 0;
-    for (let i = 0; i < n; i++) { ar += Math.cos(k * i * dz * ct); ai += Math.sin(k * i * dz * ct); }
+    for (let i = 0; i < n; i++) { ar += Math.cos(i * (k * dz * ct - dPhase)); ai += Math.sin(i * (k * dz * ct - dPhase)); }
     return el * el * (ar * ar + ai * ai);
   };
   let P = 0;
@@ -147,13 +166,13 @@ function collinearSim(params: Params, fPat: number): SimResult {
   const g = (th: number) => 10 * Math.log10(Math.max((4 * Math.PI * raw(th)) / P, 1e-6));
   return {
     method: "pattern-only", z: [], pattern: samplePattern(fPat, (th) => g(th)),
-    notes: ["Collinear: ideal array-factor pattern (equal in-phase currents). No impedance: a wire model cannot represent the coax."],
+    notes: ["Collinear: ideal array-factor pattern (equal currents, in phase at the design frequency). No impedance: a wire model cannot represent the coax."],
   };
 }
 
 /** Small loop: analytic matched-loop impedance; magnetic-dipole pattern (axis along z, loop in the board plane). */
 function loopSim(params: Params, d: Design, freqs: number[], fPat: number): SimResult {
-  const m = loopModel(d.f, num(params, "a", 0.03), num(params, "b", 0.02), num(params, "w", 2e-3), num(params, "t", 35e-6), 5.8e7, num(params, "qc", 300));
+  const m = loopModel(d.f, num(params, "a", 0.03), num(params, "b", 0.02), loopTraceW(num(params, "a", 0.03), num(params, "b", 0.02), num(params, "w", 2e-3)), num(params, "t", 35e-6), 5.8e7, num(params, "qc", 300));
   const z = freqs.map((f) => { const [r, x] = loopZin(f, m, d.f); return { f, r, x }; });
   const gmax = 10 * Math.log10(1.5 * Math.max(m.eff, 1e-6)); // same floor as synthesis (eff 0 gave −∞ dBi)
   const g = (th: number) => gmax + 20 * Math.log10(Math.max(Math.abs(Math.sin(th)), 1e-3));
@@ -211,10 +230,10 @@ export function simulate(def: AntennaDef, params: Params, d: Design, opt: SimOpt
   const freqs = def.id === "patch" ? sweepFreqs(d, 101, true) : sweepFreqs(d, opt.perBand ?? 21);
   const fPat = opt.patternF ?? d.f;
   if (def.id === "patch") return patchSim(params, d, freqs, fPat);
-  if (def.id === "collinear") return collinearSim(params, fPat);
+  if (def.id === "collinear") return collinearSim(params, d, fPat);
   if (def.id === "pcbloop") return loopSim(params, d, sweepFreqs(d, 101, true), fPat);
   if (SKYCONE_TABLES[def.id]) return skyconeSim(def.id, d, fPat);
-  if (d.pcb) return { method: "openems", z: [], pattern: null, notes: ["Printed antenna on a dielectric: the wire solver cannot model it. Export the openEMS script, run it, and load its results file here."] };
+  if (d.pcb) return { method: "openems", z: [], pattern: null, notes: ["Printed antenna on a dielectric: the wire solver cannot model it. Run the FDTD above, or export the openEMS script and load its results file here."] };
   if (!d.necSupported) return { method: "none", z: [], pattern: null, notes: [] };
   const z: ZPoint[] = [];
   const total = freqs.length + 1;
@@ -262,9 +281,9 @@ export function toS1P(name: string, z: ZPoint[], z0: number): string {
 export const SIM_STRINGS = [
   "Horizontal plane XY (θ = 90°)", "Vertical plane XZ (φ = 0°)", "Vertical plane YZ (φ = 90°)",
   "Patch: cavity-model impedance and two-slot pattern over an infinite ground plane (no back radiation). Use openEMS or another full-wave tool for final numbers.",
-  "Collinear: ideal array-factor pattern (equal in-phase currents). No impedance: a wire model cannot represent the coax.",
+  "Collinear: ideal array-factor pattern (equal currents, in phase at the design frequency). No impedance: a wire model cannot represent the coax.",
   "Thin-wire Method of Moments (MININEC formulation), free space, perfect conductors. Checked against NEC-2 on converged models.",
-  "Printed antenna on a dielectric: the wire solver cannot model it. Export the openEMS script, run it, and load its results file here.",
+  "Printed antenna on a dielectric: the wire solver cannot model it. Run the FDTD above, or export the openEMS script and load its results file here.",
   "Small loop: analytic model (matched with Cs + Cp at the design frequency; magnetic-dipole pattern, efficiency included).",
   "Sky-tilted bicone: precomputed body-of-revolution MoM sweep of this shape (solid sheet metal, free space, no cable), scaled to your size. The thin-wire solver cannot model solid cones.",
   SKYCONE_OUT,

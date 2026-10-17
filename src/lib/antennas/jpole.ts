@@ -14,13 +14,15 @@ export const jpole: AntennaDef = {
   defaults: { bands: "144e6-146e6", d: 6e-3, sp: 25e-3 },
   build(p): Design {
     const { f, sweeps } = band(p);
-    const d = num(p, "d"), s = num(p, "sp", 25e-3);
+    const d = num(p, "d"), sIn = num(p, "sp", 25e-3);
+    const s = Math.max(sIn, 2 * d); // legs must not overlap
     const lam = wavelength(f), k = endEffect(lam, d), r = d / 2;
     // Tuned on converged models (MoM λ/120 and NEC-2 λ/320, 2 m, Ø6 mm, 25 mm spacing → ≈ 45–48 − j7 Ω):
     // stub ≈ λ/4 physical, radiator λ/2 × K above it, tap 0.019 λ.
     const stub = 0.25 * lam * k * 1.04;
     const long = stub + 0.5 * lam * k;
-    const tap = 0.019 * lam;
+    const tap = Math.max(0.019 * lam, d); // the tap must clear the shorting bar
+    const clamped = sIn < 2 * d || tap > 0.019 * lam;
     const wires: Wire[] = [
       { a: v(0, 0, 0), b: v(s, 0, 0), r, tag: "D", group: "line" },
       { a: v(0, 0, 0), b: v(0, 0, tap), r, group: "driven" },
@@ -49,6 +51,7 @@ export const jpole: AntennaDef = {
         { label: "Polarisation", value: "Vertical" },
       ],
       notes: [
+        ...(clamped ? ["Warning: the wire is too thick for this band; the stub spacing and the feed tap height were raised to fit. Use thinner wire."] : []),
         "Slide the feed tap up or down for lowest SWR, then trim the long element for frequency.",
         "Add a choke (a few turns of coax) at the feed to keep current off the feedline.",
       ],

@@ -26,7 +26,7 @@ describe("discone hub", () => {
         expect(inside(hub, along(M, [0, 0, g.discZ], u, D_IN + 4, D_IN + D_LUG, g.wireD + CLEAR + 2))).toBeGreaterThan(1);
       }
     }
-  }, 60_000);
+  }, 180_000);
   it("keeps the disc and the cone apart by the insulating wall", () => {
     for (const c of CASES) {
       const g = disconeGeometry(setup("discone", c).d);
@@ -46,7 +46,7 @@ describe("discone hub", () => {
       expect(inside(hub, cyl((mast + CLEAR + 2) / 2, 1, 29)), JSON.stringify(c)).toBeGreaterThan(1);
       for (const u of g.coneDirs) expect(inside(hub, along(M, [0, 0, 0], u, g.sN + 2, g.sN + D_LUG, g.wireD))).toBeLessThan(1e-3);
     }
-  }, 60_000);
+  }, 180_000);
   it("keeps a solid core round the braid groove", () => {
     for (const half of [20, 45]) for (const dd of [3e-3, 12e-3]) {
       const c = { half, d: dd };
@@ -55,5 +55,5 @@ describe("discone hub", () => {
       const slab = M.Manifold.cube([400, 400, 0.5], true).translate([0, 0, g.grooveZ]);
       expect(inside(hub, slab) / 0.5, JSON.stringify(c)).toBeGreaterThanOrEqual(150);
     }
-  }, 60_000);
+  }, 180_000);
 });

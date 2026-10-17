@@ -20,8 +20,11 @@ const CW = A4.w - 2 * MARGIN, CH = BOTTOM - TOP;
 function pcbDrawing(p: Pcb, layer: "top" | "bottom", mirror: boolean, name: string): Drawing {
   const P = 8, b = p.board;
   const W = (b.x1 - b.x0) * 1e3, H = (b.y1 - b.y0) * 1e3;
-  const X = (x: number) => P + (mirror ? (b.x1 - x) : (x - b.x0)) * 1e3, Y = (y: number) => P + (b.y1 - y) * 1e3;
-  const prims: Prim[] = [p.outline ? { k: "poly", pts: p.outline.map(([x, y]): [number, number] => [X(x), Y(y)]), closed: true, lw: 0.2 } : { k: "rect", x: P, y: P, w: W, h: H, dash: true, lw: 0.2 }];
+  // Each layer is drawn as seen from its own face (the bottom one from below: x flipped). Toner transfer (mirror) flips
+  // both: the top paper image is the mirror of the top face, the bottom one the view through the board from the top.
+  const flip = mirror !== (layer === "bottom");
+  const X = (x: number) => P + (flip ? (b.x1 - x) : (x - b.x0)) * 1e3, Y = (y: number) => P + (b.y1 - y) * 1e3;
+  const prims: Prim[] = [p.outline ? { k: "poly", pts: p.outline.map(([x, y]): [number, number] => [X(x), Y(y)]), closed: true, lw: 0.2, grey: true } : { k: "rect", x: P, y: P, w: W, h: H, dash: true, lw: 0.2, grey: true }];   // grey: not copper
   for (const q of p.rects.filter((r) => r.layer === layer)) {
     const x0 = Math.min(X(q.x0), X(q.x1)), x1 = Math.max(X(q.x0), X(q.x1));
     prims.push({ k: "rect", x: x0, y: Y(q.y1), w: x1 - x0, h: (q.y1 - q.y0) * 1e3, fill: true });
@@ -29,7 +32,7 @@ function pcbDrawing(p: Pcb, layer: "top" | "bottom", mirror: boolean, name: stri
   for (const q of (p.polys ?? []).filter((r) => r.layer === layer)) prims.push({ k: "poly", pts: q.pts.map(([x, y]) => [X(x), Y(y)]), fill: true, closed: true });
   // crop marks at the board corners
   for (const [cx, cy, sx, sy] of [[P, P, -1, -1], [P + W, P, 1, -1], [P, P + H, -1, 1], [P + W, P + H, 1, 1]]) {
-    prims.push({ k: "line", x1: cx + sx * 1.5, y1: cy, x2: cx + sx * 6, y2: cy, w: 0.15 }, { k: "line", x1: cx, y1: cy + sy * 1.5, x2: cx, y2: cy + sy * 6, w: 0.15 });
+    prims.push({ k: "line", x1: cx + sx * 1.5, y1: cy, x2: cx + sx * 6, y2: cy, w: 0.15, grey: true }, { k: "line", x1: cx, y1: cy + sy * 1.5, x2: cx, y2: cy + sy * 6, w: 0.15, grey: true });
   }
   const s = p.port.start, t = p.port.stop;
   for (const q of p.drills ?? []) prims.push({ k: "circle", cx: X(q.x), cy: Y(q.y), r: q.d * 500, fill: true, white: true });
@@ -39,9 +42,11 @@ function pcbDrawing(p: Pcb, layer: "top" | "bottom", mirror: boolean, name: stri
     prims.push({ k: "circle", cx, cy, r: PROBE_DRILL * 500, fill: true, white: true }, { k: "line", x1: cx - 2.5, y1: cy, x2: cx + 2.5, y2: cy, w: 0.15, grey: true }, { k: "line", x1: cx, y1: cy - 2.5, x2: cx, y2: cy + 2.5, w: 0.15, grey: true });
   } else if (layer === "top") {
     const cx = (X(s[0]) + X(t[0])) / 2, cy = (Y(s[1]) + Y(t[1])) / 2;
-    prims.push({ k: "circle", cx, cy, r: 1.2, lw: 0.3 }, { k: "text", x: cx + 2, y: cy - 1.8, s: "FEED", size: 2.2, bold: true, grey: true });
+    prims.push({ k: "circle", cx, cy, r: 1.2, lw: 0.3, grey: true }, { k: "text", x: cx + 2, y: cy - 1.8, s: "FEED", size: 2.2, bold: true, grey: true });
   }
-  const what = layer === "top" ? (mirror ? "Top copper, MIRRORED for toner transfer" : "Top copper, seen from the top") : mirror ? "Bottom copper, as seen from below (prints right for toner transfer)" : "Bottom copper, seen through the board from the top";
+  const what = layer === "top"
+    ? (mirror ? "Top copper, MIRRORED for toner transfer (toner side against the top face)" : "Top copper, seen from the top")
+    : mirror ? "Bottom copper for toner transfer, seen through the board from the top (toner against the bottom face)" : "Bottom copper, seen from below (mirror image of the view from the top)";
   return { w: W + 2 * P, h: H + 2 * P, prims, caption: `${name} - ${what} - board ${W.toFixed(1)} x ${H.toFixed(1)} mm` };
 }
 
@@ -53,7 +58,7 @@ const MAX_TILES = 30;
 const fitsTiles = (d: Drawing) => Math.min(tiles(d.w, d.h), tiles(d.h, d.w)) <= MAX_TILES;
 
 /** Every board's copper layers (a stacked build: one pair per board, named in the caption). */
-function pcbDrawings(p: Pcb, mirror: boolean, name: string): Drawing[] {
+export function pcbDrawings(p: Pcb, mirror: boolean, name: string): Drawing[] {
   return boardsOf(p).flatMap(({ label, pcb }) => {
     const n = label ? `${name} ${label}` : name;
     const ds = [];
@@ -115,28 +120,30 @@ function frameDrawing(def: AntennaDef, d: Design): Drawing | null {
   const hotW = Math.max(...hot.map((q) => q[0])) - hx0, gndW = Math.max(...gnd.map((q) => q[0])) - gx0;
   const dxG = P + hotW + 25 - gx0;
   const prims: Prim[] = [];
-  const draw = (pts: [number, number][], dx: number, name: string, endName: string) => {
+  const draw = (pts: [number, number][], seats: [number, number][], dx: number, name: string, endName: string) => {
     const X = (q: [number, number]) => dx + q[0], Y = (q: [number, number]) => P + 6 + zTop - q[1];
     pts.slice(1).forEach((q, i) => prims.push({ k: "line", x1: X(pts[i]), y1: Y(pts[i]), x2: X(q), y2: Y(q), w: wd }));
-    for (const q of pts.slice(1)) prims.push({ k: "circle", cx: X(q), cy: Y(q), r: wd / 2 + 1.2, lw: 0.25 });   // every bend carries a hoop
+    for (const q of seats) prims.push({ k: "circle", cx: X(q), cy: Y(q), r: wd / 2 + 0.4, lw: 0.25 });   // where each hoop sits (as in the table)
     prims.push({ k: "text", x: X(pts[0]) - 1, y: Y(pts[0]) + 4, s: endName, size: 2.2, bold: true, grey: true });
     const xs = pts.map(X), ys = pts.map(Y);
     prims.push({ k: "text", x: (Math.min(...xs) + Math.max(...xs)) / 2, y: Math.max(...ys) + 9, s: name, size: 2.8, bold: true, anchor: "middle" });
   };
-  draw(hot, P - hx0, `HOT FRAME x ${f.n}`, "WASHER");
-  draw(gnd, dxG, `GROUND FRAME x ${f.n}`, "COLLAR");
-  if (f.short) {                                       // where the shorting wire is soldered on (one frame of each side)
-    const mark = (q: [number, number], dx: number, hot: boolean) => {
+  draw(hot, f.hoops.hot.map(mmP), P - hx0, `HOT FRAME x ${f.n}`, "WASHER");
+  draw(gnd, f.hoops.ground.map(mmP), dxG, `GROUND FRAME x ${f.n}`, "COLLAR");
+  const sw = f.short ?? [];
+  if (sw.length) {                                     // where the shorting wires are soldered on (all frames are alike: the frames are named)
+    const mark = (q: [number, number], dx: number, hot: boolean, lines: string[]) => {
       const x = dx + q[0] * 1e3, y = P + 6 + zTop - q[1] * 1e3, l = 1.5 + wd;
       prims.push({ k: "line", x1: x - l, y1: y - l, x2: x + l, y2: y + l, w: 0.35 }, { k: "line", x1: x - l, y1: y + l, x2: x + l, y2: y - l, w: 0.35 });
       // hot: right of the rising frame and below it; ground: above the flat frame (the collar label is below)
-      prims.push({ k: "text", x: hot ? x + l + 1.5 : x - 2, y: hot ? y + 3.5 : y - l - 2.5, s: "SHORTING WIRE", size: 2.2, bold: true });
+      lines.forEach((s, i) => prims.push({ k: "text", x: hot ? x + l + 1.5 : x - 2, y: hot ? y + 3.5 + i * 2.8 : y - l - 2.5 - (lines.length - 1 - i) * 2.8, s, size: 2.2, bold: i === 0 }));
     };
-    mark(f.short.hot, P - hx0, true);
-    mark(f.short.ground, dxG, false);
+    const fr = sw.map((q) => q.frame + 1).join(" and ");
+    mark(sw[0].hot, P - hx0, true, [`${sw[0].coil ? "COILED " : ""}SHORTING WIRE x ${sw.length}`, sw.length > 1 ? `on frames ${fr}` : `on frame ${fr}`]);
+    mark(sw[0].ground, dxG, false, [`${sw[0].coil ? "COILED " : ""}SHORTING WIRE x ${sw.length}`, ...sw.filter((q) => q.cap).map((q) => `${q.cap} pF CAPACITOR in series, frame ${q.frame + 1}`)]);
   }
   const w = dxG + gx0 + gndW + P, h = zTop - Math.min(...all.map((q) => q[1])) + 2 * P + 18;
-  const out: Drawing = { w, h, prims, caption: `${def.name} - frames, 1:1 (circles: hoops at the bends; the axis is to the left of each frame${f.short ? "; x: shorting wire" : ""})` };
+  const out: Drawing = { w, h, prims, caption: `${def.name} - frames, 1:1 (circles: where the hoops sit; the axis is to the left of each frame${sw.length ? "; x: shorting wire" : ""})` };
   return fitsTiles(out) ? out : null;
 }
 
@@ -278,7 +285,10 @@ function stripPages(title: string, L: number, marks: Mark[]): Page[] {
 
 function frame(prims: Prim[], title: string, sub: string, page?: string): Page {
   const out: Prim[] = [{ k: "text", x: MARGIN, y: 14, s: title, size: 4.6, bold: true }];
-  wrap(sub, 2.6, CW).slice(0, 2).forEach((l, i) => out.push({ k: "text", x: MARGIN, y: 19.5 + i * 3.4, s: l, size: 2.6, grey: true }));
+  let ss = 2.6, sl = wrap(sub, ss, CW);
+  while (sl.length > 3 && ss > 1.8) sl = wrap(sub, (ss -= 0.2), CW);         // shrink rather than drop text
+  if (sl.length > 3) sl = [...sl.slice(0, 2), `${sl[2]} ...`];
+  sl.forEach((l, i) => out.push({ k: "text", x: MARGIN, y: 19.5 + i * (ss * 1.3), s: l, size: ss, grey: true }));
   // 50 mm scale check
   const y = 287;
   out.push({ k: "line", x1: MARGIN, y1: y, x2: MARGIN + 50, y2: y, w: 0.4 });
@@ -295,11 +305,16 @@ const shift = (ps: Prim[], dx: number, dy: number): Prim[] => ps.map((q) => {
     case "poly": return { ...q, pts: q.pts.map(([x, y]) => [x + dx, y + dy] as [number, number]) };
     case "circle": return { ...q, cx: q.cx + dx, cy: q.cy + dy };
     case "text": return { ...q, x: q.x + dx, y: q.y + dy };
+    case "clip": return { ...q, x: q.x + dx, y: q.y + dy };
+    case "unclip": return q;
   }
 });
 
 const TH = CH - 8;
-const tiles = (w: number, h: number) => (w <= CW && h + 6 <= CH ? 1 : Math.ceil(w / CW) * Math.ceil(h / TH));
+/** Neighbouring tiles overlap by this much (mm), so they can be taped together along alignment lines. */
+const OV = 10;
+const along = (len: number, size: number) => (len <= size ? 1 : Math.ceil((len - OV) / (size - OV)));
+const tiles = (w: number, h: number) => (w <= CW && h + 6 <= CH ? 1 : along(w, CW) * along(h, TH));
 
 /** Quarter turn (clockwise) of a drawing, to tile it on fewer pages. Text stays upright. */
 function rotate(d: Drawing): Drawing {
@@ -311,6 +326,8 @@ function rotate(d: Drawing): Drawing {
       case "poly": return { ...q, pts: q.pts.map(([x, y]) => R(x, y)) };
       case "circle": { const [cx, cy] = R(q.cx, q.cy); return { ...q, cx, cy }; }
       case "text": { const [x, y] = R(q.x, q.y); return { ...q, x, y }; }
+      case "clip": { const [x, y] = R(q.x, q.y + q.h); return { ...q, x, y, w: q.h, h: q.w }; }
+      case "unclip": return q;
     }
   });
   return { w: d.h, h: d.w, prims, caption: `${d.caption} (turned 90 degrees)` };
@@ -323,7 +340,7 @@ function layout(ds: Drawing[], title: string, sub: string): Page[] {
   const flush = () => { if (cur.length) pages.push(cur); cur = []; y = TOP; };
   for (const d0 of ds) {
     const d = tiles(d0.h, d0.w) < tiles(d0.w, d0.h) ? rotate(d0) : d0;
-    const cap = wrap(d.caption, 2.8, CW, true).slice(0, 2), ch = cap.length * 3.6;
+    const cap = wrap(d.caption, 2.8, CW, true).slice(0, 3), ch = cap.length * 3.6;
     if (d.w <= CW && d.h + 2 + ch <= CH) {
       if (y + d.h + 2 + ch > BOTTOM) flush();
       cap.forEach((l, i) => cur.push({ k: "text", x: MARGIN, y: y + 3.5 + i * 3.6, s: l, size: 2.8, bold: true }));
@@ -332,13 +349,20 @@ function layout(ds: Drawing[], title: string, sub: string): Page[] {
       continue;
     }
     flush();
-    const tw = CW, th = TH, nx = Math.ceil(d.w / tw), ny = Math.ceil(d.h / th);
+    const tw = CW, th = TH, sx = tw - OV, sy = th - OV, nx = along(d.w, tw), ny = along(d.h, th);
+    const idOf = (r: number, c: number) => `${String.fromCharCode(65 + r)}${c + 1}`;
     for (let r = 0; r < ny; r++) for (let c = 0; c < nx; c++) {
-      const id = `${String.fromCharCode(65 + r)}${c + 1}`;
-      const clip = d.prims.filter((q) => inTile(q, c * tw, r * th, tw, th));
-      wrap(`Tile ${id} of ${String.fromCharCode(64 + ny)}${nx}: ${d.caption}`, 2.6, CW, true).slice(0, 2).forEach((l, i) => cur.push({ k: "text", x: MARGIN, y: TOP + 1 + i * 3.2, s: l, size: 2.6, bold: true }));
-      cur.push({ k: "rect", x: MARGIN, y: TOP + 6, w: tw, h: th, lw: 0.15, dash: true, grey: true });
-      cur.push(...shift(clip, MARGIN - c * tw, TOP + 6 - r * th));
+      const clip = d.prims.filter((q) => inTile(q, c * sx, r * sy, tw, th));
+      wrap(`Tile ${idOf(r, c)} of ${String.fromCharCode(64 + ny)}${nx}: ${d.caption}`, 2.6, CW, true).slice(0, 2).forEach((l, i) => cur.push({ k: "text", x: MARGIN, y: TOP + 1 + i * 3.2, s: l, size: 2.6, bold: true }));
+      const x0 = MARGIN, y0 = TOP + 6;
+      cur.push({ k: "rect", x: x0, y: y0, w: tw, h: th, lw: 0.15, dash: true, grey: true });
+      cur.push({ k: "clip", x: x0, y: y0, w: tw, h: th }, ...shift(clip, MARGIN - c * sx, y0 - r * sy), { k: "unclip" });
+      // alignment lines at the edges of the overlap strips: line the neighbour's edge up with them
+      const al = (x1: number, y1: number, x2: number, y2: number) => cur.push({ k: "line", x1, y1, x2, y2, w: 0.2, dash: true, grey: true });
+      if (c < nx - 1) { al(x0 + sx, y0, x0 + sx, y0 + th); cur.push({ k: "text", x: x0 + sx + 1, y: y0 + 3, s: `${idOf(r, c + 1)} starts here`, size: 2, grey: true }); }
+      if (c > 0) { al(x0 + OV, y0, x0 + OV, y0 + th); cur.push({ k: "text", x: x0 + OV - 1, y: y0 + 3, s: `${idOf(r, c - 1)} ends here`, size: 2, grey: true, anchor: "end" }); }
+      if (r < ny - 1) { al(x0, y0 + sy, x0 + tw, y0 + sy); cur.push({ k: "text", x: x0 + 1, y: y0 + sy - 1, s: `${idOf(r + 1, c)} starts here`, size: 2, grey: true }); }
+      if (r > 0) { al(x0, y0 + OV, x0 + tw, y0 + OV); cur.push({ k: "text", x: x0 + 1, y: y0 + OV - 1, s: `${idOf(r - 1, c)} ends here`, size: 2, grey: true }); }
       pages.push(cur); cur = [];
     }
   }
@@ -346,12 +370,13 @@ function layout(ds: Drawing[], title: string, sub: string): Page[] {
   return pages.map((ps, i) => frame(ps, title, sub, `${i + 1}/${pages.length}`));
 }
 
-/** Coarse clip: keep primitives that touch the tile (the page edge clips the rest when printed). */
+/** Coarse pre-filter: keep primitives that touch the tile (the clip rectangle cuts the rest). */
 function inTile(q: Prim, x: number, y: number, w: number, h: number): boolean {
   const bb = q.k === "line" ? [Math.min(q.x1, q.x2), Math.min(q.y1, q.y2), Math.max(q.x1, q.x2), Math.max(q.y1, q.y2)]
     : q.k === "rect" ? [q.x, q.y, q.x + q.w, q.y + q.h]
       : q.k === "poly" ? [Math.min(...q.pts.map((p) => p[0])), Math.min(...q.pts.map((p) => p[1])), Math.max(...q.pts.map((p) => p[0])), Math.max(...q.pts.map((p) => p[1]))]
-        : q.k === "circle" ? [q.cx - q.r, q.cy - q.r, q.cx + q.r, q.cy + q.r] : [q.x, q.y - q.size, q.x + 1, q.y];
+        : q.k === "circle" ? [q.cx - q.r, q.cy - q.r, q.cx + q.r, q.cy + q.r]
+          : q.k === "text" ? [q.x, q.y - q.size, q.x + 1, q.y] : [-1e9, -1e9, 1e9, 1e9];
   return bb[2] >= x && bb[0] <= x + w && bb[3] >= y && bb[1] <= y + h;
 }
 
@@ -371,7 +396,7 @@ export function templateKind(def: AntennaDef, d: Design): TemplateKind {
 export function templatePages(def: AntennaDef, d: Design, mirror: boolean): Page[] {
   const name = def.name;
   if (d.pcb) {
-    return layout(pcbDrawings(d.pcb, mirror, name), `${name}: 1:1 PCB template`, "Black = copper. For toner transfer or photo etching use the mirrored option. Check the scale bar before you etch.");
+    return layout(pcbDrawings(d.pcb, mirror, name), `${name}: 1:1 PCB template`, "Black = copper; grey marks (outline, crop marks, FEED) are not copper. Each layer is drawn as seen from its own face. The Mirrored option is for toner transfer: the top layer prints mirrored and the bottom layer as seen through the board from the top, toner against the copper face. Check the scale bar before you etch.");
   }
   const bm = boomMarks(d);
   if (bm) return stripPages(`${name}: boom drilling strip`, bm.L, bm.marks);

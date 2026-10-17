@@ -63,7 +63,7 @@ export const discone: AntennaDef = {
       notes: [
         "Disc to the coax centre conductor, cone to the braid; feed through the inside of the cone.",
         "More rods (16 or more) behave closer to solid surfaces at the top of the range.",
-        "The cone is sized 25 % below your lowest frequency, because SWR rises quickly near the λ/4 frequency.",
+        "The cone is sized 20 % below your lowest frequency, because SWR rises quickly near the λ/4 frequency.",
         ...(fHigh > 8 * f ? ["Warning: the highest band is above about 8 × the cut-off; expect higher SWR there. Use more rods and a smaller gap."] : []),
         "Keep the disc-to-cone gap small; a large gap spoils the top of the range.",
       ],

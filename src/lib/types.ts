@@ -89,10 +89,13 @@ export interface Design {
    *  `what` and `note` are English strings that also appear in the design's tables. */
   cuts?: { what: string; qty: number; length: number; dia: number; note?: string }[];
   /** Wire cage: one frame of each side as a (ρ, z) polyline in metres, for the bending template and the printed jigs;
-   *  short: the ends (ρ, z) of a straight shorting wire from a hot frame to the ground frame under it. */
+   *  short: one entry per shorting wire from a hot frame to the ground frame under it: its ends (ρ, z), the frame it is
+   *  on (0-based, counted round the cage), coil: wound into a coil, cap: series capacitor (pF) at its ground end;
+   *  pinCap: series capacitor (pF) in the centre pin. */
   frames?: {
     hot: [number, number][]; ground: [number, number][]; n: number; hoops: { hot: [number, number][]; ground: [number, number][] };
-    short?: { hot: [number, number]; ground: [number, number] };
+    short?: { hot: [number, number]; ground: [number, number]; frame: number; coil: boolean; cap?: number }[];
+    pinCap?: number;
   };
   /** Sky-tilted bicones: what goes on the coax below the ground cone (ferrite bead, 6-bead ferrite sleeve, metal choke
    *  tubes of diameter d and length len in metres, or nothing) and, with nothing, the bare-cable row of the table that

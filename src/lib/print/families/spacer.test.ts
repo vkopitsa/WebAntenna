@@ -44,10 +44,10 @@ describe("j-pole", () => {
       }
     }
   });
-  it("tube spacing smaller than the tube is reported", () => {
+  it("tube spacing smaller than the tube is raised by the design, so the spacer still builds", () => {
     const { p, d } = setup("jpole", { sp: 3e-3 });
     const r = buildPart(M, partsFor("jpole", p, d)[0], "x");
-    expect(r.ok ? "" : r.error.s).toBe(FAIL.thick);
+    expect(r.ok ? "" : r.error.s).toBe("");
   });
   it("0.5 m spacing is too large, not broken", () => {
     const { p, d } = setup("jpole", { sp: 0.5 });

@@ -43,7 +43,7 @@ export function runCPU(s: Setup, o: RunOptions = {}): RunResult {
   // Mur: saved inner-neighbour values of boundary tangential components.
   const nf = o.nf2ffFreqs?.length ? makeNf(s, o.nf2ffFreqs) : null;
   const excLen = 2 * s.exc.t0;
-  let peak = 0, steps = 0;
+  let peak = 0, steps = 0, lastDecay = 1, lastReport = performance.now();
   const murPlanes = murSetup(s);
 
   for (let n = 0; n < maxSteps; n++) {
@@ -94,10 +94,13 @@ export function runCPU(s: Setup, o: RunOptions = {}): RunResult {
     steps = n + 1;
     const a = Math.abs(V[n]) + Math.abs(I[n]) * s.port.R;
     peak = Math.max(peak, a);
+    if (n % 20 === 0 && o.onProgress && n % 500 !== 0 && performance.now() - lastReport >= 250) { lastReport = performance.now(); o.onProgress(n, lastDecay); }
     if (n % 500 === 0) {
       let recent = 0;
       for (let q = Math.max(0, n - 500); q <= n; q++) recent = Math.max(recent, Math.abs(V[q]) + Math.abs(I[q]) * s.port.R);
-      o.onProgress?.(n, recent / (peak || 1));
+      lastDecay = recent / (peak || 1);
+      lastReport = performance.now();
+      o.onProgress?.(n, lastDecay);
       if ((n + 1) * dt > excLen && recent < endC * peak) break;
     }
   }

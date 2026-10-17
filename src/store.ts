@@ -60,7 +60,12 @@ function load(): State {
       if (o.params) for (const id of Object.keys(s.params)) if (o.params[id]) s.params[id] = clean(id, o.params[id]);
     }
   } catch { /* private mode or bad JSON: defaults */ }
-  try { return applyHash(s); } catch { return s; }   // a broken share link must not keep the app from starting
+  try {
+    const h = applyHash(s);
+    // consumed: otherwise a reload would put the link's values back over later edits
+    if (h !== s) clearHash();
+    return h;
+  } catch { return s; }   // a broken share link must not keep the app from starting
 }
 
 /** Keep only known keys; migrate the old single "f" param (v0.1.0) to a one-band list. */
@@ -70,6 +75,10 @@ function clean(id: string, saved: Params): Params {
   for (const pd of def.params) out[pd.key] = sanitizeParam(pd, saved[pd.key]) ?? def.defaults[pd.key];
   if (typeof saved.f === "number" && saved.bands === undefined && "bands" in out) out.bands = `${saved.f}-${saved.f}`;
   return out;
+}
+
+function clearHash() {
+  try { history.replaceState(null, "", location.pathname + location.search); } catch { /* ignore */ }
 }
 
 /** Share link: #t=yagi&f=145500000&n=9 … */
@@ -118,7 +127,25 @@ export function setParam(key: string, value: number | string) {
   set((s) => ({ params: { ...s.params, [s.type]: { ...s.params[s.type], [key]: value } } }));
 }
 export function resetParams() {
-  set((s) => ({ params: { ...s.params, [s.type]: { ...ANTENNA_BY_ID[s.type].defaults } } }));
+  // the band list is shared by every type: keep it
+  set((s) => {
+    const d = { ...ANTENNA_BY_ID[s.type].defaults };
+    const b = s.params[s.type].bands;
+    if (b !== undefined && "bands" in d) d.bands = b;
+    return { params: { ...s.params, [s.type]: d } };
+  });
+}
+
+// A share link pasted into the address bar of the running app
+if (typeof window !== "undefined") {
+  window.addEventListener("hashchange", () => {
+    try {
+      const n = applyHash(state);
+      if (n === state) return;
+      set({ type: n.type, params: n.params });
+      clearHash();
+    } catch { /* broken link: ignore */ }
+  });
 }
 
 export function useStore<T>(sel: (s: State) => T): T {

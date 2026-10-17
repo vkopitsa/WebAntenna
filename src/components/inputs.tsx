@@ -8,6 +8,9 @@ export function FreqInput({ value, onChange, min, max, id, ariaLabel }: { value:
   // Draft text while editing; null shows the committed value (so external changes always win).
   const [draft, setDraft] = useState<string | null>(null);
   const [bad, setBad] = useState(false);
+  // an outside change (band preset, reset, share link) wins over a rejected draft
+  const [seen, setSeen] = useState(value);
+  if (seen !== value) { setSeen(value); setDraft(null); setBad(false); }
   const commit = () => {
     if (draft == null) return;
     const v = parseHz(draft);
@@ -16,7 +19,8 @@ export function FreqInput({ value, onChange, min, max, id, ariaLabel }: { value:
     setDraft(null);
     if (v !== value) onChange(v);
   };
-  return <input id={id} type="text" inputMode="decimal" aria-label={ariaLabel && t(ariaLabel)} className={bad ? "bad" : ""} value={draft ?? fmtHz(value).replace(/(\.\d*?)0+ /, "$1 ").replace(". ", " ")}
+  return <input id={id} type="text" inputMode="decimal" aria-label={ariaLabel && t(ariaLabel)} className={bad ? "bad" : ""} aria-invalid={bad || undefined}
+    title={bad ? t("Out of range: {0}–{1}", min != null ? fmtHz(min) : "0", max != null ? fmtHz(max) : "∞") : undefined} value={draft ?? fmtHz(value).replace(/(\.\d*?)0+ /, "$1 ").replace(". ", " ")}
     onChange={(e) => setDraft(e.target.value)} onBlur={commit} onKeyDown={(e) => e.key === "Enter" && commit()} />;
 }
 
@@ -24,6 +28,8 @@ export function FreqInput({ value, onChange, min, max, id, ariaLabel }: { value:
 export function Num({ value, onChange, min, max, step, id, digits = 6 }: { value: number; onChange: (v: number) => void; min?: number; max?: number; step?: number; id?: string; digits?: number }) {
   const show = (v: number) => String(+v.toPrecision(digits));
   const [draft, setDraft] = useState<string | null>(null);
+  const [seen, setSeen] = useState(value);
+  if (seen !== value) { setSeen(value); setDraft(null); }
   const commit = () => {
     if (draft == null) return;
     let v = parseFloat(draft.replace(",", "."));

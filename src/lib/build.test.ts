@@ -3,7 +3,7 @@ import { ANTENNAS, ANTENNA_BY_ID } from "./antennas";
 import { advise, buildPack, en, pieces, tuning } from "./build";
 import { crc32, zip } from "./zip";
 import { excellon, fabZip, gerberCopper, toDXF } from "./fab";
-import { buildPackPDF, templateKind, templateSVG } from "./template";
+import { buildPackPDF, pcbDrawings, templateKind, templateSVG, templatePages } from "./template";
 import type { ZPoint } from "./simulate";
 
 const build = (id: string, extra = {}) => { const def = ANTENNA_BY_ID[id]; const p = { ...def.defaults, ...extra }; return { def, p, d: def.build(p) }; };
@@ -118,5 +118,52 @@ describe("fabrication files", () => {
     expect(toDXF(d.pcb!)).toContain("DRILL");
     expect(fabZip(def, p, d, "x", "t").length).toBeGreaterThan(1000);
     expect(excellon(build("ifa").d.pcb!)).toBeNull();
+  });
+});
+
+describe("build pack details", () => {
+  it("A55 lists its capacitors and both coiled shorting wires", () => {
+    const { def, p, d } = build("skyconecage55");
+    const pack = buildPack(def, p, d);
+    const caps = pack.bom.filter((r) => r.item.s.startsWith("Capacitor"));
+    expect(caps.map((r) => r.item.a![0])).toEqual([2.2, 3.6]);
+    expect(caps.map((r) => r.qty.a![0])).toEqual([1, 1]);
+    const st = pack.steps.map((m) => en(m));
+    expect(st.some((x) => x.includes("2.2 pF capacitor in the centre pin"))).toBe(true);
+    expect(st.some((x) => x.includes("3.6 pF capacitor in series"))).toBe(true);
+    expect(st.some((x) => x.includes("each of the 2 coiled shorting wires"))).toBe(true);
+    expect(st.some((x) => x.includes("One wire only"))).toBe(false);
+    expect(d.frames!.short!.map((q) => [q.frame, q.cap])).toEqual([[d.frames!.short![0].frame, undefined], [d.frames!.short![0].frame + d.frames!.n / 2, 3.6]]);
+    // a single straight wire keeps the old text and has no capacitors
+    const w = build("skyconecagemini");
+    const wp = buildPack(w.def, w.p, w.d);
+    expect(wp.bom.some((r) => r.item.s.startsWith("Capacitor"))).toBe(false);
+    expect(wp.steps.some((m) => en(m).includes("One wire only"))).toBe(true);
+  });
+  it("bare coax option adds a cable row of that length", () => {
+    const { def, p, d } = build("skycone8", { coax: "bare2" });
+    const row = buildPack(def, p, d).bom.find((r) => r.item.s === "Coax cable, {0}");
+    expect(row).toBeTruthy();
+    expect((row!.item.a![0] as { len: number }).len).toBeCloseTo(d.coax!.bare!.len, 9);
+  });
+  it("toner-transfer option: top mirrored, bottom as seen through the board from the top", () => {
+    const P = 8, drawing = (pcb: NonNullable<ReturnType<typeof build>["d"]["pcb"]>, mirror: boolean, layer: "Top" | "Bottom") => pcbDrawings(pcb, mirror, "t").find((z) => z.caption.includes(layer))!;
+    // top copper: an asymmetric rectangle (the patch is off the board centre)
+    for (const id of ["patch", "printedvdipole"]) {
+      const pcb = build(id).d.pcb!, b = pcb.board, q = pcb.rects.find((r) => r.layer === "top")!;
+      const direct = P + (q.x0 - b.x0) * 1e3, flipped = P + (b.x1 - q.x1) * 1e3;
+      expect(Math.abs(direct - flipped), id).toBeGreaterThan(1);
+      const x = (mirror: boolean) => (drawing(pcb, mirror, "Top").prims.find((z) => z.k === "rect" && z.fill) as { x: number }).x;
+      expect(x(false), id).toBeCloseTo(direct, 6);
+      expect(x(true), id).toBeCloseTo(flipped, 6);
+    }
+    // bottom copper: the probe clearance round the off-centre feed
+    const pcb = build("patch", { feed: "probe" }).d.pcb!, b = pcb.board, fx = pcb.port.start[0];
+    const direct = P + (fx - b.x0) * 1e3, flipped = P + (b.x1 - fx) * 1e3;
+    expect(Math.abs(direct - flipped)).toBeGreaterThan(1);
+    const cx = (mirror: boolean) => (drawing(pcb, mirror, "Bottom").prims.find((z) => z.k === "circle" && z.white) as { cx: number }).cx;
+    expect(cx(true)).toBeCloseTo(direct, 6);    // toner transfer: the view through the board from the top
+    expect(cx(false)).toBeCloseTo(flipped, 6);  // plain: seen from below
+    expect(templatePages(ANTENNA_BY_ID.patch, build("patch").d, true).length).toBeGreaterThan(0);
   });
 });

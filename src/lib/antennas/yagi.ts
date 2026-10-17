@@ -65,7 +65,13 @@ export const yagi: AntennaDef = {
       return directorLambda(i - 1) * lam * sc + bc;
     });
     const pos: number[] = [0];
-    for (let i = 1; i < n; i++) pos.push(pos[i - 1] + spacingLambda(i) * lam);
+    // Wire surfaces must stay at least one diameter apart: spacing ≥ 2 d (a fat element at high frequency would intersect its neighbour).
+    let spacingClamped = false;
+    for (let i = 1; i < n; i++) {
+      const sp = spacingLambda(i) * lam;
+      if (sp < 2 * d) spacingClamped = true;
+      pos.push(pos[i - 1] + Math.max(sp, 2 * d));
+    }
     const boomLen = pos[n - 1];
 
     const wires: Wire[] = [];
@@ -114,6 +120,7 @@ export const yagi: AntennaDef = {
         { label: "Feed impedance", value: driven === "folded" ? "≈ 200 Ω → 4:1 balun / λ/2 coax loop" : "≈ 25–50 Ω (gamma or hairpin match)" },
       ],
       notes: [
+        ...(spacingClamped ? ["Warning: the element diameter is too large for this band, so some spacings were widened to two diameters. Use thinner elements."] : []),
         "Empirical DL6WU-style model, verified against a published 145.5 MHz 9-element design. Check in NEC before cutting metal.",
         "Element lengths are tip to tip. Through a metal boom the correction is already added.",
         "Driven element length is a starting point: trim it for best match, not for frequency.",

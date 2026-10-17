@@ -455,7 +455,11 @@ function buildCage(t: SkyconeTable, bandsP: Params, mini: false | "w40" | "b44" 
   const f = Math.sqrt(fLow * Math.min(fHigh, fTop));
   return {
     wires, plates: [], cuts,
-    frames: { hot: hotF, ground: gndF, n, hoops: seats, ...(hotN && gndN ? { short: { hot: hotN.q, ground: gndN.q } } : {}) },
+    frames: {
+      hot: hotF, ground: gndF, n, hoops: seats,
+      ...(sh && hotN && gndN ? { short: Array.from({ length: sh.n }, (_, j) => ({ hot: hotN.q, ground: gndN.q, frame: sh.frame + (j * n) / sh.n, coil: turns > 0, ...(sh.cap && j % 2 === 1 ? { cap: sh.cap } : {}) })) } : {}),
+      ...(t.cage!.pinCap ? { pinCap: t.cage!.pinCap } : {}),
+    },
     feed: { wire: 0, at: "center" },
     dims: [
       { label: "Wavelength at the lowest frequency", value: wavelength(fLow) },

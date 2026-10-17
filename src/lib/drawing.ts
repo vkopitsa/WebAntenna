@@ -5,7 +5,10 @@ export type Prim =
   | { k: "line"; x1: number; y1: number; x2: number; y2: number; w: number; dash?: boolean; grey?: boolean }
   | { k: "rect"; x: number; y: number; w: number; h: number; fill?: boolean; lw?: number; dash?: boolean; grey?: boolean }
   | { k: "poly"; pts: [number, number][]; fill?: boolean; lw?: number; closed?: boolean; grey?: boolean }
-  | { k: "circle"; cx: number; cy: number; r: number; fill?: boolean; lw?: number; white?: boolean }
+  | { k: "circle"; cx: number; cy: number; r: number; fill?: boolean; lw?: number; white?: boolean; grey?: boolean }
+  /** Everything up to the matching "unclip" is cut off outside this rectangle (tiles of a big drawing). */
+  | { k: "clip"; x: number; y: number; w: number; h: number }
+  | { k: "unclip" }
   | { k: "text"; x: number; y: number; s: string; size: number; anchor?: "start" | "middle" | "end"; bold?: boolean; grey?: boolean };
 
 export interface Page { w: number; h: number; prims: Prim[] }
@@ -85,9 +88,15 @@ function pageStream(p: Page): string {
         const c = 0.5523 * q.r, cx = q.cx, cy = q.cy, r = q.r;
         const pts = [[cx + r, cy], [cx + r, cy - c, cx + c, cy - r, cx, cy - r], [cx - c, cy - r, cx - r, cy - c, cx - r, cy], [cx - r, cy + c, cx - c, cy + r, cx, cy + r], [cx + c, cy + r, cx + r, cy + c, cx + r, cy]];
         const path = `${X(pts[0][0])} ${Y(pts[0][1])} m ` + pts.slice(1).map((s) => `${X(s[0])} ${Y(s[1])} ${X(s[2])} ${Y(s[3])} ${X(s[4])} ${Y(s[5])} c`).join(" ") + " h";
-        o.push("[] 0 d", q.fill ? `${fill(false, q.white)} ${path} f` : `0 G ${f2((q.lw ?? 0.25) * PT)} w ${path} S`);
+        o.push("[] 0 d", q.fill ? `${fill(q.grey, q.white)} ${path} f` : `${stroke(q.grey)} ${f2((q.lw ?? 0.25) * PT)} w ${path} S`);
         break;
       }
+      case "clip":
+        o.push("q", `${X(q.x)} ${Y(q.y + q.h)} ${f2(q.w * PT)} ${f2(q.h * PT)} re W n`);
+        break;
+      case "unclip":
+        o.push("Q");
+        break;
       case "text": {
         const w = textWidth(q.s, q.size, q.bold);
         const x = q.anchor === "middle" ? q.x - w / 2 : q.anchor === "end" ? q.x - w : q.x;
@@ -135,12 +144,15 @@ export function toSVG(p: Page, title: string): string {
     `<svg xmlns="http://www.w3.org/2000/svg" width="${f2(p.w)}mm" height="${f2(p.h)}mm" viewBox="0 0 ${f2(p.w)} ${f2(p.h)}">`, `<title>${esc(title)}</title>`,
     `<rect x="0" y="0" width="${f2(p.w)}" height="${f2(p.h)}" fill="#fff"/>`];
   const col = (grey?: boolean) => (grey ? "#8c8c8c" : "#000");
+  let nclip = 0;
   for (const q of p.prims) {
     switch (q.k) {
+      case "clip": o.push(`<clipPath id="c${nclip}"><rect x="${f2(q.x)}" y="${f2(q.y)}" width="${f2(q.w)}" height="${f2(q.h)}"/></clipPath>`, `<g clip-path="url(#c${nclip++})">`); break;
+      case "unclip": o.push("</g>"); break;
       case "line": o.push(`<line x1="${f2(q.x1)}" y1="${f2(q.y1)}" x2="${f2(q.x2)}" y2="${f2(q.y2)}" stroke="${col(q.grey)}" stroke-width="${f2(q.w)}" stroke-linecap="round"${q.dash ? ` stroke-dasharray="2 1.2"` : ""}/>`); break;
       case "rect": o.push(`<rect x="${f2(q.x)}" y="${f2(q.y)}" width="${f2(q.w)}" height="${f2(q.h)}" ${q.fill ? `fill="${col(q.grey)}"` : `fill="none" stroke="${col(q.grey)}" stroke-width="${f2(q.lw ?? 0.25)}"${q.dash ? ` stroke-dasharray="2 1.2"` : ""}`}/>`); break;
       case "poly": o.push(`<${q.closed || q.fill ? "polygon" : "polyline"} points="${q.pts.map(([x, y]) => `${f2(x)},${f2(y)}`).join(" ")}" ${q.fill ? `fill="${col(q.grey)}"` : `fill="none" stroke="${col(q.grey)}" stroke-width="${f2(q.lw ?? 0.25)}" stroke-linejoin="round"`}/>`); break;
-      case "circle": o.push(`<circle cx="${f2(q.cx)}" cy="${f2(q.cy)}" r="${f2(q.r)}" ${q.fill ? `fill="${q.white ? "#fff" : "#000"}"` : `fill="none" stroke="#000" stroke-width="${f2(q.lw ?? 0.25)}"`}/>`); break;
+      case "circle": o.push(`<circle cx="${f2(q.cx)}" cy="${f2(q.cy)}" r="${f2(q.r)}" ${q.fill ? `fill="${q.white ? "#fff" : col(q.grey)}"` : `fill="none" stroke="${col(q.grey)}" stroke-width="${f2(q.lw ?? 0.25)}"`}/>`); break;
       case "text": o.push(`<text x="${f2(q.x)}" y="${f2(q.y)}" font-family="Helvetica, Arial, sans-serif" font-size="${f2(q.size)}"${q.bold ? ` font-weight="bold"` : ""}${q.anchor && q.anchor !== "start" ? ` text-anchor="${q.anchor}"` : ""} fill="${col(q.grey)}">${esc(q.s)}</text>`); break;
     }
   }

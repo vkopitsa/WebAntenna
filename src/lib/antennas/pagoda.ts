@@ -176,7 +176,7 @@ export const pagoda: AntennaDef = {
       notes: [
         ...(scaled ? ["Outside 5.3–6.0 GHz: the published design is scaled as a whole, including the board thickness and the coax. Re-check it in the FDTD before building."] : []),
         "Design by Maarten Baert (maartenbaert.be), CC BY-SA 4.0: share modified versions under the same licence and credit him.",
-        "The board spacing must hold to ±0.1 mm: a small error shifts the centre frequency and spoils the axial ratio. Use a printed jig.",
+        "The board spacing must hold to ±0.1 mm: a small error shifts the centre frequency and spoils the axial ratio. Use spacers cut to the listed heights and check them with calipers.",
         "Slide the coax through boards 3 and 2 and solder its shield to both; strip it to end flush with board 1's underside, solder the shield to the pad there and the core to the top pad.",
         "Align the leg markers of boards 1 and 2: the two boards are mirror images, and twisting one against the other ruins the circular polarisation.",
         "The FR-4 thickness (1.0 mm) and εr matter: a different laminate moves the resonance. The in-browser FDTD shows the shift.",

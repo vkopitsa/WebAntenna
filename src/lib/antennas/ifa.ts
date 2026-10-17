@@ -13,7 +13,7 @@ import { gapPort, groundedBoard, span } from "./pcbcommon";
  * The vertical legs barely count; the arm length sets the frequency.
  */
 export const IFA_BETA = 0.225;
-export const ifaEeff = (er: number, h: number) => 1 + 0.2745 * Math.pow(h / 1e-3, 0.133) * Math.pow(er, 0.47) * (er - 1);
+export const ifaEeff = (er: number, h: number) => Math.max(1, Math.min(er, 1 + 0.2745 * Math.pow(h / 1e-3, 0.133) * Math.pow(er, 0.47) * (er - 1))); // a fit can overshoot εr at the corners
 export function ifaArm(f: number, H: number, er: number, h: number): number {
   return 299792458 / (4 * f * Math.sqrt(ifaEeff(er, h))) - IFA_BETA * H;
 }
@@ -37,7 +37,9 @@ export const ifa: AntennaDef = {
     const lam = wavelength(f), ee = ifaEeff(er, h);
     const La = Math.max(2 * w, ifaArm(f, H, er, h) * (1 + num(p, "trim", 0) / 100));
     const Ltot = La + H; // short → open end along the centre line
-    const S = Math.max(1.5 * w, ifaTap(H));
+    const S0 = Math.max(1.5 * w, ifaTap(H));
+    const S = Math.min(S0, La - w / 2); // the feed leg must land on the arm
+    const tapClamped = S < S0;
     const g = Math.max(0.5e-3, w);
     const xs = -bw / 2 + 1e-3 + w / 2; // short leg near the board corner
     const xf = xs + S;
@@ -67,6 +69,7 @@ export const ifa: AntennaDef = {
       ],
       notes: [
         ...(tooLong ? ["Warning: the arm is longer than the board is wide. Widen the board, raise H, or use the meander monopole."] : []),
+        ...(tapClamped ? ["Warning: the arm is too short for the feed tap distance, so the tap was moved onto the arm. Use thinner traces or a lower frequency."] : []),
         "Tune frequency with the arm length (shorter = higher), match with the tap distance S.",
         "Keep both copper layers out of the antenna area; leave a π matching network footprint at the feed.",
         "Dimensions come from an openEMS-calibrated model; run the exported openEMS script for your exact board.",

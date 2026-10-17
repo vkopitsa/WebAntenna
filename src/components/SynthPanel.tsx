@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Candidate } from "../lib/synth";
-import { useFdtd } from "../useFdtd";
+import { phaseText, useFdtd } from "../useFdtd";
 import { ANTENNA_BY_ID, WIDEST } from "../lib/antennas";
 import { parseBands, spanRatio } from "../lib/bands";
 import type { Goal, SynthOptions } from "../lib/synth";
@@ -31,23 +31,28 @@ export function SynthPanel() {
   const [rows, setRows] = useState<Candidate[] | null>(null);
   const [fdNote, setFdNote] = useState("");
   const fdStopped = useRef(false);
+  // bumped by every new FDTD loop and by a band change: a superseded loop exits without touching state
+  const runId = useRef(0);
   // The panel stays mounted while the sidebar is edited: results for other bands would be wrong (and their SWR
   // columns wouldn't match the header), so a band change stops the run and clears them.
-  useEffect(() => { cancel(); fdtd.cancel(); setRows(null); setFdNote(""); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [bandsStr]);
+  useEffect(() => { runId.current++; cancel(); fdtd.cancel(); setRows(null); setFdNote(""); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [bandsStr]);
   // After the wire/analytic search: tune every printed (formula) candidate with FDTD and score it.
   useEffect(() => {
     if (state.status !== "done" || !state.result) return;
     setRows(state.result);
     if (!useFd) return;
     let alive = true;
+    const myRun = ++runId.current;
+    const live = () => alive && runId.current === myRun;
     fdStopped.current = false;
     (async () => {
       let list = state.result!;
       for (const c of state.result!.filter((x) => !Number.isFinite(x.score))) {
-        if (!alive || fdStopped.current) break;
+        if (!live() || fdStopped.current) break;
         setFdNote(`${t("FDTD tuning")}: ${t(ANTENNA_BY_ID[c.id].name)}`);
         try {
           const out = await fdtd.start("tune", c.id, c.params, undefined, "auto");
+          if (!live()) return;
           const z0 = c.feedZ0 || 50;
           const swr = bands.map(([a, b]) => {
             const pts = out.result.z.filter((p) => p.f >= a && p.f <= b);
@@ -57,21 +62,22 @@ export function SynthPanel() {
           const ml = Math.max(...swr.map((x) => { const g = (x - 1) / (x + 1); return -10 * Math.log10(Math.max(1 - g * g, 1e-6)); }));
           const gain = out.result.pattern?.max.dbi ?? NaN;
           const score = goal === "match" ? 10 * ml : goal === "gain" ? 4 * ml - gain : goal === "small" ? 4 * ml + 3 * c.size : 6 * ml - 0.4 * gain;
-          const upd: Candidate = { ...c, params: out.params, swr, gain, score, note: `FDTD (${out.engine === "gpu" ? "WebGPU" : "CPU"}) tuned, trim ${Number(out.params.trim ?? 0).toFixed(1)} %` };
+          const upd: Candidate = { ...c, params: out.params, swr, gain, score, note: t("FDTD ({0}) tuned, trim {1} %", out.engine === "gpu" ? "WebGPU" : "CPU", Number(out.params.trim ?? 0).toFixed(1)) };
           list = list.map((x) => (x.id === c.id ? upd : x));
           const scored = list.filter((x) => Number.isFinite(x.score)).sort((a, b) => a.score - b.score);
           list = [...scored, ...list.filter((x) => !Number.isFinite(x.score))];
-          if (alive) setRows(list);
+          setRows(list);
         } catch (e) {
           // one candidate the FDTD can't run (e.g. a grid too large for a very wide band) must not stop the others
-          if (!alive) return;
+          // a cancellation (band change, unmount, Stop button) is not a failure of this candidate
+          if (!live()) return;
           if (fdStopped.current) break;
           const msg = `FDTD (${t("not run")}): ${e instanceof Error ? e.message : String(e)}`;
           list = list.map((x) => (x.id === c.id ? { ...x, note: msg } : x));
           setRows(list);
         }
       }
-      if (alive) setFdNote("");
+      if (live()) setFdNote("");
     })();
     return () => { alive = false; fdtd.cancel(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -112,7 +118,7 @@ export function SynthPanel() {
             : <button className="primary" onClick={go} disabled={!bands.length}>{t("Synthesize")}</button>}
         </div>
         {state.error && <p className="err-text">{state.error}</p>}
-        {fdNote && <p className="muted small">{fdtd.st.status === "running" ? "⏳ " : ""}{fdNote}{fdtd.st.status === "running" ? ` · ${fdtd.st.phase} · ${t("step {0}", fdtd.st.step)}` : ""}
+        {fdNote && <p className="muted small">{fdtd.st.status === "running" ? "⏳ " : ""}{fdNote}{fdtd.st.status === "running" ? ` · ${phaseText(t, fdtd.st.phase, fdtd.st.pass)}${fdtd.st.engine ? ` (${fdtd.st.engine === "gpu" ? "WebGPU" : "CPU"})` : ""} · ${t("step {0}", fdtd.st.step)}` : ""}
           {fdtd.st.status === "running" && <> <button className="small danger" onClick={() => { fdStopped.current = true; fdtd.cancel(); }}>{t("Stop")}</button></>}</p>}
       </div>
       {rows && (

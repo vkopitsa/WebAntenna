@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { AntennaDef, Design, Params } from "../lib/types";
 import { patternChoices, s11, sweepBreaks, toS1P, type SimResult, type ZPoint } from "../lib/simulate";
 import { parseBands } from "../lib/bands";
@@ -10,7 +10,7 @@ import { CursorReadout } from "./CursorReadout";
 import { FreqChart, Pattern3D, PolarChart, SmithChart, type FCursor, type Series } from "./Charts";
 import { Select } from "./inputs";
 import { download } from "../download";
-import { useFdtd } from "../useFdtd";
+import { phaseText, useFdtd } from "../useFdtd";
 import type { Engine } from "../fdtdJob";
 import { set, useStore } from "../store";
 import { advise, bestMatch, tuning } from "../lib/build";
@@ -32,14 +32,14 @@ function bandSummary(z: ZPoint[], z0: number, bands: [number, number][]) {
   });
 }
 
-export function SimPanel({ def, params, design }: { def: AntennaDef; params: Params; design: Design }) {
+export function SimPanel({ def, params, design, active = true }: { def: AntennaDef; params: Params; design: Design; active?: boolean }) {
   const t = useT();
   const choices = useMemo(() => patternChoices(params, design), [params, design]);
   const [pf, setPf] = useState<number | null>(null);
   const patternF = pf != null && choices.some((c) => Math.abs(c - pf) < 1) ? pf : choices[0];
   const [z0s, setZ0] = useState<string | null>(null);
   const z0 = Number(z0s ?? String(Math.round(design.feedZ0 ?? 50)));
-  const sim = useSimulation(def.id, params, patternF, true);
+  const sim = useSimulation(def.id, params, patternF, active);
   const fdtd = useFdtd();
   const [engine, setEngine] = useState<Engine>("auto");
   const fdKey = JSON.stringify([def.id, params]);
@@ -52,8 +52,11 @@ export function SimPanel({ def, params, design }: { def: AntennaDef; params: Par
       if (job === "tune") set((s) => ({ params: { ...s.params, [def.id]: { ...s.params[def.id], ...out.params } } }));
     }).catch(() => {});
   };
+  // a stale result of the previous design stays on screen while the new one runs: don't export it
+  const simReady = fdOut != null || sim.status === "done";
   const bands = parseBands(String(params.bands ?? ""));
   const [bandSel, setBandSel] = useState(0);
+  const fileRef = useRef<HTMLInputElement | null>(null);
   const [imp, setImp] = useState<Imported | null>(null);
   const [impErr, setImpErr] = useState<string | null>(null);
   const r: SimResult | null = fdOut ? fdOut.result : sim.result;
@@ -75,7 +78,7 @@ export function SimPanel({ def, params, design }: { def: AntennaDef; params: Par
   }, [own, imp, design.sweeps, win?.[0], win?.[1]]);
   // x axis: the selected band's window, or every band (parts the model doesn't reach stay visible, empty)
   const span = win ?? (bands.length ? [Math.min(...bands.map((b) => b[0])), Math.max(...bands.map((b) => b[1]))] as const : undefined);
-  const ser = (fn: (p: ZPoint) => number): Series[] => curves.map((c) => ({ name: c.name, cls: c.cls, f: c.z.map((p) => p.f), values: c.z.map(fn), breaks: c.breaks }));
+  const ser = (fn: (p: ZPoint) => number, raw?: (p: ZPoint) => number): Series[] => curves.map((c) => ({ name: c.name, cls: c.cls, f: c.z.map((p) => p.f), values: c.z.map(fn), raw: raw && c.z.map(raw), breaks: c.breaks }));
   const zMain = curves[0];
 
   const onFile = async (file: File) => {
@@ -118,13 +121,11 @@ export function SimPanel({ def, params, design }: { def: AntennaDef; params: Par
         <span className="spacer" />
         <label className="inline">{t("Reference Z0")}<Select value={String(z0)} options={Z0S.some(([v]) => Number(v) === z0) ? Z0S : [[String(z0), `${z0} Ω`], ...Z0S]} onChange={setZ0} ariaLabel="Reference Z0" /></label>
         {choices.length > 1 && <label className="inline">{t("Pattern at")}<Select value={String(patternF)} options={choices.map((c) => [String(c), fmtHz(c, 3)] as [string, string])} onChange={(v) => setPf(Number(v))} ariaLabel="Pattern at" /></label>}
-        <label className="button-like small">
-          {t("Load results (.json / .s1p / .s2p)")}
-          <input type="file" accept=".json,.s1p,.S1P,.s2p,.S2P,.txt" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void onFile(f); e.target.value = ""; }} />
-        </label>
+        <button className="small" onClick={() => fileRef.current?.click()}>{t("Load results (.json / .s1p / .s2p)")}</button>
+        <input ref={fileRef} type="file" accept=".json,.s1p,.S1P,.s2p,.S2P,.txt" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void onFile(f); e.target.value = ""; }} />
         {imp && <button className="small" onClick={() => setImp(null)}>{t("Clear {0}", imp.name)}</button>}
-        {own.length > 0 && <button className="small" onClick={() => download(`${def.id}-sim.s1p`, toS1P(def.name, own, z0), "text/plain")}>S11 (.s1p)</button>}
-        {r?.pattern && <button className="small" onClick={() => download(`${def.id}-pattern.csv`, ["cut,angle_deg,gain_dBi", ...r.pattern!.cuts.flatMap((c) => c.deg.map((a, i) => `${c.id},${a},${c.dbi[i].toFixed(3)}`))].join("\n") + "\n", "text/csv")}>{t("Pattern")} (.csv)</button>}
+        {own.length > 0 && <button className="small" disabled={!simReady} onClick={() => download(`${def.id}-sim.s1p`, toS1P(def.name, own, z0), "text/plain")}>S11 (.s1p)</button>}
+        {r?.pattern && <button className="small" disabled={!simReady} onClick={() => download(`${def.id}-pattern.csv`, ["cut,angle_deg,gain_dBi", ...r.pattern!.cuts.flatMap((c) => c.deg.map((a, i) => `${c.id},${a},${c.dbi[i].toFixed(3)}`))].join("\n") + "\n", "text/csv")}>{t("Pattern")} (.csv)</button>}
       </div>
       {design.pcb && (
         <div className="box fdtd-bar">
@@ -132,7 +133,8 @@ export function SimPanel({ def, params, design }: { def: AntennaDef; params: Par
           <label className="inline">{t("Engine")}<Select value={engine} onChange={setEngine} options={[["auto", "Auto (WebGPU if available)"], ["gpu", "WebGPU"], ["cpu", "CPU (slow)"]]} ariaLabel="Engine" /></label>
           {fdtd.st.status === "running" ? <>
             <button className="small danger" onClick={fdtd.cancel}>{t("Stop")}</button>
-            <span className="muted small">{fdtd.st.phase} · {t("step {0}", fdtd.st.step)} · {t("field {0} dB", fdtd.st.decay > 0 ? (20 * Math.log10(fdtd.st.decay)).toFixed(0) : "…")}</span>
+            <span className="muted small">{phaseText(t, fdtd.st.phase, fdtd.st.pass)}{fdtd.st.engine ? ` · ${fdtd.st.engine === "gpu" ? "WebGPU" : "CPU"}` : ""}{fdtd.st.cells ? ` · ${(fdtd.st.cells / 1e3).toFixed(0)} k ${t("cells")}` : ""} · {t("step {0}", fdtd.st.step)} · {t("field {0} dB", fdtd.st.decay > 0 ? (20 * Math.log10(fdtd.st.decay)).toFixed(0) : "…")}{fdtd.st.t0 ? ` · ${Math.max(0, Math.round((Date.now() - fdtd.st.t0) / 1000))} s` : ""}</span>
+            {fdtd.st.fellBack && <span className="warn-text small">{t("No WebGPU in this browser: running on the CPU, this can take tens of minutes. Chrome/Edge with WebGPU is 10–50× faster.")}</span>}
           </> : <>
             <button className="small primary" onClick={() => runFd("run")}>{t("Run FDTD")}</button>
             {"trim" in params && <button className="small" onClick={() => runFd("tune")} title={t("Run, rescale the resonant length onto the band centre, run again")}>{t("Tune to band")}</button>}
@@ -194,9 +196,9 @@ export function SimPanel({ def, params, design }: { def: AntennaDef; params: Par
         {zMain && <>
           <FreqChart title="Return loss S11" unit="dB" bands={bands} span={span} yMax={0} refLine={-9.54} series={ser((p) => s11(p, z0).db)} cursor={cursor} />
           <FreqChart title="Input impedance" unit="Ω" bands={bands} span={span} refLine={0} series={[
-            { name: "Re Zin", cls: "s1", f: zMain.z.map((p) => p.f), values: zMain.z.map((p) => p.r), breaks: zMain.breaks },
-            { name: "Im Zin", cls: "s2", f: zMain.z.map((p) => p.f), values: zMain.z.map((p) => p.x), breaks: zMain.breaks }]} cursor={cursor} />
-          <FreqChart title="SWR" unit="" bands={bands} span={span} yMin={1} refLine={2} digits={2} series={ser((p) => Math.min(s11(p, z0).swr, 20))} cursor={cursor} />
+            { name: t("Re Zin"), cls: "s1", f: zMain.z.map((p) => p.f), values: zMain.z.map((p) => p.r), breaks: zMain.breaks },
+            { name: t("Im Zin"), cls: "s2", f: zMain.z.map((p) => p.f), values: zMain.z.map((p) => p.x), breaks: zMain.breaks }]} cursor={cursor} />
+          <FreqChart title="SWR" unit="" bands={bands} span={span} yMin={1} refLine={2} digits={2} series={ser((p) => Math.min(s11(p, z0).swr, 20), (p) => s11(p, z0).swr)} cursor={cursor} />
           <SmithChart z={zMain.z} z0={z0} bands={bands} breaks={zMain.breaks} overlay={curves[1] ? { name: curves[1].name, z: curves[1].z } : undefined} cursor={cursor} />
           <CursorReadout curves={curves} z0={z0} cursor={cursor} pattern={pat} />
         </>}

@@ -10,7 +10,7 @@ import { gapPort, groundedBoard, span } from "./pcbcommon";
  * (FR-4 1.6 / 0.8 mm, εr 10.2 1.27 mm, w = 1 mm; docs/ANTENNAS.md): q = 0.048 √(h/w) εr^0.47.
  */
 export function printedEeff(er: number, h: number, w: number): number {
-  return 1 + 0.048 * Math.sqrt(h / w) * Math.pow(er, 0.47) * (er - 1);
+  return Math.max(1, Math.min(er, 1 + 0.048 * Math.sqrt(h / w) * Math.pow(er, 0.47) * (er - 1))); // a fit can overshoot εr at the corners
 }
 /** Length factor on λeff/4 (openEMS fit). */
 export const MONO_K = 1.0;
@@ -47,6 +47,7 @@ export const pcbmonopole: AntennaDef = {
         { label: "Feed impedance", value: "≈ 70–120 Ω at resonance (openEMS): plan a π matching network" },
       ],
       notes: [
+        ...(w > num(p, "bw", 0.03) - 1e-3 ? ["Warning: the trace is wider than the board."] : []),
         "Keep all copper (both layers) out of the antenna area; the ground pour is the other half of the antenna.",
         "Leave room for a π matching network (0 Ω + two DNP) at the feed.",
         "Dimensions come from an openEMS-calibrated εeff; run the exported openEMS script for your exact board.",

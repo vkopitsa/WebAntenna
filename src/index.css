@@ -283,7 +283,7 @@ label.button-like:hover { border-color: var(--accent); }
   .drawer-close { float: right; }
   .menu-btn { font-size: 18px; padding: 2px 10px; }
   .toolbar { gap: 6px; padding: 6px 8px; position: sticky; top: 0; z-index: 10; }
-  .toolbar .ver, .toolbar .theme-select, .toolbar .spacer { display: none; }
+  .toolbar .ver, .toolbar .spacer { display: none; }
   .toolbar .current { flex: 1 1 100%; order: 10; margin-left: 0; }
   .main { overflow: visible; padding: 6px; }
   .results { grid-template-columns: minmax(0, 1fr); }

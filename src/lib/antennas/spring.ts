@@ -85,7 +85,8 @@ export const spring: AntennaDef = {
   defaults: { bands: "433.05e6-434.79e6", D: 4.5e-3, pitch: 1.2e-3, d: 0.8e-3, lead: 5e-3 },
   build(p): Design {
     const { f, sweeps } = band(p);
-    const D = num(p, "D", 4.5e-3), d = Math.min(num(p, "d", 0.8e-3), 0.9 * num(p, "pitch", 1.2e-3));
+    const dIn = num(p, "d", 0.8e-3), d = Math.min(dIn, 0.9 * num(p, "pitch", 1.2e-3));
+    const Din = num(p, "D", 4.5e-3), D = Math.max(Din, 2 * d); // the coil must be wider than the wire
     const S = Math.max(num(p, "pitch", 1.2e-3), d / 0.9), lead = Math.max(0, num(p, "lead", 5e-3));
     const lam = wavelength(f), r = d / 2, R = D / 2;
     const kt = 1 + num(p, "trim", 0) / 100; // the whole-antenna trim applied after build (index.ts)
@@ -137,6 +138,9 @@ export const spring: AntennaDef = {
         { label: "Bandwidth", value: "Narrow: a few MHz at 433 MHz" },
       ],
       notes: [
+        ...(d < dIn * 0.9999 ? ["Warning: the wire is thicker than the pitch allows; its diameter was reduced to 90 % of the pitch. Raise the pitch or use thinner wire."] : []),
+        ...(D > Din * 1.0001 ? ["Warning: the coil diameter was raised to twice the wire diameter."] : []),
+        ...(lead > 2 * D || lead < 0.5 * D ? ["The straight lead is far from one coil diameter, the length the turns fit was made with; expect the resonance to shift and check it in the Simulation tab."] : []),
         "The radiation resistance is only a few ohms: the feed needs a matching network (an L-match or a tap on the first turn) for 50 Ω, and copper loss eats a large share of the power.",
         "The model stands the coil over four λ/4 radials. On a module the board's ground pour is the counterpoise: a smaller one raises the resonance, so stretch or compress the coil to tune.",
         "Stretching the coil (more pitch) raises the resonance and the radiation resistance; adding turns lowers it.",

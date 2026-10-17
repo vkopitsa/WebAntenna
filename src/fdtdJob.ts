@@ -14,9 +14,10 @@ export type Engine = "auto" | "gpu" | "cpu";
 // A printed IFA (loaded Q ≈ 16) needs ≈ 25 k steps to settle its resonance and match depth at this level,
 // while −60 dB takes > 80 k steps for no visible change in Z.
 const END_CRITERIA = 1e-2, MAX_STEPS = 100000;
+export interface FdtdProgress { step: number; decay: number; phase: "run" | "post"; pass?: number; engine: "gpu" | "cpu"; cells: number; fellBack: boolean }
 export interface FdtdOut { result: SimResult; engine: "gpu" | "cpu"; cells: number; steps: number; ms: number; fRes: number | null; params: Params }
 
-export async function runFdtd(type: string, params: Params, patternF: number | undefined, engine: Engine, onProgress: (msg: { step: number; decay: number; phase: string }) => void): Promise<FdtdOut> {
+export async function runFdtd(type: string, params: Params, patternF: number | undefined, engine: Engine, onProgress: (msg: FdtdProgress) => void): Promise<FdtdOut> {
   const def = ANTENNA_BY_ID[type];
   const d = def.build(params);
   if (!d.pcb) throw new Error("FDTD needs a printed (PCB) antenna");
@@ -28,10 +29,20 @@ export async function runFdtd(type: string, params: Params, patternF: number | u
   let res: RunResult, used: "gpu" | "cpu" = "cpu";
   const useGpu = engine !== "cpu" && (await gpuAvailable());
   if (engine === "gpu" && !useGpu) throw new Error("WebGPU is not available in this browser");
-  const prog = (step: number, decay: number) => onProgress({ step, decay, phase: "fdtd" });
-  if (useGpu) { res = await runGPU(s, { nf2ffFreqs: [fPat], endCriteria: END_CRITERIA, maxSteps: MAX_STEPS, onProgress: prog }); used = "gpu"; }
-  else res = runCPU(s, { nf2ffFreqs: [fPat], endCriteria: END_CRITERIA, maxSteps: MAX_STEPS, onProgress: prog });
-  onProgress({ step: res.steps, decay: 0, phase: "post" });
+  const cells = s.nx * s.ny * s.nz;
+  let fellBack = engine === "auto" && !useGpu;
+  let eng: "gpu" | "cpu" = useGpu ? "gpu" : "cpu";
+  const prog = (step: number, decay: number) => onProgress({ step, decay, phase: "run", engine: eng, cells, fellBack });
+  if (useGpu) {
+    try { res = await runGPU(s, { nf2ffFreqs: [fPat], endCriteria: END_CRITERIA, maxSteps: MAX_STEPS, onProgress: prog }); used = "gpu"; }
+    catch (e) {
+      // "auto" never fails because of the GPU (too large a grid, device lost, driver error): redo the job on the CPU
+      if (engine !== "auto") throw e;
+      eng = "cpu"; fellBack = true;
+      res = runCPU(s, { nf2ffFreqs: [fPat], endCriteria: END_CRITERIA, maxSteps: MAX_STEPS, onProgress: prog });
+    }
+  } else res = runCPU(s, { nf2ffFreqs: [fPat], endCriteria: END_CRITERIA, maxSteps: MAX_STEPS, onProgress: prog });
+  onProgress({ step: res.steps, decay: 0, phase: "post", engine: eng, cells, fellBack });
   const freqs = Array.from({ length: 241 }, (_, i) => fmin + ((fmax - fmin) * i) / 240);
   const z: ZPoint[] = impedance(res, freqs);
   const ff = farField(res.nf!, 0);
@@ -60,12 +71,12 @@ export function resonance(z: ZPoint[], f0: number, z0: number): number | null {
 }
 
 /** Tune: run, rescale the resonant length so the resonance lands on the design frequency, run again. */
-export async function tuneFdtd(type: string, params: Params, patternF: number | undefined, engine: Engine, onProgress: (msg: { step: number; decay: number; phase: string }) => void): Promise<FdtdOut> {
+export async function tuneFdtd(type: string, params: Params, patternF: number | undefined, engine: Engine, onProgress: (msg: FdtdProgress) => void): Promise<FdtdOut> {
   const def = ANTENNA_BY_ID[type];
   let p = { ...params };
   let out: FdtdOut | null = null;
   for (let pass = 0; pass < 3; pass++) {
-    out = await runFdtd(type, p, patternF, engine, (m) => onProgress({ ...m, phase: `pass ${pass + 1}` }));
+    out = await runFdtd(type, p, patternF, engine, (m) => onProgress({ ...m, pass: pass + 1 }));
     const f0 = def.build(p).f;
     // the last pass returns the trim it ran (a rescaled but unsimulated trim wouldn't match the result)
     if (out.fRes == null || Math.abs(out.fRes / f0 - 1) < 0.005 || pass === 2) break;

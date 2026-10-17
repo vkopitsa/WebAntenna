@@ -88,7 +88,7 @@ describe("sky-tilted capped bicones", () => {
     expect(r.method).toBe("analytic");
     expect(Math.max(...r.z.filter((q) => q.f >= 960e6 && q.f <= 6.4e9).map((q) => s11(q, 50).swr))).toBeLessThan(1.9);
     expect(d.cuts!.find((c) => c.what.startsWith("Shorting wire"))).toMatchObject({ qty: 1 });
-    expect(d.frames!.short!.hot[0] * 1e3).toBeCloseTo(11.12, 2);
+    expect(d.frames!.short![0].hot[0] * 1e3).toBeCloseTo(11.12, 2);
     expect(d.frames!.hoops.hot.length + d.frames!.hoops.ground.length).toBe(7);   // no hoop at the shorting wire's nodes
     expect(d.notes.some((n) => n.startsWith("The shorting wire is a DC short"))).toBe(true);
     expect(templatePages(def, d, false).length).toBe(1);

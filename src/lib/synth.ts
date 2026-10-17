@@ -4,7 +4,7 @@ import type { AntennaDef, Design, Params } from "./types";
 import { ANTENNAS } from "./antennas";
 import { buildMesh, gainFn, solve } from "./mom";
 import { patchDesign } from "./antennas/patch";
-import { loopModel, loopZin } from "./antennas/pcbloop";
+import { loopModel, loopTraceW, loopZin } from "./antennas/pcbloop";
 import { SKYCONE_TABLES, skyconeGain, skyconeZ } from "./antennas/skycone";
 import { centre, formatBands, type Band } from "./bands";
 import { num } from "./types";
@@ -116,7 +116,7 @@ function evaluate(def: AntennaDef, p: Params, o: SynthOptions, withGain: boolean
     return { swr, gain: 6.5, size: sizeOf(d, lamLow), z0 };
   }
   if (def.id === "pcbloop") {
-    const m = loopModel(d.f, num(p, "a", 0.03), num(p, "b", 0.02), num(p, "w", 2e-3), num(p, "t", 35e-6), 5.8e7, num(p, "qc", 300));
+    const m = loopModel(d.f, num(p, "a", 0.03), num(p, "b", 0.02), loopTraceW(num(p, "a", 0.03), num(p, "b", 0.02), num(p, "w", 2e-3)), num(p, "t", 35e-6), 5.8e7, num(p, "qc", 300));
     const swr = o.bands.map((b) => Math.max(...pts(b).map((f) => { const [r, x] = loopZin(f, m, d.f); return swrOf(r, x, 50); })));
     return { swr, gain: 1.76 + 10 * Math.log10(Math.max(m.eff, 1e-6)), size: sizeOf(d, lamLow), z0: 50 };
   }
@@ -156,7 +156,14 @@ function evaluate(def: AntennaDef, p: Params, o: SynthOptions, withGain: boolean
       if (!s) continue;
       const g = gainFn(s);
       let peak = -Infinity;
-      for (let th = 10; th <= 170; th += 20) for (let ph = 0; ph < 360; ph += 20) peak = Math.max(peak, g((th * Math.PI) / 180, (ph * Math.PI) / 180));
+      // coarse scan including the poles (a helix peaks on the axis), then refine round the best point in 5° steps
+      const D = Math.PI / 180;
+      let bt = 0, bp = 0;
+      for (let th = 0; th <= 180; th += 20) for (let ph = 0; ph < (th % 180 === 0 ? 1 : 360); ph += 30) {
+        const v = g(th * D, ph * D);
+        if (v > peak) { peak = v; bt = th; bp = ph; }
+      }
+      for (let th = Math.max(0, bt - 10); th <= Math.min(180, bt + 10); th += 5) for (let ph = bp - 15; ph <= bp + 15; ph += 5) peak = Math.max(peak, g(th * D, ph * D));
       gain = Math.min(gain, peak);
     }
     if (!Number.isFinite(gain)) gain = NaN;

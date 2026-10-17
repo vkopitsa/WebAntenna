@@ -6,7 +6,7 @@ import { fmtHz } from "./lib/units";
 
 export function fmtMsg(t: (s: string, ...a: (string | number)[]) => string, unit: Unit, m: Msg): string {
   const f = (a: Arg): string | number => {
-    if (typeof a === "number") return +a.toPrecision(4);
+    if (typeof a === "number") return Number.isInteger(a) ? a : +a.toPrecision(4);
     if (typeof a === "string") return t(a);
     if ("len" in a) return fmtLen(a.len, unit);
     if ("hz" in a) return fmtHz(a.hz, 3);

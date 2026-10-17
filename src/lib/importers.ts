@@ -8,6 +8,10 @@ export interface Imported { name: string; z: ZPoint[]; pattern: Pattern | null; 
 export function parseTouchstone(text: string, name: string): Imported {
   let unit = 1e9, fmt = "MA", z0 = 50;
   const z: ZPoint[] = [];
+  // Columns per data row: 1 + 2 n² for an n-port (3 for .s1p, 9 for .s2p). Anything else, such as the 5-column noise block of an
+  // .s2p, is not S-parameter data. Without a .sNp extension the first data row decides.
+  const ext = /\.s(\d)p$/i.exec(name);
+  let cols = ext ? 1 + 2 * Number(ext[1]) ** 2 : 0;
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.replace(/!.*/, "").trim();
     if (!line) continue;
@@ -22,6 +26,8 @@ export function parseTouchstone(text: string, name: string): Imported {
     }
     const n = line.split(/\s+/).map(Number);
     if (n.length < 3 || n.some((x) => !Number.isFinite(x))) continue;
+    if (!cols) cols = n.length === 9 ? 9 : 3;
+    if (n.length !== cols) continue;
     let gr: number, gi: number;
     if (fmt === "RI") { gr = n[1]; gi = n[2]; }
     else {
@@ -60,7 +66,8 @@ export function parseOpenEMS(obj: unknown, name: string, fPattern: number): Impo
       th.forEach((x, i) => { if (Math.abs(x - t) < Math.abs(th[best] - t)) best = i; });
       return vals[Math.min(best, vals.length - 1)];
     });
-    const xy = o.cut_xy.length === 181 ? o.cut_xy : ang.map((_, i) => o.cut_xy![Math.min(i, o.cut_xy!.length - 1)]);
+    // φ cut: the samples span 0..360°, so take the nearest angle (not the same index)
+    const xyv = o.cut_xy, xy = ang.map((a) => xyv[Math.min(xyv.length - 1, Math.round((a / 360) * (xyv.length - 1)))]);
     const cuts: Cut[] = [
       { id: "xy", label: "Horizontal plane XY (θ = 90°)", deg: ang, dbi: xy },
       { id: "xz", label: "Vertical plane XZ (φ = 0°)", deg: ang, dbi: pick(o.cut_xz) },

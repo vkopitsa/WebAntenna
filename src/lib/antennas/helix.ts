@@ -34,9 +34,11 @@ export const helix: AntennaDef = {
   build(p): Design {
     const { f, sweeps, bands } = band(p);
     const n = Math.max(1, Math.round(num(p, "turns", 8))), cl = num(p, "cl", 1), alpha = deg(num(p, "pitch", 13));
-    const d = num(p, "d"), gpl = num(p, "gp", 0.8), hand = str(p, "hand", "rhcp") === "lhcp" ? -1 : 1;
-    const lam = wavelength(f), r = d / 2;
+    const dIn = num(p, "d");
+    const gpl = num(p, "gp", 0.8), hand = str(p, "hand", "rhcp") === "lhcp" ? -1 : 1;
+    const lam = wavelength(f);
     const C = cl * lam, R = C / (2 * Math.PI), S = C * Math.tan(alpha);
+    const d = Math.min(dIn, 0.8 * S), r = d / 2; // thicker wire would make the turns intersect
     const h0 = Math.max(0.02 * lam, 3 * d);
     const Lturn = Math.hypot(C, S);
     const gpR = (gpl * lam) / 2;
@@ -73,6 +75,7 @@ export const helix: AntennaDef = {
         { key: "S", label: "Turn spacing (pitch)", value: S, at: [wires[1].b, wires[1 + seg].b] },
         { label: "Helix length (axial)", value: n * S, at: [wires[1].b, wires[1 + n * seg].b] },
         { label: "Wire per turn", value: Lturn },
+        ...(d < dIn ? [{ label: "Wire diameter used (reduced to fit the pitch)", value: d }] : []),
         { label: "Total wire length", value: n * Lturn },
         { label: "Height of the first turn above the ground plane", value: h0, at: [wires[0].a, wires[0].b] },
         { label: "Ground plane diameter", value: 2 * gpR, at: [v(-gpR, 0, 0), v(gpR, 0, 0)] },
@@ -86,8 +89,9 @@ export const helix: AntennaDef = {
         { label: "Axial ratio", value: `${fmt(e.axialRatio, 3)} (${fmt(20 * Math.log10(e.axialRatio), 2)} dB)` },
       ],
       notes: [
+        ...(d < dIn ? ["Warning: the wire is thicker than the turn spacing allows; the diameter was reduced to 80 % of the pitch."] : []),
         ...(outOfMode ? ["Warning: some bands fall outside the axial-mode range 0.75 < C/λ < 1.33."] : []),
-        "The Kraus directivity formula is optimistic by 2–3 dB: NEC-2 gives ≈ 11 dBi for the default 8-turn design.",
+        "The Kraus directivity formula is optimistic by 3–4 dB: NEC-2 gives ≈ 11 dBi for the default 8-turn design.",
         "Match the ≈140 Ω feed to 50 Ω with a tapered first quarter turn or a copper strip close to the ground plane.",
         "In the NEC model the ground plane is a wire grid and the feed rises from its centre.",
       ],

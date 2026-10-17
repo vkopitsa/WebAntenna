@@ -260,7 +260,7 @@ export function cutList(def: AntennaDef, d: Design, trimmedTags: Set<string>): C
       if (pc.tag && !same.tag.split(/[,–]/).map((x) => x.trim()).includes(pc.tag)) same.tag = same.tag ? `${same.tag.split(/[,–]/)[0].trim()}–${pc.tag}` : pc.tag;
       continue;
     }
-    const note = tunable ? M("2 % long, trim to resonance") : def.id === "helix" ? M("Wind it on a former; see the helix dimensions") : pc.bends > 0 ? M("Bends: {0}, see the template", pc.bends) : undefined;
+    const note = tunable ? M("2 % long, trim to resonance") : def.id === "helix" ? M("Wind it on a former; see the helix dimensions") : pc.bends > 0 ? M("Bends: {0}, see the template; allow a little extra length for the bends and the joint at each end", pc.bends) : undefined;
     rows.push({ tag: pc.tag, what, qty: 1, length: pc.length, cut: tunable ? Math.ceil(pc.length * 1.02 * 1e3) / 1e3 : pc.length, dia: pc.dia, note });
   }
   return rows;
@@ -285,6 +285,7 @@ function coaxChoke(d: Design): BomRow[] {
   if (c.choke === "sleeve") return [{ item: M("Ferrite beads for the coax (material 43 or 61, inner Ø ≥ 3.7 mm)"), qty: M("{0} pc", 6), note: M("Stacked on the first 11 cm of coax below the ground cone (ferrite sleeve)") }];
   if (c.choke === "bead") return [{ item: M("Clip-on ferrite for the coax (about 150 Ω at the lowest band)"), qty: M("{0} pc", 1) }];
   if (c.choke === "tube") return (c.tubes ?? []).map((t) => ({ item: M("Brass or copper tube Ø{0}, {1} long (choke sleeve)", { len: t.d }, { len: t.len }), qty: M("{0} pc", 1), note: M("Over the coax below the ground cone, open towards the antenna, soldered to the jacket at its far end") }));
+  if (d.coax?.bare) return [{ item: M("Coax cable, {0}", { len: d.coax.bare.len }), qty: M("{0} pc", 1), note: M("Runs from the antenna to the receiver with no choke: its length is part of the model") }];
   return [];
 }
 
@@ -306,7 +307,7 @@ export function bom(def: AntennaDef, d: Design, cuts: CutRow[]): BomRow[] {
       const bb = bd.board, layers = new Set(copperBoxes(bd).map((q) => q.layer)).size;
       rows.push({ item: M("PCB {0} × {1}, {2} thick, εr {3}", { len: bb.x1 - bb.x0 }, { len: bb.y1 - bb.y0 }, { len: pcb.h }, pcb.er), qty: M("{0} pc", 1), note: layers > 1 ? M("Copper on both sides") : M("Copper on the top side") });
     }
-    if (pcb.coaxFeed) rows.push({ item: M("Semi-rigid coax RG402 (Ø3.6 mm) with an SMA plug, about 9 cm"), qty: M("{0} pc", 1), note: M("Runs through the boards: the shield is soldered to them") });
+    if (pcb.coaxFeed) rows.push({ item: M("Semi-rigid coax RG402 (Ø3.6 mm) with an SMA plug, at least {0} long", { len: Math.max(0, ...(pcb.levels ?? []).map((l) => l.z0)) + pcb.h + 30e-3 }), qty: M("{0} pc", 1), note: M("Runs through the boards: the shield is soldered to them") });
     else rows.push({ item: connector(d.f, true, isProbe(pcb)), qty: M("{0} pc", 1) });
   } else {
     const byDia = new Map<string, { dia: number; n: number; L: number; coax: boolean }>();
@@ -345,6 +346,9 @@ export function bom(def: AntennaDef, d: Design, cuts: CutRow[]): BomRow[] {
       for (const w of washers) rows.push({ item: M("{0}: disc Ø{1}, hole Ø{2}", String(w[0]), { len: +w[1] }, { len: +w[2] }), qty: M("{0} pc", 1), note: M("Brass or copper, 0.3–0.5 mm: the frames are soldered round its edge") });
       rows.push({ item: M("Semi-rigid coax UT-141 / RG-402 (Ø3.6 mm) with an SMA plug"), qty: M("{0} pc", 1), note: M("The ground collar is soldered onto its jacket") });
       rows.push(...coaxChoke(d));
+      if (d.frames.pinCap) rows.push({ item: M("Capacitor {0} pF, C0G/NP0 ceramic, 0402 or 0603, ≥ 50 V", d.frames.pinCap), qty: M("{0} pc", 1), note: M("In the centre pin, between the coax end and the hot washer") });
+      const capWires = (d.frames.short ?? []).filter((q) => q.cap);
+      for (const cv of new Set(capWires.map((q) => q.cap!))) rows.push({ item: M("Capacitor {0} pF, C0G/NP0 ceramic, 0402 or 0603, ≥ 50 V", cv), qty: M("{0} pc", capWires.filter((q) => q.cap === cv).length), note: M("In series in a shorting wire, at its ground end") });
     }
     if (!d.sheets?.length && !d.frames) rows.push({ item: connector(d.f, false, false), qty: M("{0} pc", 1) });
   }
@@ -383,8 +387,8 @@ export function substrateNotes(def: AntennaDef, p: Params, d: Design): Msg[] {
 export function steps(d: Design, hasBoom: boolean, tunable: boolean): Msg[] {
   const s: Msg[] = [];
   if (d.pcb) {
-    s.push(M("Order the board from the Gerber files, or etch it at home with the 1:1 template (for toner transfer, print it mirrored)."));
-    if (d.pcb.levels?.length) s.push(M("Stack the boards on the coax at the listed spacings (a printed jig holds them to ±0.1 mm) and solder them in place."));
+    s.push(M("Order the board from the Gerber files, or etch it at home with the 1:1 template (for toner transfer use the Mirrored option: the top layer prints mirrored and the bottom layer as seen through the board from the top, each toner side against its copper)."));
+    if (d.pcb.levels?.length) s.push(M("Stack the boards on the coax at the listed spacings (align the drill holes and keep the spacing within ±0.1 mm, e.g. with spacers cut to the listed height) and solder them in place."));
     else s.push(M("Solder the connector at the feed port and keep the joint short."));
     const grounds = d.pcb.rects.filter((q) => /Ground/.test(q.label));
     if (new Set(grounds.map((q) => q.layer)).size > 1) s.push(M("Stitch the top and bottom ground pours with vias along their edges (usual practice; not part of the model)."));
@@ -396,7 +400,16 @@ export function steps(d: Design, hasBoom: boolean, tunable: boolean): Msg[] {
     s.push(M("Print the 1:1 frame template (or the bending jig) and bend every frame over it with flat-nose pliers: all frames of a side must be identical."));
     s.push(M("Solder the hot frames to the washer in the printed cradle and the ground frames to the collar on the coax jacket in the cup: one groove per frame keeps them at equal angles. Then solder the washer onto the coax centre pin at the listed gap."));
     s.push(M("Bend each hoop on its step of the printed hoop mandrel (or into a ring of the listed diameter) and solder it against the outside of the frames at its bend, at every crossing. Keep the frames in their grooves while you do it."));
-    if (d.frames.short) s.push(M("Last, with the hot cage on the centre pin: solder the straight shorting wire from one hot frame down to the ground frame under it, at the marks of the template (its distance from the axis is in the table, ±0.5 mm). One wire only, on one frame; it passes just outside the small ground hoop, so keep the two from touching."));
+    if (d.frames.pinCap) s.push(M("Fit the {0} pF capacitor in the centre pin: solder it between the coax centre pin and the hot washer (it spans the listed gap), instead of a plain joint.", d.frames.pinCap));
+    const sw = d.frames.short ?? [];
+    if (sw.length) {
+      const coil = sw.some((q) => q.coil);
+      s.push(sw.length === 1 && !coil ? M("Last, with the hot cage on the centre pin: solder the straight shorting wire from one hot frame down to the ground frame under it, at the marks of the template (its distance from the axis is in the table, ±0.5 mm). One wire only, on one frame; it passes just outside the small ground hoop, so keep the two from touching.")
+        : sw.length === 1 ? M("Last, with the hot cage on the centre pin: solder the coiled shorting wire from a hot frame down to the ground frame under it, at the marks of the template (its distance from the axis is in the table, ±0.5 mm). The coil sits beside its frame; keep it clear of the hoops.")
+          : coil ? M("Last, with the hot cage on the centre pin: solder each of the {0} coiled shorting wires from a hot frame down to the ground frame under it, at the marks of the template, which name the frame of each (its distance from the axis is in the table, ±0.5 mm). The coils sit beside their frames and the wires pass just outside the small ground hoop; keep them clear of the hoops and of each other.", sw.length)
+            : M("Last, with the hot cage on the centre pin: solder each of the {0} straight shorting wires from a hot frame down to the ground frame under it, at the marks of the template, which name the frame of each (its distance from the axis is in the table, ±0.5 mm). They pass just outside the small ground hoop, so keep the two from touching.", sw.length));
+      for (const cv of new Set(sw.map((q) => q.cap).filter((c): c is number => !!c))) s.push(M("Fit the {0} pF capacitor in series at the ground end of the shorting wire marked with it on the template: cut the wire there and solder the capacitor in, with short leads.", cv));
+    }
   } else {
     s.push(M("Cut every part to the cut length in the list. Driven parts are cut long so you can trim them."));
     if (hasBoom) s.push(M("Tape the 1:1 drilling strip to the boom, mark the element positions, then drill and fit the elements."));
@@ -472,13 +485,13 @@ export const BUILD_STRINGS = [
   ...Object.values(NOT_TRIMMED), ...Object.values(PRINTED).flatMap((x) => [x.what, x.how]),
   "Band element", "Folded dipole", "Move each end of the folded dipole in by {0}", "Disc rod", "Cone rod", "Top whip",
   "Wind it on a former; see the helix dimensions", "PCB with the loop trace ({0} × {1} loop)", "Reflector loop", "Driven loop", "Radiator", "Driven element", "Director", "Reflector", "Parasitic element", "Radial",
-  "Matching section or stub", "Wire", "Boom or support", "Helix wire", "Leaf wire", "Semi-rigid coax RG402 (Ø3.6 mm) with an SMA plug, about 9 cm", "Runs through the boards: the shield is soldered to them", "Stack the boards on the coax at the listed spacings (a printed jig holds them to ±0.1 mm) and solder them in place.", "Spring wire (lead + coil, straightened)", "Coax section (cut braid to braid)",
+  "Matching section or stub", "Wire", "Boom or support", "Helix wire", "Leaf wire", "Semi-rigid coax RG402 (Ø3.6 mm) with an SMA plug, at least {0} long", "Runs through the boards: the shield is soldered to them", "Stack the boards on the coax at the listed spacings (align the drill holes and keep the spacing within ±0.1 mm, e.g. with spacers cut to the listed height) and solder them in place.", "Spring wire (lead + coil, straightened)", "Coax section (cut braid to braid)",
   "Shorten the loop by {0} (at the joint or overlap)", "Trim {0} off the open end", "Trim {0} off each end",
   "SMA panel jack (probe through the board)", "SMA edge-mount or u.FL connector", "SMA edge-mount connector",
   "SO-239 (UHF) or N chassis socket", "N or SMA chassis socket", "SMA chassis socket",
   "Balun or differential feed ({0} Ω)", "4:1 balun ({0} Ω to 50 Ω), e.g. a coax half-wave loop", "1:1 current balun (choke) at the feed point",
   "Impedance transformer {0} Ω to 50 Ω (λ/4 line or tapered strip)",
-  "2 % long, trim to resonance", "Bends: {0}, see the template",
+  "2 % long, trim to resonance", "Bends: {0}, see the template; allow a little extra length for the bends and the joint at each end",
   "PCB {0} × {1}, {2} thick, εr {3}", "{0} pc", "Copper on both sides", "Copper on the top side",
   "Coax for the sections (velocity factor as set)", "{0} pieces, {1} in total", "Wire or tube Ø{0}", "Add a little for bends and joints",
   "Boom or support tube Ø{0}", "{0} pc, {1}", "Element mounts (insulators or boom clamps)", "Metal disc Ø{0}", "Metal plate {0} × {1}",
@@ -489,7 +502,7 @@ export const BUILD_STRINGS = [
   "The same layout on FR-4 (εr 4.4) would resonate at about {0}.",
   "FR-4 loss (tan δ ≈ 0.02) costs noticeable efficiency above about 3 GHz; a low-loss laminate such as RO4003C helps.",
   "Solder mask over the antenna lowers the resonance slightly. Keep the antenna area unmasked, or tune with the mask applied.",
-  "Order the board from the Gerber files, or etch it at home with the 1:1 template (for toner transfer, print it mirrored).",
+  "Order the board from the Gerber files, or etch it at home with the 1:1 template (for toner transfer use the Mirrored option: the top layer prints mirrored and the bottom layer as seen through the board from the top, each toner side against its copper).",
   "Solder the connector at the feed port and keep the joint short.",
   "Stitch the top and bottom ground pours with vias along their edges (usual practice; not part of the model).",
   "Cut every part to the cut length in the list. Driven parts are cut long so you can trim them.",
@@ -510,12 +523,18 @@ export const BUILD_STRINGS = [
   "Stacked on the first 11 cm of coax below the ground cone (ferrite sleeve)",
   "Brass or copper tube Ø{0}, {1} long (choke sleeve)",
   "Over the coax below the ground cone, open towards the antenna, soldered to the jacket at its far end",
+  "Capacitor {0} pF, C0G/NP0 ceramic, 0402 or 0603, ≥ 50 V", "In the centre pin, between the coax end and the hot washer", "In series in a shorting wire, at its ground end", "Coax cable, {0}", "Runs from the antenna to the receiver with no choke: its length is part of the model",
   "Brass or copper, 0.3–0.5 mm: the frames are soldered round its edge", "The ground collar is soldered onto its jacket", "Bends: see the template", "Bend into a ring and solder the ends",
   "Print the 1:1 frame template (or the bending jig) and bend every frame over it with flat-nose pliers: all frames of a side must be identical.",
   "Solder the hot frames to the washer in the printed cradle and the ground frames to the collar on the coax jacket in the cup: one groove per frame keeps them at equal angles. Then solder the washer onto the coax centre pin at the listed gap.",
   "Bend each hoop on its step of the printed hoop mandrel (or into a ring of the listed diameter) and solder it against the outside of the frames at its bend, at every crossing. Keep the frames in their grooves while you do it.",
   "Last, with the hot cage on the centre pin: solder the straight shorting wire from one hot frame down to the ground frame under it, at the marks of the template (its distance from the axis is in the table, ±0.5 mm). One wire only, on one frame; it passes just outside the small ground hoop, so keep the two from touching.",
   "Straight: solder it on at the marks of the template",
+  "Fit the {0} pF capacitor in the centre pin: solder it between the coax centre pin and the hot washer (it spans the listed gap), instead of a plain joint.",
+  "Last, with the hot cage on the centre pin: solder the coiled shorting wire from a hot frame down to the ground frame under it, at the marks of the template (its distance from the axis is in the table, ±0.5 mm). The coil sits beside its frame; keep it clear of the hoops.",
+  "Last, with the hot cage on the centre pin: solder each of the {0} coiled shorting wires from a hot frame down to the ground frame under it, at the marks of the template, which name the frame of each (its distance from the axis is in the table, ±0.5 mm). The coils sit beside their frames and the wires pass just outside the small ground hoop; keep them clear of the hoops and of each other.",
+  "Last, with the hot cage on the centre pin: solder each of the {0} straight shorting wires from a hot frame down to the ground frame under it, at the marks of the template, which name the frame of each (its distance from the axis is in the table, ±0.5 mm). They pass just outside the small ground hoop, so keep the two from touching.",
+  "Fit the {0} pF capacitor in series at the ground end of the shorting wire marked with it on the template: cut the wire there and solder the capacitor in, with short leads.",
   "Print the 1:1 flat patterns, glue them onto the sheet and cut the parts out (tin snips, then file the edges).",
   "Roll each sector into its cone and each strip into its ring over a former, overlap or butt the seam and solder it along its length.",
   "Solder the hot element together (washer, cones, rim, lid) and the ground cone with its skirt. Solder the coax jacket into the ground cone apex and the centre pin into the washer, keeping the listed gap.",

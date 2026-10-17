@@ -124,6 +124,9 @@ tools/wideband-antenna/  Python (numba) body-of-revolution MoM + FDTD, DE optimi
 - **Two engines, one layout.** `cpu.ts` is the reference; the WGSL kernels mirror it line by line
   (updateH, saveOld, updateE, port, mur, nf). After touching either, rerun the CPU↔GPU equality check:
   the GPU must match the CPU to ~1e-4 relative over a few hundred steps.
+- **GPU specifics:** Mur runs one dispatch per plane in the CPU's order (corners: last plane wins); the excitation and NF
+  cos/sin per step are host-side f64 tables (f32 trig of ωt ≈ 1e3 rad is too coarse); dispatches fold to 2D above 4 M cells;
+  "auto" falls back to the CPU if the GPU run throws.
 - **WebGPU limit: 8 storage buffers per stage by default.** Fields, materials, ints, floats and work data are packed
   into 7 buffers. Don't add an 8th+ without packing.
 - **Port:** a resistive lumped source. V = −Σ E·len averaged over parallel edges at (n+1)dt; I = the summed

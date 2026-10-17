@@ -47,7 +47,7 @@ export function standInEeff(p: Pcb): number {
   if (p.levels?.length) return printedEeff(p.er, p.h, narrowest(p)); // stacked boards: traces on bare laminate
   const tops = p.rects.filter((q) => q.layer === "top"), bots = p.rects.filter((q) => q.layer === "bottom");
   const over = tops.find((t) => bots.some((b) => !same(t, b) && t.x0 >= b.x0 - TOL && t.x1 <= b.x1 + TOL && t.y0 >= b.y0 - TOL && t.y1 <= b.y1 + TOL));
-  if (over) return microstripEeff(p.er, Math.max(over.x1 - over.x0, over.y1 - over.y0) / p.h);
+  if (over) return microstripEeff(p.er, Math.min(over.x1 - over.x0, over.y1 - over.y0) / p.h);
   return printedEeff(p.er, p.h, narrowest(p));
 }
 
