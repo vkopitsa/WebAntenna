@@ -16,7 +16,8 @@ export function PrintPanel({ def, params, design, base }: { def: AntennaDef; par
   const unit = useStore((s) => s.unit);
   const specs = useMemo(() => partsFor(def.id, params, design), [def.id, params, design]);
   const st = usePrintParts(def.id, params, design, specs.length > 0);
-  const [sel, setSel] = useState(0);
+  const [sel0, setSel] = useState(0);
+  const sel = Math.max(0, Math.min(sel0, specs.length - 1));   // the list can shrink when a parameter changes
   const current = st.status === "done";   // parts match the current parameters
   const built = (id: string): BuiltPart | undefined => st.parts?.find((p) => p.id === id);
   const files = (id: string) => { const b = built(id); return b?.ok ? b.segments.map((g, k) => ({ name: `${base}-${id}${b.segments.length > 1 ? `-${k + 1}` : ""}.stl`, data: g.stl })) : []; };
@@ -42,7 +43,7 @@ export function PrintPanel({ def, params, design, base }: { def: AntennaDef; par
                   const b = built(s.id);
                   const size = b?.ok ? b.segments[0].size.map((x) => fmtLen(x / 1000, unit)).join(" × ") : b ? fmtMsg(t, unit, b.error) : "…";
                   return (
-                    <tr key={s.id} className={i === sel ? "on" : undefined} onClick={() => setSel(i)}>
+                    <tr key={s.id} className={i === sel ? "on" : undefined} tabIndex={0} aria-selected={i === sel} onClick={() => setSel(i)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSel(i); } }}>
                       <td>{t(s.title)}</td><td>{t(USE_LABELS[s.use])}</td><td className="num">{s.qty}</td>
                       <td>{size}</td><td>{fmtMsg(t, unit, s.purpose)}{s.warn && <div className="err-text">{fmtMsg(t, unit, s.warn)}</div>}</td>
                       <td><button className="small" disabled={!current || !b?.ok} onClick={() => save(files(s.id), `${base}-${s.id}.zip`)}>STL</button></td>

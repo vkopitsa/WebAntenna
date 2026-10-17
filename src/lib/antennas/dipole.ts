@@ -17,7 +17,8 @@ export const dipole: AntennaDef = {
     const d = num(p, "d"), droop = deg(num(p, "droop"));
     const lam = wavelength(f), k = endEffect(lam, d);
     const total = 0.5 * lam * k;
-    const gap = Math.max(4 * d, Math.min(0.015 * lam, 0.05));
+    // 4d for fat elements, but never more than a quarter of the element (a 0.2 m tube at UHF gave negative arms)
+    const gap = Math.min(Math.max(4 * d, Math.min(0.015 * lam, 0.05)), total / 4);
     const arm = (total - gap) / 2;
     const r = d / 2;
     const ay = arm * Math.cos(droop), az = -arm * Math.sin(droop);

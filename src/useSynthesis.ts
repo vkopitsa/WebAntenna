@@ -19,6 +19,7 @@ export function useSynthesis() {
       else if (e.data.error) { setState({ status: "error", progress: 0, current: "", result: null, error: e.data.error }); stop(); }
       else setState((s) => ({ ...s, progress: e.data.progress ?? s.progress, current: e.data.current ?? s.current }));
     };
+    worker.onerror = (e) => { e.preventDefault(); setState({ status: "error", progress: 0, current: "", result: null, error: e.message || "Synthesis worker failed" }); stop(); };
     worker.postMessage({ id: 1, synth: opts });
   };
   const cancel = () => { stop(); setState((s) => ({ ...s, status: s.result ? "done" : "idle" })); };

@@ -30,6 +30,7 @@ export function useNearField(type: string, params: Params, plane: FieldPlane | n
         if (e.data.error) setState({ status: "error", key, data: null, error: e.data.error });
         else setState({ status: "done", key, data: e.data.field ?? null });
       };
+      w.onerror = (e) => { e.preventDefault(); if (worker.current === w) { w.terminate(); worker.current = null; } busy.current = false; if (id === seq.current) setState({ status: "error", key, data: null, error: e.message || "Field worker failed" }); };
       w.postMessage({ id, field: { type, params, plane } });
     }, 250);
     return () => clearTimeout(timer);

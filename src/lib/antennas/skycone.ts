@@ -56,7 +56,7 @@ const BARE_NOTE = "No ferrite or choke: the outside of the coax carries current 
 function bareOf(t: SkyconeTable, p: Params, fLow: number): { row: number; len: number } | undefined {
   const row = BARE_ROWS[str(p, "coax", "")];
   if (row == null || !t.bare) return undefined;
-  return { row, len: (t.bare.lensLam[row] * 3e8) / fLow };
+  return { row, len: (t.bare.lensLam[row] * 3e8) / fLow }; // 3e8, not C0: the tools' export_bare_table.py simulated k·3e8/fLo
 }
 
 /** Facets round the axis for the drawing and CAD (each facet is a planar trapezoid). */

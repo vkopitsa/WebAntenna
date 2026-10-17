@@ -12,9 +12,10 @@ export const dB = (x: number) => 10 * Math.log10(x);
  * Fits the ARRL Antenna Book curve: ratio 10 → 0.90, 100 → 0.95, 1000 → 0.967, 10⁴ → 0.976.
  */
 export function endEffect(lambda: number, d: number): number {
+  // held at its ratio-5 value below that (no curve there); a fixed 0.88 jumped above the 0.860 just past 5,
+  // so an element got longer as it got fatter
   const ratio = lambda / (2 * d);
-  if (!(ratio > 5)) return 0.88;
-  return 1 - 0.225 / Math.log(ratio);
+  return 1 - 0.225 / Math.log(ratio > 5 ? ratio : 5);
 }
 
 /** Composite Simpson integration of f over [a, b] with n (even) intervals. */

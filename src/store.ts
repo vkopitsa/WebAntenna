@@ -60,7 +60,7 @@ function load(): State {
       if (o.params) for (const id of Object.keys(s.params)) if (o.params[id]) s.params[id] = clean(id, o.params[id]);
     }
   } catch { /* private mode or bad JSON: defaults */ }
-  return applyHash(s);
+  try { return applyHash(s); } catch { return s; }   // a broken share link must not keep the app from starting
 }
 
 /** Keep only known keys; migrate the old single "f" param (v0.1.0) to a one-band list. */

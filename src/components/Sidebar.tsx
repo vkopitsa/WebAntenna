@@ -13,6 +13,15 @@ import { useEffect, useRef } from "react";
 
 const ALL_PRESETS = [...BAND_PRESETS, ...WIDE_PRESETS];
 
+/** "+ Add band": the lowest preset above every band so far (a copy of the last band was a duplicate to edit), else an octave up. */
+function nextBand(bands: Band[]): Band {
+  const top = Math.max(...bands.map((b) => b[1]));
+  const next = BAND_PRESETS.filter(([, r]) => r[0] > top).sort((a, b) => a[1][0] - b[1][0])[0];
+  if (next) return next[1];
+  const [a, c] = bands[bands.length - 1];
+  return c * 2 <= 100e9 ? [a * 2, c * 2] : [a, c];   // the band range ends at 100 GHz
+}
+
 /** List of [start, stop] ranges with presets. Stored as the "bands" string param. */
 function BandsInput({ def, value }: { def: ParamDef; value: string }) {
   const t = useT();
@@ -50,7 +59,7 @@ function BandsInput({ def, value }: { def: ParamDef; value: string }) {
         </div>
       ))}
       <div className="band-actions">
-        <button className="small add-band" disabled={bands.length >= MAX_BANDS} onClick={() => commit([...bands, bands[bands.length - 1]])}>{t("+ Add band")}</button>
+        <button className="small add-band" disabled={bands.length >= MAX_BANDS} onClick={() => commit([...bands, nextBand(bands)])}>{t("+ Add band")}</button>
         <button className="small primary" onClick={() => set({ tab: "synth" })} title={t("Find the best antenna type and dimensions for these bands")}>⚡ {t("Synthesize")}</button>
       </div>
       <div className="hint">{multi ? t("Every band is used in the design.") : t("Band 1 sets the dimensions; extra bands are swept in the NEC export.")}</div>

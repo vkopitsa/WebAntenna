@@ -44,6 +44,9 @@ export function SimPanel({ def, params, design }: { def: AntennaDef; params: Par
   const [engine, setEngine] = useState<Engine>("auto");
   const fdKey = JSON.stringify([def.id, params]);
   const fdOut = fdtd.st.out && fdtd.st.key === fdKey ? fdtd.st.out : null;
+  // an edit while FDTD runs: its result would be for the old design (and "Tune" would write the old params back)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (fdtd.st.status === "running" && fdtd.st.key !== fdKey) fdtd.cancel(); }, [fdKey]);
   const runFd = (job: "run" | "tune") => {
     fdtd.start(job, def.id, params, patternF, engine).then((out) => {
       if (job === "tune") set((s) => ({ params: { ...s.params, [def.id]: { ...s.params[def.id], ...out.params } } }));
@@ -113,7 +116,7 @@ export function SimPanel({ def, params, design }: { def: AntennaDef; params: Par
         )}
         {r?.unknowns != null && <span className="muted small">{t("{0} unknowns", r.unknowns)}</span>}
         <span className="spacer" />
-        <label className="inline">{t("Reference Z0")}<Select value={String(z0)} options={Z0S} onChange={setZ0} ariaLabel="Reference Z0" /></label>
+        <label className="inline">{t("Reference Z0")}<Select value={String(z0)} options={Z0S.some(([v]) => Number(v) === z0) ? Z0S : [[String(z0), `${z0} Ω`], ...Z0S]} onChange={setZ0} ariaLabel="Reference Z0" /></label>
         {choices.length > 1 && <label className="inline">{t("Pattern at")}<Select value={String(patternF)} options={choices.map((c) => [String(c), fmtHz(c, 3)] as [string, string])} onChange={(v) => setPf(Number(v))} ariaLabel="Pattern at" /></label>}
         <label className="button-like small">
           {t("Load results (.json / .s1p / .s2p)")}

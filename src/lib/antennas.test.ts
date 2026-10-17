@@ -254,9 +254,9 @@ describe("printed V dipole", () => {
     const def = ANTENNA_BY_ID.printedvdipole;
     const straight = def.build({ ...def.defaults, vang: 180 }), v90 = def.build({ ...def.defaults, vang: 90 });
     const L = (d: typeof v90) => d.dims.find((x) => x.key === "L")!.value;
-    // FDTD with equal lengths: 180° resonated at 1.237 GHz, 90° at 1.212 GHz
-    expect(L(v90) / L(straight)).toBeCloseTo(1237 / 1212, 9);
-    expect(L(straight)).toBeCloseTo(ANTENNA_BY_ID.printeddipole.build({ ...ANTENNA_BY_ID.printeddipole.defaults, bands: "1.15e9-1.3e9", w: 3e-3 }).dims.find((x) => x.key === "L")!.value * 1225 / 1237, 9);
+    // FDTD with equal lengths: 180° resonated at 1.237 GHz, 90° at 1.212 GHz, so the 90° V must be the shorter one
+    expect(L(v90) / L(straight)).toBeCloseTo(1212 / 1237, 9);
+    expect(L(straight)).toBeCloseTo(ANTENNA_BY_ID.printeddipole.build({ ...ANTENNA_BY_ID.printeddipole.defaults, bands: "1.15e9-1.3e9", w: 3e-3 }).dims.find((x) => x.key === "L")!.value * 1237 / 1225, 9);
     const span = (d: typeof v90) => d.dims.find((x) => x.label === "Span between the tips")!.value;
     expect(span(v90)).toBeLessThan(span(straight) * 0.8);
     // the arms really are at the requested angle
@@ -308,5 +308,26 @@ describe("pagoda", () => {
     const s = def.build({ ...def.defaults, bands: "2.899e9-2.901e9" });
     expect(s.pcb!.h / p.h).toBeCloseTo(5.3 / 2.9, 9); // scaled from the nearest published end
     expect(s.notes.some((n) => n.startsWith("Outside 5.3–6.0 GHz"))).toBe(true);
+  });
+});
+
+describe("QA regressions", () => {
+  it("end-effect factor never rises as the element gets fatter (it jumped 0.860 → 0.88 at λ/2d = 5)", () => {
+    let prev = Infinity;
+    for (let ratio = 50; ratio >= 1; ratio -= 0.25) { const k = endEffect(1, 1 / (2 * ratio)); expect(k).toBeLessThanOrEqual(prev + 1e-12); prev = k; }
+  });
+  it("a fat dipole / fan dipole at UHF keeps positive arms (the 4d gap once exceeded the element)", () => {
+    for (const id of ["dipole", "fandipole"]) {
+      const def = ANTENNA_BY_ID[id];
+      const d = def.build({ ...def.defaults, bands: "435e6-438e6", d: 0.2 });
+      for (const w of d.wires.filter((x) => x.group === "driven")) expect(Math.abs(w.b[1]) - Math.abs(w.a[1])).toBeGreaterThan(0);
+    }
+  });
+  it("the patch reports the feed impedance its inset is placed for", () => {
+    const def = ANTENNA_BY_ID.patch;
+    expect(def.build({ ...def.defaults, z0: 75 }).feedZ0).toBe(75);
+  });
+  it("ids from share links resolve only to antennas, not to Object.prototype members", () => {
+    for (const k of ["constructor", "toString", "__proto__", "hasOwnProperty"]) expect(ANTENNA_BY_ID[k]).toBeUndefined();
   });
 });

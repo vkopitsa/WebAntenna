@@ -99,7 +99,7 @@ function sizeOf(d: Design, lam: number): number {
 
 const swrOf = (r: number, x: number, z0: number) => {
   const g = Math.hypot(r - z0, x) / Math.hypot(r + z0, x);
-  return g >= 1 ? 99 : (1 + g) / (1 - g);
+  return !(g < 1) ? 99 : (1 + g) / (1 - g); // NaN (a degenerate solve) counts as no match
 };
 
 /** Evaluate one parameter set: worst SWR per band (3 points per band: edges + centre) and peak gain at band 1. */
@@ -112,8 +112,8 @@ function evaluate(def: AntennaDef, p: Params, o: SynthOptions, withGain: boolean
   if (def.id === "patch") {
     const q = patchDesign(d.f, num(p, "er", 4.4), num(p, "h", 1.6e-3), num(p, "z0", 50));
     const R0 = q.Rin * Math.cos((Math.PI * q.y0) / q.L) ** 2, Q = 1 / (Math.SQRT2 * q.bw);
-    const swr = o.bands.map((b) => Math.max(...pts(b).map((f) => { const u = Q * (f / d.f - d.f / f), den = 1 + u * u; return swrOf(R0 / den, (-R0 * u) / den, 50); })));
-    return { swr, gain: 6.5, size: sizeOf(d, lamLow), z0: 50 };
+    const swr = o.bands.map((b) => Math.max(...pts(b).map((f) => { const u = Q * (f / d.f - d.f / f), den = 1 + u * u; return swrOf(R0 / den, (-R0 * u) / den, z0); })));
+    return { swr, gain: 6.5, size: sizeOf(d, lamLow), z0 };
   }
   if (def.id === "pcbloop") {
     const m = loopModel(d.f, num(p, "a", 0.03), num(p, "b", 0.02), num(p, "w", 2e-3), num(p, "t", 35e-6), 5.8e7, num(p, "qc", 300));
@@ -200,7 +200,9 @@ function nelderMead(f: (x: number[]) => number, x0: number[], iters: number): { 
       if (vc < worst.v) simplex[n] = { x: ct, v: vc };
       else simplex = simplex.map((p, i) => (i === 0 ? p : (() => { const x = clamp(p.x.map((v, j) => best.x[j] + 0.5 * (v - best.x[j]))); return { x, v: f(x) }; })()));
     }
-    if (Math.abs(simplex[n].v - simplex[0].v) < 1e-3) break;
+    // spread of the whole simplex (it is unsorted here: comparing slot n with slot 0 stopped as soon as a trial tied the best)
+    const vs = simplex.map((p) => p.v);
+    if (Math.max(...vs) - Math.min(...vs) < 1e-3) break;
   }
   simplex.sort((a, b) => a.v - b.v);
   return simplex[0];

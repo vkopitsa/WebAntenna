@@ -7,7 +7,7 @@ import { fmtHz, fmtHzShort, niceStep } from "../lib/units";
 import { useT } from "../i18n";
 import { set, useStore } from "../store";
 
-const fmt = (v: number, d = 1) => (Number.isFinite(v) ? v.toFixed(d) : "∞");
+const fmt = (v: number, d = 1) => (Number.isFinite(v) ? v.toFixed(d) : Number.isNaN(v) ? "—" : "∞");
 
 function ticks(lo: number, hi: number, n = 5): number[] {
   const st = niceStep((hi - lo) / n);
@@ -61,8 +61,8 @@ export function FreqChart({ title, unit, series, bands, span, yMin, yMax, refLin
   const allF = series.flatMap((x) => x.f);
   const f0 = Math.min(...allF, ...(span ? [span[0]] : [])), f1 = Math.max(...allF, ...(span ? [span[1]] : []));
   const all = series.flatMap((s) => s.values).filter(Number.isFinite);
-  let lo = yMin ?? Math.min(...all), hi = yMax ?? Math.max(...all);
-  if (yMin == null && yMax != null) lo = Math.min(...all);
+  let lo = yMin ?? (all.length ? Math.min(...all) : 0), hi = yMax ?? (all.length ? Math.max(...all) : 1);
+  if (yMin == null && yMax != null && all.length) lo = Math.min(...all);
   if (!(hi > lo)) { hi = lo + 1; lo -= 1; }
   const pad = (hi - lo) * 0.06;
   if (yMin == null) lo -= pad;
@@ -156,7 +156,7 @@ export function SmithChart({ z, z0, bands, breaks, overlay, cursor }: { z: ZPoin
           <line className="grid" x1={c - Rr} x2={c + Rr} y1={c} y2={c} />
         </g>
         <circle className="ref" cx={c} cy={c} r={Rr / 3} fill="none" />
-        <text className="axis-label" x={c + Rr / 3 + 3} y={c - 4}>SWR 2</text>
+        <text className="axis-label" x={c + Rr / 3 + 3} y={c - 4}>{t("SWR")} 2</text>
         <path className="line s1" d={d} fill="none" />
         {overlay && <polyline className="line s2" fill="none" points={overlay.z.map((p) => { const q = s11(p, z0); return P(q.gr, q.gi).join(","); }).join(" ")} />}
         {g.map((s, i) => inBand(z[i].f) && <circle key={i} className="dot s1 small" cx={P(s.gr, s.gi)[0]} cy={P(s.gr, s.gi)[1]} r={2.2} />)}

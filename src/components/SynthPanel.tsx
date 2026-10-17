@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Candidate } from "../lib/synth";
 import { useFdtd } from "../useFdtd";
 import { ANTENNA_BY_ID, WIDEST } from "../lib/antennas";
@@ -30,16 +30,21 @@ export function SynthPanel() {
   const fdtd = useFdtd();
   const [rows, setRows] = useState<Candidate[] | null>(null);
   const [fdNote, setFdNote] = useState("");
+  const fdStopped = useRef(false);
+  // The panel stays mounted while the sidebar is edited: results for other bands would be wrong (and their SWR
+  // columns wouldn't match the header), so a band change stops the run and clears them.
+  useEffect(() => { cancel(); fdtd.cancel(); setRows(null); setFdNote(""); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [bandsStr]);
   // After the wire/analytic search: tune every printed (formula) candidate with FDTD and score it.
   useEffect(() => {
     if (state.status !== "done" || !state.result) return;
     setRows(state.result);
     if (!useFd) return;
     let alive = true;
+    fdStopped.current = false;
     (async () => {
       let list = state.result!;
       for (const c of state.result!.filter((x) => !Number.isFinite(x.score))) {
-        if (!alive) return;
+        if (!alive || fdStopped.current) break;
         setFdNote(`${t("FDTD tuning")}: ${t(ANTENNA_BY_ID[c.id].name)}`);
         try {
           const out = await fdtd.start("tune", c.id, c.params, undefined, "auto");
@@ -60,6 +65,7 @@ export function SynthPanel() {
         } catch (e) {
           // one candidate the FDTD can't run (e.g. a grid too large for a very wide band) must not stop the others
           if (!alive) return;
+          if (fdStopped.current) break;
           const msg = `FDTD (${t("not run")}): ${e instanceof Error ? e.message : String(e)}`;
           list = list.map((x) => (x.id === c.id ? { ...x, note: msg } : x));
           setRows(list);
@@ -93,10 +99,10 @@ export function SynthPanel() {
           <label>{t("Family")}<Select value={family} onChange={setFamily} options={[["any", "Any"], ["wire", "Wire / rod"], ["printed", "Printed (PCB)"]]} /></label>
           <label>{t("Polarisation")}<Select value={pol} onChange={setPol} options={[["any", "Any"], ["vertical", "Vertical"], ["horizontal", "Horizontal"], ["circular", "Circular"]]} /></label>
           <label>{t("Pattern")}<Select value={pattern} onChange={setPattern} options={[["any", "Any"], ["omni", "Omnidirectional"], ["beam", "Directional (beam)"]]} /></label>
-          <label>{t("Element diameter")} ({unit === "in" ? "in" : "mm"})<Num value={+toUnit(d, unit).toPrecision(6)} min={0.05} max={+toUnit(0.2, unit).toPrecision(6)} onChange={(v) => setD(fromUnit(v, unit))} /></label>
+          <label>{t("Element diameter")} ({unit === "in" ? "in" : "mm"})<Num value={+toUnit(d, unit).toPrecision(6)} min={+toUnit(0.05e-3, unit).toPrecision(6)} max={+toUnit(0.2, unit).toPrecision(6)} onChange={(v) => setD(fromUnit(v, unit))} /></label>
           <label>{t("Substrate εr")}<Num value={er} min={1} max={15} onChange={setEr} /></label>
           <label className="check"><input type="checkbox" checked={useFd} onChange={(e) => setUseFd(e.target.checked)} /> {t("Simulate printed candidates with FDTD (WebGPU)")}</label>
-          <label>{t("Substrate thickness")} ({unit === "in" ? "in" : "mm"})<Num value={+toUnit(h, unit).toPrecision(6)} min={0.05} max={+toUnit(0.02, unit).toPrecision(6)} onChange={(v) => setH(fromUnit(v, unit))} /></label>
+          <label>{t("Substrate thickness")} ({unit === "in" ? "in" : "mm"})<Num value={+toUnit(h, unit).toPrecision(6)} min={+toUnit(0.05e-3, unit).toPrecision(6)} max={+toUnit(0.02, unit).toPrecision(6)} onChange={(v) => setH(fromUnit(v, unit))} /></label>
         </div>
         <div className="row-btns">
           {state.status === "running"
@@ -106,7 +112,8 @@ export function SynthPanel() {
             : <button className="primary" onClick={go} disabled={!bands.length}>{t("Synthesize")}</button>}
         </div>
         {state.error && <p className="err-text">{state.error}</p>}
-        {fdNote && <p className="muted small">{fdtd.st.status === "running" ? "⏳ " : ""}{fdNote}{fdtd.st.status === "running" ? ` · ${fdtd.st.phase} · ${t("step {0}", fdtd.st.step)}` : ""}</p>}
+        {fdNote && <p className="muted small">{fdtd.st.status === "running" ? "⏳ " : ""}{fdNote}{fdtd.st.status === "running" ? ` · ${fdtd.st.phase} · ${t("step {0}", fdtd.st.step)}` : ""}
+          {fdtd.st.status === "running" && <> <button className="small danger" onClick={() => { fdStopped.current = true; fdtd.cancel(); }}>{t("Stop")}</button></>}</p>}
       </div>
       {rows && (
         <div className="box">

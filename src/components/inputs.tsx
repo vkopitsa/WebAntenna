@@ -16,7 +16,7 @@ export function FreqInput({ value, onChange, min, max, id, ariaLabel }: { value:
     setDraft(null);
     if (v !== value) onChange(v);
   };
-  return <input id={id} type="text" inputMode="decimal" aria-label={ariaLabel && t(ariaLabel)} className={bad ? "bad" : ""} value={draft ?? fmtHz(value)}
+  return <input id={id} type="text" inputMode="decimal" aria-label={ariaLabel && t(ariaLabel)} className={bad ? "bad" : ""} value={draft ?? fmtHz(value).replace(/(\.\d*?)0+ /, "$1 ").replace(". ", " ")}
     onChange={(e) => setDraft(e.target.value)} onBlur={commit} onKeyDown={(e) => e.key === "Enter" && commit()} />;
 }
 

@@ -155,7 +155,7 @@ function collinearSim(params: Params, fPat: number): SimResult {
 function loopSim(params: Params, d: Design, freqs: number[], fPat: number): SimResult {
   const m = loopModel(d.f, num(params, "a", 0.03), num(params, "b", 0.02), num(params, "w", 2e-3), num(params, "t", 35e-6), 5.8e7, num(params, "qc", 300));
   const z = freqs.map((f) => { const [r, x] = loopZin(f, m, d.f); return { f, r, x }; });
-  const gmax = 10 * Math.log10(1.5 * m.eff);
+  const gmax = 10 * Math.log10(1.5 * Math.max(m.eff, 1e-6)); // same floor as synthesis (eff 0 gave −∞ dBi)
   const g = (th: number) => gmax + 20 * Math.log10(Math.max(Math.abs(Math.sin(th)), 1e-3));
   return {
     method: "analytic", z, pattern: samplePattern(fPat, (th) => g(th)),

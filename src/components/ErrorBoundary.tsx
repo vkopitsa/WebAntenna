@@ -14,8 +14,13 @@ function Fallback({ error }: { error: Error }) {
 }
 
 /** Keeps a render error in one tab from blanking the whole app. Give it a `key` that changes with the inputs to retry. */
-export class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
-  state: { error: Error | null } = { error: null };
+/** resetKey: a change clears a caught error (a new design gets a fresh try) without remounting the children,
+ *  so panel state (compare ghost, loaded measurement, running FDTD/synthesis) survives parameter edits. */
+export class ErrorBoundary extends Component<{ children: ReactNode; resetKey?: string }, { error: Error | null; key?: string }> {
+  state: { error: Error | null; key?: string } = { error: null, key: this.props.resetKey };
   static getDerivedStateFromError(error: Error) { return { error }; }
+  static getDerivedStateFromProps(props: { resetKey?: string }, state: { error: Error | null; key?: string }) {
+    return props.resetKey !== state.key ? { error: null, key: props.resetKey } : null;
+  }
   render() { return this.state.error ? <Fallback error={this.state.error} /> : this.props.children; }
 }

@@ -11,7 +11,8 @@ export const VDIP_K = 0.855;
 
 /**
  * In-browser FDTD (CPU engine, FR-4 1.6 mm, w = 3 mm, 1.15–1.3 GHz) with K = 0.855, by angle between the arms:
- * resonance / target (the length is divided by it) and R at resonance (docs/ANTENNAS.md).
+ * resonance / target and R at resonance (docs/ANTENNAS.md). f ∝ 1/L, so the length is multiplied by that ratio
+ * (a V that resonated low at the common length gets shorter).
  */
 const VDIP_FDTD: [number, number][] = [[90, 1212 / 1225], [120, 1195 / 1225], [180, 1237 / 1225]];
 const VDIP_R: [number, number][] = [[90, 31], [120, 41], [180, 54]];
@@ -39,7 +40,7 @@ export const printedvdipole: AntennaDef = {
     const er = num(p, "er", 4.4), h = num(p, "h", 1.6e-3), w = num(p, "w", 3e-3), tanD = num(p, "tanD", 0.02);
     const vang = Math.min(180, Math.max(60, num(p, "vang", 90)));
     const lam = wavelength(f), ee = printedEeff(er, h, w);
-    const L = ((VDIP_K * lam) / 2 / Math.sqrt(ee) / interp(VDIP_FDTD, vang)) * (1 + num(p, "trim", 0) / 100);
+    const L = ((VDIP_K * lam) / 2 / Math.sqrt(ee) * interp(VDIP_FDTD, vang)) * (1 + num(p, "trim", 0) / 100);
     const R = interp(VDIP_R, vang);
     const g = Math.max(1e-3, w / 2);
     // each arm: a square stub of width w at the port (exact mesh lines for the port), then a strip bent by ψ off the y axis

@@ -19,8 +19,10 @@ export function MeshView({ tris }: { tris: Float32Array }) {
       fs.push({ q, d: q[0][2] + q[1][2] + q[2][2], s });
     }
     fs.sort((u, v) => u.d - v.d);
-    const xs = fs.flatMap((f) => f.q.map((p) => p[0])), ys = fs.flatMap((f) => f.q.map((p) => p[1]));
-    const x0 = Math.min(...xs), y0 = Math.min(...ys), k = (SIZE - 20) / Math.max(Math.max(...xs) - x0, Math.max(...ys) - y0, 1e-9);
+    // a loop, not Math.min(...xs): a spread of a few hundred thousand points overflows the call stack
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const f of fs) for (const p of f.q) { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); }
+    const k = (SIZE - 20) / Math.max(x1 - x0, y1 - y0, 1e-9);
     return fs.map((f) => ({ pts: f.q.map((p) => `${((p[0] - x0) * k + 10).toFixed(1)},${((p[1] - y0) * k + 10).toFixed(1)}`).join(" "), op: f.s }));
   }, [tris]);
   return (

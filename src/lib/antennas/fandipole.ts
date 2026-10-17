@@ -69,9 +69,9 @@ export const fandipole: AntennaDef = {
     const d = num(p, "d"), fan = deg(num(p, "fan", 20)), r = d / 2;
     const order = bands.slice(0, FAN_MAX).sort((a, b) => centre(a) - centre(b)); // longest element first, lies flat
     const lamMin = wavelength(centre(order[order.length - 1]));
-    const gap = Math.max(4 * d, Math.min(0.015 * lamMin, 0.05));
     const fc = order.map(centre);
     const free = fc.map((f) => 0.5 * wavelength(f) * endEffect(wavelength(f), d));
+    const gap = Math.min(Math.max(4 * d, Math.min(0.015 * lamMin, 0.05)), Math.min(...free) / 4); // arms stay positive
     const geometry = (facs: number[]): Wire[] => {
       const wires: Wire[] = [{ a: v(0, -gap / 2, 0), b: v(0, gap / 2, 0), r, group: "feed" }];
       facs.forEach((k, i) => {

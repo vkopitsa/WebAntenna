@@ -30,6 +30,8 @@ export function useSimulation(type: string, params: Params, patternF: number | u
         else if (e.data.error) { busy.current = false; setState((s) => ({ status: "error", progress: 0, result: s.result, error: e.data.error! })); }
         else if (e.data.progress != null) setState((s) => ({ status: "running", progress: e.data.progress!, result: s.result }));
       };
+      // a worker that fails to load or dies outside its try block: report it and start a fresh one next time
+      w.onerror = (e) => { e.preventDefault(); if (worker.current === w) { w.terminate(); worker.current = null; } busy.current = false; if (id === seq.current) setState((s) => ({ status: "error", progress: 0, result: s.result, error: e.message || "Simulation worker failed" })); };
       w.postMessage({ id, type, params, patternF });
     }, 350);
     return () => clearTimeout(timer);

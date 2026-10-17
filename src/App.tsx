@@ -65,7 +65,7 @@ export default function App() {
             <button role="tab" aria-selected={tab === "build"} className={tab === "build" ? "on" : ""} onClick={() => setTab("build")}>{t("Build")}</button>
             <button role="tab" aria-selected={tab === "synth"} className={tab === "synth" ? "on" : ""} onClick={() => setTab("synth")}>{t("Synthesis")}</button>
           </div>
-          <ErrorBoundary key={`${tab}|${type}|${JSON.stringify(params)}`}>
+          <ErrorBoundary key={type} resetKey={`${tab}|${JSON.stringify(params)}`}>
           {tab === "synth" ? <SynthPanel /> : design ? (tab === "design" ? (
             <>
               <Preview design={design} svgRef={svgRef} type={type} params={params} />

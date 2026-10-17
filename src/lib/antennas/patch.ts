@@ -107,6 +107,7 @@ export const patch: AntennaDef = {
         ...(q.Rin <= z0 ? ["Edge resistance is below the feed impedance: feed at the edge with a λ/4 transformer."] : []),
       ],
       necSupported: false,
+      feedZ0: z0, // the inset is placed for this impedance, so the Simulation and Synthesis judge the match against it
       f, sweeps,
     };
   },

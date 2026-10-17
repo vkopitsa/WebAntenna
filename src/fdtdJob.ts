@@ -67,7 +67,8 @@ export async function tuneFdtd(type: string, params: Params, patternF: number | 
   for (let pass = 0; pass < 3; pass++) {
     out = await runFdtd(type, p, patternF, engine, (m) => onProgress({ ...m, phase: `pass ${pass + 1}` }));
     const f0 = def.build(p).f;
-    if (out.fRes == null || Math.abs(out.fRes / f0 - 1) < 0.005) break;
+    // the last pass returns the trim it ran (a rescaled but unsimulated trim wouldn't match the result)
+    if (out.fRes == null || Math.abs(out.fRes / f0 - 1) < 0.005 || pass === 2) break;
     const k = (1 + Number(p.trim ?? 0) / 100) * (out.fRes / f0); // longer element ↔ lower resonance
     p = { ...p, trim: +Math.max(-25, Math.min(25, (k - 1) * 100)).toFixed(2) };
   }

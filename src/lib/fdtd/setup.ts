@@ -41,7 +41,7 @@ export function setup(p: Pcb, fmin: number, fmax: number): Setup {
   // Cell materials: substrate where the cell centre is inside the board box and 0 < z < h.
   const { f0, fc } = excitation(fmin, fmax);
   const sigSub = 2 * Math.PI * f0 * EPS0 * p.er * p.tanD;
-  const subs = slabs(p).map((sl) => ({ ...sl, box: { x0: Math.min(...sl.pts.map((q) => q[0])), x1: Math.max(...sl.pts.map((q) => q[0])), y0: Math.min(...sl.pts.map((q) => q[1])), y1: Math.max(...sl.pts.map((q) => q[1])) }, rect: sl.pts.length === 4 && sl === slabs(p)[0] && !p.outline }));
+  const subs = slabs(p).map((sl, i) => ({ ...sl, box: { x0: Math.min(...sl.pts.map((q) => q[0])), x1: Math.max(...sl.pts.map((q) => q[0])), y0: Math.min(...sl.pts.map((q) => q[1])), y1: Math.max(...sl.pts.map((q) => q[1])) }, rect: sl.pts.length === 4 && i === 0 && !p.outline })); // main board: box test (comparing with a fresh slabs() never matched)
   // cell-centre substrate flags, precomputed (an outline polygon test per edge would be slow)
   const cellSub = new Uint8Array(Math.max(1, (nx - 1) * (ny - 1) * (nz - 1)));
   for (let k = 0; k < nz - 1; k++) {
