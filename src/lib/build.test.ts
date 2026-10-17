@@ -167,3 +167,75 @@ describe("build pack details", () => {
     expect(templatePages(ANTENNA_BY_ID.patch, build("patch").d, true).length).toBeGreaterThan(0);
   });
 });
+
+describe("build pack accuracy", () => {
+  const stepsOf = (id: string, extra = {}) => { const { def, p, d } = build(id, extra); return buildPack(def, p, d).steps.map((m) => en(m)); };
+  it("spring and helix cut lengths follow the helix, not its chords", () => {
+    const sp = build("spring");
+    const need = sp.d.dims.find((x) => x.label === "Wire in the coil")!.value + sp.d.dims.find((x) => x.label === "Straight lead")!.value;
+    const row = buildPack(sp.def, sp.p, sp.d).cuts.find((c) => c.what.s.startsWith("Spring wire"))!;
+    expect(row.length).toBeCloseTo(need, 9);
+    expect(row.cut).toBeGreaterThanOrEqual(need);                       // "2 % long" is never shorter than the design
+    const bom = buildPack(sp.def, sp.p, sp.d).bom.find((r) => r.item.s === "Wire or tube Ø{0}" && Math.abs((r.item.a![0] as { len: number }).len - 0.8e-3) < 1e-9)!;
+    expect((bom.qty.a![1] as { len: number }).len).toBeCloseTo(row.cut, 9);
+    const hx = build("helix");
+    const hrow = buildPack(hx.def, hx.p, hx.d).cuts.find((c) => c.what.s === "Helix wire")!;
+    const R = hx.d.dims.find((x) => x.key === "D")!.value / 2;
+    expect(hrow.length).toBeCloseTo(R + hx.d.dims.find((x) => x.label === "Total wire length")!.value, 9);
+    // straight wires are unchanged
+    const dp = build("dipole");
+    expect(pieces(dp.d).filter((x) => x.group === "driven").reduce((s, x) => s + x.length, 0)).toBeCloseTo(dp.d.wires.filter((w) => w.group === "driven").reduce((s, w) => s + Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1], w.b[2] - w.a[2]), 0), 9);
+  });
+  it("no paper template for the spring", () => {
+    const { def, d } = build("spring");
+    expect(templateKind(def, d)).toBe("none");
+    expect(templatePages(def, d, false)).toEqual([]);
+  });
+  it("biquad reflector is listed at its real size, whatever its orientation", () => {
+    const { def, p, d } = build("biquad");
+    const row = buildPack(def, p, d).bom.find((r) => r.item.s === "Metal plate {0} × {1}")!;
+    const [a, b] = row.item.a as { len: number }[];
+    const pl = d.plates.find((x) => x.material === "metal")!;
+    const edge = (i: number, j: number) => Math.hypot(...[0, 1, 2].map((k) => pl.pts[i][k] - pl.pts[j][k]));
+    expect(a.len).toBeCloseTo(edge(0, 1), 9);
+    expect(b.len).toBeCloseTo(edge(1, 2), 9);
+  });
+  it("PCB loop gets board, capacitor and trimmer steps, and a PCB template", () => {
+    const st = stepsOf("pcbloop");
+    expect(st.some((x) => x.startsWith("Cut every part"))).toBe(false);
+    expect(st.some((x) => x.startsWith("Make the board"))).toBe(true);
+    expect(st.some((x) => x.includes("Cs in the top gap") && x.includes("Cp across the feed"))).toBe(true);
+    expect(st.some((x) => x.includes("Cs trimmer"))).toBe(true);
+    const { def, d } = build("pcbloop");
+    const pdf = new TextDecoder("latin1").decode(templatePages(def, d, false).length ? buildPackPDF(def, def.defaults, d, "t", false) : new Uint8Array());
+    expect(pdf).toContain("PCB template");
+    expect(pdf).not.toContain("Bend the wire over");
+  });
+  it("A55: the washer is not soldered straight to the pin when a capacitor sits there", () => {
+    const st = stepsOf("skyconecage55");
+    expect(st[1]).toContain("through the capacitor");
+    expect(st[1]).not.toContain("solder the washer onto the coax centre pin");
+    expect(stepsOf("skyconecage")[1]).toContain("solder the washer onto the coax centre pin");
+  });
+  it("generic steps only mention trimming and a balun when they apply", () => {
+    const long = (st: string[]) => st.some((x) => x.includes("cut long"));
+    const match = (st: string[]) => st.some((x) => x.includes("balun or match"));
+    for (const id of ["biquad", "helix", "collinear", "cloverleaf", "discone"]) expect(long(stepsOf(id)), id).toBe(false);
+    expect(long(stepsOf("dipole"))).toBe(true);
+    for (const id of ["cloverleaf", "spring", "groundplane"]) expect(match(stepsOf(id)), id).toBe(false);
+    for (const id of ["dipole", "helix"]) expect(match(stepsOf(id)), id).toBe(true);
+    expect(buildPack(ANTENNA_BY_ID.collinear, ANTENNA_BY_ID.collinear.defaults).tuneNote!.s).not.toContain("top whip.");
+    // printed dipoles list a balun, so a step says where it goes
+    for (const id of ["printeddipole", "printedvdipole"]) expect(stepsOf(id).some((x) => x.includes("balun or feed network")), id).toBe(true);
+    expect(stepsOf("ifa").some((x) => x.includes("balun or feed network"))).toBe(false);
+  });
+  it("sheet-metal steps mention a skirt only when there is one", () => {
+    const skirt = (id: string) => stepsOf(id).some((x) => x.includes("skirt"));
+    expect(skirt("skycone7")).toBe(false);
+    expect(skirt("skycone8")).toBe(false);
+  });
+  it("long lengths read in metres in files", () => {
+    expect(en({ s: "{0}", a: [{ len: 36.986 }] })).toBe("36.986 m");
+    expect(en({ s: "{0}", a: [{ len: 0.1234 }] })).toBe("123.4 mm");
+  });
+});

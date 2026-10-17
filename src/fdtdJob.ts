@@ -2,6 +2,7 @@
 // same SimResult the charts use. Runs inside a Web Worker (WebGPU is available in workers).
 import { ANTENNA_BY_ID } from "./lib/antennas";
 import type { Params } from "./lib/types";
+import type { Msg } from "./lib/build";
 import { setup } from "./lib/fdtd/setup";
 import { impedance, runCPU, type RunResult } from "./lib/fdtd/cpu";
 import { acceptedPower, farField } from "./lib/fdtd/nf2ff";
@@ -13,9 +14,12 @@ export type Engine = "auto" | "gpu" | "cpu";
 // Stop when the port signals fall 40 dB below their peak (≈ openEMS EndCriteria 1e-4, which is on energy).
 // A printed IFA (loaded Q ≈ 16) needs ≈ 25 k steps to settle its resonance and match depth at this level,
 // while −60 dB takes > 80 k steps for no visible change in Z.
-const END_CRITERIA = 1e-2, MAX_STEPS = 100000;
+// The step budget grows with the excitation pulse (thin substrates have a tiny Δt: the pulse alone is 110–158 k steps).
+const END_CRITERIA = 1e-2, MAX_STEPS = 100000, HARD_MAX_STEPS = 500000;
 export interface FdtdProgress { step: number; decay: number; phase: "run" | "post"; pass?: number; engine: "gpu" | "cpu"; cells: number; fellBack: boolean }
-export interface FdtdOut { result: SimResult; engine: "gpu" | "cpu"; cells: number; steps: number; ms: number; fRes: number | null; params: Params }
+export interface FdtdOut { result: SimResult; engine: "gpu" | "cpu"; cells: number; steps: number; ms: number; fRes: number | null; params: Params;
+  /** Notes for the Simulation tab (translated at render time) and whether the run reached the end criterion. */
+  notes: Msg[]; converged: boolean }
 
 export async function runFdtd(type: string, params: Params, patternF: number | undefined, engine: Engine, onProgress: (msg: FdtdProgress) => void): Promise<FdtdOut> {
   const def = ANTENNA_BY_ID[type];
@@ -29,19 +33,20 @@ export async function runFdtd(type: string, params: Params, patternF: number | u
   let res: RunResult, used: "gpu" | "cpu" = "cpu";
   const useGpu = engine !== "cpu" && (await gpuAvailable());
   if (engine === "gpu" && !useGpu) throw new Error("WebGPU is not available in this browser");
+  const maxSteps = Math.min(HARD_MAX_STEPS, Math.max(MAX_STEPS, Math.ceil((3 * 2 * s.exc.t0) / s.dt)));
   const cells = s.nx * s.ny * s.nz;
   let fellBack = engine === "auto" && !useGpu;
   let eng: "gpu" | "cpu" = useGpu ? "gpu" : "cpu";
   const prog = (step: number, decay: number) => onProgress({ step, decay, phase: "run", engine: eng, cells, fellBack });
   if (useGpu) {
-    try { res = await runGPU(s, { nf2ffFreqs: [fPat], endCriteria: END_CRITERIA, maxSteps: MAX_STEPS, onProgress: prog }); used = "gpu"; }
+    try { res = await runGPU(s, { nf2ffFreqs: [fPat], endCriteria: END_CRITERIA, maxSteps, onProgress: prog }); used = "gpu"; }
     catch (e) {
       // "auto" never fails because of the GPU (too large a grid, device lost, driver error): redo the job on the CPU
       if (engine !== "auto") throw e;
       eng = "cpu"; fellBack = true;
-      res = runCPU(s, { nf2ffFreqs: [fPat], endCriteria: END_CRITERIA, maxSteps: MAX_STEPS, onProgress: prog });
+      res = runCPU(s, { nf2ffFreqs: [fPat], endCriteria: END_CRITERIA, maxSteps, onProgress: prog });
     }
-  } else res = runCPU(s, { nf2ffFreqs: [fPat], endCriteria: END_CRITERIA, maxSteps: MAX_STEPS, onProgress: prog });
+  } else res = runCPU(s, { nf2ffFreqs: [fPat], endCriteria: END_CRITERIA, maxSteps, onProgress: prog });
   onProgress({ step: res.steps, decay: 0, phase: "post", engine: eng, cells, fellBack });
   const freqs = Array.from({ length: 241 }, (_, i) => fmin + ((fmax - fmin) * i) / 240);
   const z: ZPoint[] = impedance(res, freqs);
@@ -50,11 +55,16 @@ export async function runFdtd(type: string, params: Params, patternF: number | u
   const g = (th: number, ph: number) => 10 * Math.log10(Math.max((4 * Math.PI * ff.U(th, ph)) / Math.max(pacc, 1e-30), 1e-6));
   const pattern = samplePattern(fPat, g);
   const eff = ff.prad / pacc;
+  const converged = res.steps < maxSteps;
+  const notes: Msg[] = [{ s: "FDTD ({0}): {1}×{2}×{3} cells, {4} steps, radiation efficiency {5} %.", a: [used === "gpu" ? "WebGPU" : "CPU", s.nx, s.ny, s.nz, res.steps, Math.round(100 * eff)] }];
+  if (!converged) notes.push({ s: "FDTD did not converge within {0} steps: the result is approximate.", a: [maxSteps] });
   return {
     result: {
       method: "analytic", z, pattern,
-      notes: [`FDTD (${used === "gpu" ? "WebGPU" : "CPU"}): ${s.nx}×${s.ny}×${s.nz} cells, ${res.steps} steps, radiation efficiency ${(100 * eff).toFixed(0)} %.`],
+      notes: [],
     },
+    notes,
+    converged,
     engine: used, cells: s.nx * s.ny * s.nz, steps: res.steps, ms: performance.now() - t0,
     fRes: resonance(z, d.f, d.feedZ0 ?? 50), params,
   };

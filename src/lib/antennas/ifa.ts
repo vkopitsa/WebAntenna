@@ -33,14 +33,16 @@ export const ifa: AntennaDef = {
   defaults: { bands: "2.4e9-2.4835e9", er: 4.4, h: 1.6e-3, tanD: 0.02, w: 1e-3, H: 5e-3, gl: 40e-3, bw: 35e-3, trim: 0 },
   build(p): Design {
     const { f, sweeps } = band(p);
-    const er = num(p, "er", 4.4), w = num(p, "w", 1e-3), h = num(p, "h", 1.6e-3), H = num(p, "H", 5e-3), bw = num(p, "bw", 0.035);
+    const er = num(p, "er", 4.4), w = num(p, "w", 1e-3), h = num(p, "h", 1.6e-3), bw = num(p, "bw", 0.035);
+    const g = Math.max(0.5e-3, w);
+    const H0 = num(p, "H", 5e-3), Hmin = g + w + 0.2e-3; // the arm must clear the feed gap (port) and the ground pour
+    const H = Math.max(H0, Hmin), hClamped = H > H0;
     const lam = wavelength(f), ee = ifaEeff(er, h);
     const La = Math.max(2 * w, ifaArm(f, H, er, h) * (1 + num(p, "trim", 0) / 100));
     const Ltot = La + H; // short → open end along the centre line
     const S0 = Math.max(1.5 * w, ifaTap(H));
     const S = Math.min(S0, La - w / 2); // the feed leg must land on the arm
     const tapClamped = S < S0;
-    const g = Math.max(0.5e-3, w);
     const xs = -bw / 2 + 1e-3 + w / 2; // short leg near the board corner
     const xf = xs + S;
     const rects = [
@@ -69,6 +71,7 @@ export const ifa: AntennaDef = {
       ],
       notes: [
         ...(tooLong ? ["Warning: the arm is longer than the board is wide. Widen the board, raise H, or use the meander monopole."] : []),
+        ...(hClamped ? ["Warning: the arm was raised so that it clears the feed gap and the ground pour. Use a thinner trace or a larger H."] : []),
         ...(tapClamped ? ["Warning: the arm is too short for the feed tap distance, so the tap was moved onto the arm. Use thinner traces or a lower frequency."] : []),
         "Tune frequency with the arm length (shorter = higher), match with the tap distance S.",
         "Keep both copper layers out of the antenna area; leave a π matching network footprint at the feed.",

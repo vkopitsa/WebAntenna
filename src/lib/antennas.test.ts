@@ -331,3 +331,34 @@ describe("QA regressions", () => {
     for (const k of ["constructor", "toString", "__proto__", "hasOwnProperty"]) expect(ANTENNA_BY_ID[k]).toBeUndefined();
   });
 });
+
+describe("QA pass 3 guards", () => {
+  const notes = (id: string, p = {}) => { const def = ANTENNA_BY_ID[id]; return def.build({ ...def.defaults, ...p }).notes; };
+  it("IFA: a low H or wide trace is raised so the arm clears the feed gap and the ground", () => {
+    const def = ANTENNA_BY_ID.ifa;
+    for (const w of [1e-3, 2e-3]) {
+      const d = def.build({ ...def.defaults, H: 1e-3, w });
+      const arm = d.pcb!.rects.find((q) => q.label === "Radiating arm")!;
+      const gap = Math.max(0.5e-3, w);
+      expect(arm.y0).toBeGreaterThanOrEqual(gap + 0.1e-3);
+      expect(d.notes.some((n) => n.startsWith("Warning: the arm was raised"))).toBe(true);
+    }
+    expect(notes("ifa").some((n) => n.startsWith("Warning: the arm was raised"))).toBe(false);
+  });
+  it("patch: an inset that cannot fit the patch falls back to a probe feed; thin feed lines warn", () => {
+    const def = ANTENNA_BY_ID.patch;
+    const d = def.build({ ...def.defaults, bands: "5.8e9-5.8e9", er: 2.2, h: 3.2e-3, z0: 45 });
+    expect(d.notes.some((n) => n.includes("too wide for an inset notch"))).toBe(true);
+    const W = d.pcb!.board.y1 - d.pcb!.board.y0;
+    for (const q of d.pcb!.rects) expect(q.y1 - q.y0).toBeLessThanOrEqual(W + 1e-12);
+    const patchRects = d.pcb!.rects.filter((q) => q.label === "Patch");
+    expect(patchRects).toHaveLength(1);
+    expect(notes("patch").some((n) => n.includes("too wide for an inset"))).toBe(false);
+    expect(notes("patch", { z0: 200, h: 0.2e-3 }).some((n) => n.includes("thinner than 0.15 mm"))).toBe(true);
+  });
+  it("dual-band dipole: band order does not matter", () => {
+    const def = ANTENNA_BY_ID.dualbanddipole;
+    const a = def.build({ ...def.defaults, bands: "2.4e9-2.5e9;5.15e9-5.85e9" }), b = def.build({ ...def.defaults, bands: "5.15e9-5.85e9;2.4e9-2.5e9" });
+    expect(b.dims.map((x) => x.value)).toEqual(a.dims.map((x) => x.value));
+  });
+});

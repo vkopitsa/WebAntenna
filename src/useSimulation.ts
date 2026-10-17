@@ -14,6 +14,8 @@ export function useSimulation(type: string, params: Params, patternF: number | u
   const busy = useRef(false);
   const seq = useRef(0);
   const key = JSON.stringify([type, params, patternF]);
+  // key of the request the "done" result belongs to: after an edit the old result must not look current
+  const [doneKey, setDoneKey] = useState("");
 
   useEffect(() => {
     if (!enabled) return;
@@ -26,7 +28,7 @@ export function useSimulation(type: string, params: Params, patternF: number | u
       setState((s) => ({ status: "running", progress: 0, result: s.result }));
       w.onmessage = (e: MessageEvent<{ id: number; progress?: number; result?: SimResult; error?: string }>) => {
         if (e.data.id !== seq.current) return;
-        if (e.data.result) { busy.current = false; setState({ status: "done", progress: 1, result: e.data.result }); }
+        if (e.data.result) { busy.current = false; setDoneKey(key); setState({ status: "done", progress: 1, result: e.data.result }); }
         else if (e.data.error) { busy.current = false; setState((s) => ({ status: "error", progress: 0, result: s.result, error: e.data.error! })); }
         else if (e.data.progress != null) setState((s) => ({ status: "running", progress: e.data.progress!, result: s.result }));
       };
@@ -39,5 +41,5 @@ export function useSimulation(type: string, params: Params, patternF: number | u
   }, [key, enabled]);
 
   useEffect(() => () => worker.current?.terminate(), []);
-  return state;
+  return state.status === "done" && doneKey !== key ? { status: "running", progress: 0, result: state.result } : state;
 }

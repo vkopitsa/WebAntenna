@@ -36,12 +36,26 @@ export function fmtHzShort(f: number): string {
   return `${f.toFixed(0)}`;
 }
 
-/** Parse "435M", "1.2 GHz", "500k", "433.92e6", "100" (Hz). */
-export function parseHz(s: string): number | null {
+/**
+ * Parse "435M", "1.2 GHz", "500k", "433.92e6", "100" (Hz). A bare number without a prefix or exponent ("430") is read in
+ * `units` order: the first multiplier that lands in [min, max] wins (a field showing "144 MHz" passes MHz first).
+ */
+export function parseHz(s: string, units: number[] = [1], min = 0, max = Infinity): number | null {
   const m = s.trim().replace(/,/g, ".").match(/^([-+]?\d*\.?\d+(?:e[-+]?\d+)?)\s*([kKmMgG]?)(?:hz|Hz|HZ)?$/);
   if (!m) return null;
+  const x = parseFloat(m[1]);
+  if (!m[2] && !/e/i.test(m[1]) && !/hz$/i.test(s.trim())) {
+    for (const u of units) if (x * u >= min && x * u <= max) return x * u;
+    return x * units[0];
+  }
   const k = { "": 1, k: 1e3, K: 1e3, m: 1e6, M: 1e6, g: 1e9, G: 1e9 }[m[2]] ?? 1;
-  return parseFloat(m[1]) * k;
+  return x * k;
+}
+
+/** Multiplier of the unit a frequency is shown in (fmtHz): GHz, MHz, kHz or Hz. */
+export function hzUnit(f: number): number {
+  const a = Math.abs(f);
+  return a >= 1e9 ? 1e9 : a >= 1e6 ? 1e6 : a >= 1e3 ? 1e3 : 1;
 }
 
 /** Parse a value with optional SI prefix: "10p", "4.7n", "1.2u", "50". */

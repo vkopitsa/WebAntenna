@@ -31,9 +31,11 @@ export const dualbanddipole: AntennaDef = {
   ],
   defaults: { bands: "2.4e9-2.5e9;5.15e9-5.85e9", s: 3.5e-3, er: 4.4, h: 0.8e-3, tanD: 0.02, w: 2e-3, trim: 0 },
   build(p): Design {
-    const { f, sweeps, bands } = band(p);
+    const { f: fb1, sweeps, bands } = band(p);
     const er = num(p, "er", 4.4), h = num(p, "h", 0.8e-3), w = num(p, "w", 2e-3), tanD = num(p, "tanD", 0.02);
-    const f2 = bands.length > 1 ? (bands[1][0] + bands[1][1]) / 2 : f * HIGH_RATIO;
+    // the lower band always gets the main strip and the higher one the branches, whatever the order entered
+    const cs = bands.map((b) => (b[0] + b[1]) / 2).sort((a, b) => a - b);
+    const f = bands.length > 1 ? cs[0] : fb1, f2 = bands.length > 1 ? cs[1] : f * HIGH_RATIO;
     const s = Math.max(num(p, "s", 3.5e-3), 1.5 * w);
     const ee = printedEeff(er, h, w), k = 1 + num(p, "trim", 0) / 100;
     const lam1 = wavelength(f), lam2 = wavelength(f2);

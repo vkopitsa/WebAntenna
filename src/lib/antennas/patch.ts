@@ -50,9 +50,13 @@ export const patch: AntennaDef = {
   build(p): Design {
     const { f, sweeps, f1, f2 } = band(p);
     const er = num(p, "er", 4.4), h = num(p, "h", 1.6e-3), t = num(p, "t", 35e-6), z0 = num(p, "z0", 50);
-    const feed = str(p, "feed", "inset");
     const q = patchDesign(f, er, h, z0);
     const { W, L, y0, wf } = q;
+    // the side copper next to the notch spans wf/2 + gap … W/2: with no room left the notch is wider than the patch
+    const noRoom = wf / 2 + Math.max(wf / 2, 0.3e-3) >= W / 2 - 0.3e-3;
+    const insetAsked = str(p, "feed", "inset") === "inset";
+    const fellBack = insetAsked && y0 > 0 && noRoom;
+    const feed = fellBack ? "probe" : str(p, "feed", "inset");
     const Lg = L + 6 * h + (feed === "inset" ? q.lamG / 4 : 0), Wg = W + 6 * h;
     const xg0 = -L / 2 - (Lg - L) + 3 * h; // ground/substrate left edge (feed side gets the extra room)
     const gap = Math.max(wf / 2, 0.3e-3);
@@ -104,6 +108,8 @@ export const patch: AntennaDef = {
         "Transmission-line model (Balanis): expect the real resonance within 1–3 %. Make L slightly adjustable or simulate first.",
         "FR-4 εr varies between boards and with frequency; above 3 GHz use a low-loss laminate.",
         ...((f2 - f1) / f > q.bw ? ["Warning: the band is wider than the patch bandwidth. Use a thicker or lower-εr substrate."] : []),
+        ...(fellBack ? ["Warning: the feed line is too wide for an inset notch on this patch, so a coax probe feed is used instead. Lower the feed impedance's line width (raise z0) or use a thinner substrate."] : []),
+        ...(insetAsked && wf < 0.15e-3 ? ["Warning: the feed line is thinner than 0.15 mm, which most PCB fabs cannot etch. Lower the feed impedance or use a thicker substrate."] : []),
         ...(q.Rin <= z0 ? ["Edge resistance is below the feed impedance: feed at the edge with a λ/4 transformer."] : []),
       ],
       necSupported: false,

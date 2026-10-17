@@ -1,8 +1,8 @@
 import { useState, type ReactNode } from "react";
-import { fmtHz, parseHz } from "../lib/units";
+import { fmtHz, hzUnit, parseHz } from "../lib/units";
 import { useT } from "../i18n";
 
-/** Frequency field accepting "435M", "2.45G", "500k", plain Hz. Commits on Enter/blur. */
+/** Frequency field accepting "435M", "2.45G", "500k"; a bare number is in the unit shown ("430" in a "144 MHz" field = 430 MHz). Commits on Enter/blur. */
 export function FreqInput({ value, onChange, min, max, id, ariaLabel }: { value: number; onChange: (v: number) => void; min?: number; max?: number; id?: string; ariaLabel?: string }) {
   const t = useT();
   // Draft text while editing; null shows the committed value (so external changes always win).
@@ -13,7 +13,7 @@ export function FreqInput({ value, onChange, min, max, id, ariaLabel }: { value:
   if (seen !== value) { setSeen(value); setDraft(null); setBad(false); }
   const commit = () => {
     if (draft == null) return;
-    const v = parseHz(draft);
+    const v = parseHz(draft, [hzUnit(value), 1e6, 1e9, 1e3, 1], min, max);
     if (v == null || (min != null && v < min) || (max != null && v > max)) { setBad(true); return; }
     setBad(false);
     setDraft(null);

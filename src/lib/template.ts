@@ -5,7 +5,7 @@
 // Large wire antennas get no paper template: the cut list is the template.
 import type { AntennaDef, Design, Params, Vec3 } from "./types";
 import { A4, type Page, type Prim, toPDF, toSVG, wrap } from "./drawing";
-import { buildPack, en, pieces, type Msg } from "./build";
+import { buildPack, en, lenEn, pieces, type Msg } from "./build";
 import { boardsOf, copperBoxes, isProbe, type Pcb } from "./pcb";
 import { PROBE_CLEAR, PROBE_DRILL } from "./fab";
 
@@ -71,6 +71,7 @@ export function pcbDrawings(p: Pcb, mirror: boolean, name: string): Drawing[] {
 // ---------------------------------------------------------------- wire projection
 
 function wireDrawing(def: AntennaDef, d: Design): Drawing | null {
+  if (def.id === "spring") return null;   // a 4 mm coil seen from the side is not a template: the cut list and coil table are
   const ws = d.wires.filter((w) => !w.necOnly);
   const metal = d.plates.filter((pl) => pl.material === "metal");
   const pts: Vec3[] = [...ws.flatMap((w) => [w.a, w.b]), ...metal.flatMap((pl) => pl.pts)];
@@ -124,7 +125,9 @@ function frameDrawing(def: AntennaDef, d: Design): Drawing | null {
     const X = (q: [number, number]) => dx + q[0], Y = (q: [number, number]) => P + 6 + zTop - q[1];
     pts.slice(1).forEach((q, i) => prims.push({ k: "line", x1: X(pts[i]), y1: Y(pts[i]), x2: X(q), y2: Y(q), w: wd }));
     for (const q of seats) prims.push({ k: "circle", cx: X(q), cy: Y(q), r: wd / 2 + 0.4, lw: 0.25 });   // where each hoop sits (as in the table)
-    prims.push({ k: "text", x: X(pts[0]) - 1, y: Y(pts[0]) + 4, s: endName, size: 2.2, bold: true, grey: true });
+    // the end label goes on the side away from the first segment, so it never lies on the wire
+    const ex = X(pts[1]) - X(pts[0]), ey = Y(pts[1]) - Y(pts[0]), right = ex < 0;
+    prims.push({ k: "text", x: X(pts[0]) + (right ? 2 : -2), y: Y(pts[0]) + (ey > 0 ? -1.5 : 3.5), s: endName, size: 2.2, bold: true, grey: true, anchor: right ? "start" : "end" });
     const xs = pts.map(X), ys = pts.map(Y);
     prims.push({ k: "text", x: (Math.min(...xs) + Math.max(...xs)) / 2, y: Math.max(...ys) + 9, s: name, size: 2.8, bold: true, anchor: "middle" });
   };
@@ -206,16 +209,17 @@ function helixDrawing(def: AntennaDef, d: Design): Drawing | null {
   const right = (w.a[0] * w.b[1] - w.a[1] * w.b[0]) * (w.b[2] - w.a[2]) > 0;
   const C = Math.PI * (D - wd) * 1e3, H = Lax * 1e3, s = S * 1e3, P = 10, n = Math.round(Lax / S);
   // past MAX_TILES (big VHF/HF helices) the cut list is the template
-  if (!fitsTiles({ w: C + 2 * P + 6, h: H + 2 * P + 4, prims: [], caption: "" })) return null;
+  const B = 46;   // room below the wrap for the feed-end label (it must stay clear of the outline when the drawing is turned)
+  if (!fitsTiles({ w: C + 2 * P + 6, h: H + P + B, prims: [], caption: "" })) return null;
   const prims: Prim[] = [{ k: "rect", x: P, y: P, w: C, h: H, lw: 0.25 }];
   for (let i = 0; i < n; i++) {
     const y0 = P + H - i * s, y1 = y0 - s;
     prims.push(right ? { k: "line", x1: P, y1: y0, x2: P + C, y2: y1, w: Math.max(wd * 1e3, 0.4) } : { k: "line", x1: P + C, y1: y0, x2: P, y2: y1, w: Math.max(wd * 1e3, 0.4) });
     prims.push({ k: "text", x: P + C + 1.5, y: y1 + 1, s: `${i + 1}`, size: 2.4, grey: true });
   }
-  prims.push({ k: "text", x: P + C / 2, y: P + H + 5, s: "FEED END (ground plane side)", size: 2.4, bold: true, anchor: "middle", grey: true });
+  prims.push({ k: "text", x: P + C, y: P + H + 5, s: "FEED END (ground plane side)", size: 2.4, bold: true, anchor: "end", grey: true });
   prims.push({ k: "line", x1: P, y1: P - 3, x2: P + C, y2: P - 3, w: 0.15, grey: true }, { k: "text", x: P + C / 2, y: P - 4, s: `${C.toFixed(1)} mm = circumference of a ${((D - wd) * 1e3).toFixed(1)} mm former`, size: 2.2, anchor: "middle", grey: true });
-  return { w: C + 2 * P + 6, h: H + 2 * P + 4, prims, caption: `${def.name} - winding wrap (${right ? "right" : "left"}-hand, ${n} turns, pitch ${s.toFixed(1)} mm). Wrap it printed side out round the former; the side edges must just meet.` };
+  return { w: C + 2 * P + 6, h: H + P + B, prims, caption: `${def.name} - winding wrap (${right ? "right" : "left"}-hand, ${n} turns, pitch ${s.toFixed(1)} mm). Wrap it printed side out round the former; the side edges must just meet.` };
 }
 
 // ---------------------------------------------------------------- boom drilling strip
@@ -409,6 +413,7 @@ export function templatePages(def: AntennaDef, d: Design, mirror: boolean): Page
   const fd = frameDrawing(def, d);
   if (fd) return layout([fd], `${name}: 1:1 frame template`, "Bend every frame over its drawing: all frames of a side must match it. Lines are drawn at the wire diameter.");
   const w = wireDrawing(def, d);
+  if (w && def.id === "pcbloop") return layout([w], `${name}: 1:1 PCB template`, "Black = copper trace; grey = board outline. The loop has a gap at the top for Cs and one at the bottom for Cp and the feed. Check the scale bar before you etch.");
   return w ? layout([w], `${name}: 1:1 template`, "Bend the wire over the drawing. Lines are drawn at the wire diameter; FEED marks the feed point.") : [];
 }
 
@@ -473,7 +478,7 @@ class Flow {
   }
 }
 
-const mmS = (m: number) => `${(m * 1e3).toFixed(Math.abs(m) < 0.01 ? 2 : 1)} mm`;
+const mmS = lenEn;
 
 export function buildSheetPages(def: AntennaDef, p: Params, d: Design, version: string): Page[] {
   const pack = buildPack(def, p, d);

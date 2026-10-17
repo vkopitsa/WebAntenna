@@ -1,4 +1,4 @@
-import type { AntennaDef, Design, Vec3, Wire } from "../types";
+import type { AntennaDef, Design, Table, Vec3, Wire } from "../types";
 import { num } from "../types";
 import { fmt, wavelength } from "../rf";
 import { v } from "../geom";
@@ -69,6 +69,16 @@ export function springTurns(dl: number, sd: number, ds: number): { n: number; R:
   return mix(mix(one(i, j), one(i, j + 1), w), mix(one(i + 1, j), one(i + 1, j + 1), w), u);
 }
 
+/** Lossless L-match from the coil's R (at resonance) up to 50 Ω: series L at the coil, shunt C across the 50 Ω side. */
+function lMatch(R: number, f: number): Table {
+  const q = Math.sqrt(Math.max(0, 50 / R - 1)), w = 2 * Math.PI * f;
+  return {
+    title: "L-match to 50 Ω (from the MoM resistance)",
+    columns: [{ label: "Series inductor (coil side)", kind: "text" }, { label: "Shunt capacitor (50 Ω side)", kind: "text" }],
+    rows: [[`${fmt((q * R) / w * 1e9, 1)} nH`, `${fmt(q / (50 * w) * 1e12, 1)} pF`]],
+  };
+}
+
 export const spring: AntennaDef = {
   id: "spring",
   name: "Spring (normal-mode helix)",
@@ -130,7 +140,7 @@ export const spring: AntennaDef = {
         columns: [{ label: "Turns", kind: "text" }, { label: "Height / λ", kind: "text" }, { label: "Wire / λ", kind: "text" }],
         // text cells: applyTrim scales only numeric lengths, so the λ ratios take the trim here
         rows: [[fmt(turns, 2), fmt(((lead + H) * kt) / lam, 3), fmt((wire * kt) / lam, 3)]],
-      }],
+      }, lMatch(fit.R, f)],
       perf: [
         { label: "Radiation resistance (MoM)", value: `≈ ${fmt(fit.R, 1)} Ω` },
         { label: "Gain", value: "≈ 0 dBi with a full counterpoise, less with conductor loss" },
@@ -141,7 +151,7 @@ export const spring: AntennaDef = {
         ...(d < dIn * 0.9999 ? ["Warning: the wire is thicker than the pitch allows; its diameter was reduced to 90 % of the pitch. Raise the pitch or use thinner wire."] : []),
         ...(D > Din * 1.0001 ? ["Warning: the coil diameter was raised to twice the wire diameter."] : []),
         ...(lead > 2 * D || lead < 0.5 * D ? ["The straight lead is far from one coil diameter, the length the turns fit was made with; expect the resonance to shift and check it in the Simulation tab."] : []),
-        "The radiation resistance is only a few ohms: the feed needs a matching network (an L-match or a tap on the first turn) for 50 Ω, and copper loss eats a large share of the power.",
+        "The radiation resistance is only a few ohms: the feed needs a matching network (the L-match in the table, or a tap on the first turn) for 50 Ω, and copper loss eats a large share of the power. Copper loss also raises the real resistance, so tune the match on the built antenna (start from the table values).",
         "The model stands the coil over four λ/4 radials. On a module the board's ground pour is the counterpoise: a smaller one raises the resonance, so stretch or compress the coil to tune.",
         "Stretching the coil (more pitch) raises the resonance and the radiation resistance; adding turns lowers it.",
         ...(fit.n > SPRING_MAX_TURNS

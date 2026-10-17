@@ -7,7 +7,9 @@ import type { Goal, SynthOptions } from "../lib/synth";
 import { fmtHz } from "../lib/units";
 import { wavelength } from "../lib/rf";
 import { useT } from "../i18n";
-import { set, useStore } from "../store";
+import { clampParams, set, useStore } from "../store";
+import { fmtMsg } from "../msg";
+import type { Msg } from "../lib/build";
 import { fmtLen, fromUnit, toUnit } from "../format";
 import { useSynthesis } from "../useSynthesis";
 import { Num, Select } from "./inputs";
@@ -30,12 +32,14 @@ export function SynthPanel() {
   const fdtd = useFdtd();
   const [rows, setRows] = useState<Candidate[] | null>(null);
   const [fdNote, setFdNote] = useState("");
+  // FDTD notes per candidate, kept as messages so they follow the language and unit
+  const [fdMsgs, setFdMsgs] = useState<Record<string, Msg>>({});
   const fdStopped = useRef(false);
   // bumped by every new FDTD loop and by a band change: a superseded loop exits without touching state
   const runId = useRef(0);
   // The panel stays mounted while the sidebar is edited: results for other bands would be wrong (and their SWR
   // columns wouldn't match the header), so a band change stops the run and clears them.
-  useEffect(() => { runId.current++; cancel(); fdtd.cancel(); setRows(null); setFdNote(""); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [bandsStr]);
+  useEffect(() => { runId.current++; cancel(); fdtd.cancel(); setRows(null); setFdNote(""); setFdMsgs({}); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [bandsStr]);
   // After the wire/analytic search: tune every printed (formula) candidate with FDTD and score it.
   useEffect(() => {
     if (state.status !== "done" || !state.result) return;
@@ -62,7 +66,10 @@ export function SynthPanel() {
           const ml = Math.max(...swr.map((x) => { const g = (x - 1) / (x + 1); return -10 * Math.log10(Math.max(1 - g * g, 1e-6)); }));
           const gain = out.result.pattern?.max.dbi ?? NaN;
           const score = goal === "match" ? 10 * ml : goal === "gain" ? 4 * ml - gain : goal === "small" ? 4 * ml + 3 * c.size : 6 * ml - 0.4 * gain;
-          const upd: Candidate = { ...c, params: out.params, swr, gain, score, note: t("FDTD ({0}) tuned, trim {1} %", out.engine === "gpu" ? "WebGPU" : "CPU", Number(out.params.trim ?? 0).toFixed(1)) };
+          const upd: Candidate = { ...c, params: out.params, swr, gain, score, note: undefined };
+          setFdMsgs((m) => ({ ...m, [c.id]: out.converged
+            ? { s: "FDTD ({0}) tuned, trim {1} %", a: [out.engine === "gpu" ? "WebGPU" : "CPU", Number(out.params.trim ?? 0).toFixed(1)] }
+            : { s: "FDTD ({0}) tuned, trim {1} %, did not converge: approximate", a: [out.engine === "gpu" ? "WebGPU" : "CPU", Number(out.params.trim ?? 0).toFixed(1)] } }));
           list = list.map((x) => (x.id === c.id ? upd : x));
           const scored = list.filter((x) => Number.isFinite(x.score)).sort((a, b) => a.score - b.score);
           list = [...scored, ...list.filter((x) => !Number.isFinite(x.score))];
@@ -72,8 +79,8 @@ export function SynthPanel() {
           // a cancellation (band change, unmount, Stop button) is not a failure of this candidate
           if (!live()) return;
           if (fdStopped.current) break;
-          const msg = `FDTD (${t("not run")}): ${e instanceof Error ? e.message : String(e)}`;
-          list = list.map((x) => (x.id === c.id ? { ...x, note: msg } : x));
+          setFdMsgs((m) => ({ ...m, [c.id]: { s: "FDTD (not run): {0}", a: [e instanceof Error ? e.message : String(e)] } }));
+          list = list.map((x) => (x.id === c.id ? { ...x, note: undefined } : x));
           setRows(list);
         }
       }
@@ -85,7 +92,7 @@ export function SynthPanel() {
   const lamLow = wavelength(Math.min(...bands.map((b) => b[0])));
   const go = () => run({ bands, goal, family, pol, pattern, d, er, h });
   const apply = (id: string, params: Record<string, number | string>) => {
-    set((s) => ({ type: id, params: { ...s.params, [id]: { ...s.params[id], ...params } }, tab: "design" }));
+    set((s) => ({ type: id, params: { ...s.params, [id]: { ...s.params[id], ...clampParams(id, params) } }, tab: "design" }));
   };
   return (
     <div className="sim synth">
@@ -141,7 +148,7 @@ export function SynthPanel() {
                       {ANTENNA_BY_ID[c.id].id === "yagi" && <span className="muted small"> · {c.params.n} el.</span>}
                       {ANTENNA_BY_ID[c.id].id === "helix" && <span className="muted small"> · {c.params.turns} {t("turns")}</span>}
                       {c.feedZ0 !== 50 && <span className="muted small"> · Z0 {Math.round(c.feedZ0)} Ω</span>}
-                      {c.note && <div className="hint">{c.note.startsWith("FDTD (") ? c.note : t(c.note)}</div>}
+                      {fdMsgs[c.id] ? <div className="hint">{fmtMsg(t, unit, fdMsgs[c.id])}</div> : c.note && <div className="hint">{t(c.note)}</div>}
                     </td>
                     {bands.map((_, j) => <td key={j} className={"num " + (c.swr[j] == null ? "" : c.swr[j] < 2 ? "ok-text" : c.swr[j] > 3 ? "err-text" : "")}>{c.swr[j] == null ? "—" : c.swr[j] >= 20 ? "> 20" : c.swr[j].toFixed(2)}</td>)}
                     <td className="num">{Number.isFinite(c.gain) ? `${c.gain.toFixed(1)} dBi` : "—"}</td>

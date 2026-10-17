@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { AntennaDef, Design, Params } from "../lib/types";
 import { toCSV, toFreeCAD, toJSON, toNEC } from "../lib/export";
 import { toOpenEMS } from "../lib/openems";
-import { get, shareHash } from "../store";
+import { get, shareHash, showHashUntilEdit } from "../store";
 import { useT } from "../i18n";
 import { download } from "../download";
 
@@ -31,9 +31,8 @@ export function Exports({ def, params, design, svgRef }: { def: AntennaDef; para
   const base = `${def.id}-${Math.round(design.f / 1e3) / 1e3}MHz`;
   const share = async () => {
     const url = location.href.split("#")[0] + shareHash(get());
-    history.replaceState(null, "", shareHash(get()));
     try { await navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 1500); }
-    catch { setFailed(true); setTimeout(() => setFailed(false), 4000); }   // clipboard blocked: the URL is in the address bar (set above)
+    catch { showHashUntilEdit(shareHash(get())); setFailed(true); setTimeout(() => setFailed(false), 4000); }   // clipboard blocked: the URL is in the address bar (set here until the next edit)
   };
   return (
     <div className="exports">

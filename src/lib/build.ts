@@ -31,6 +31,22 @@ export interface Piece {
 
 const len = (w: Wire) => Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1], w.b[2] - w.a[2]);
 
+/**
+ * Spring and helix: the wire length of the coil as the builder computes it (dims "Wire in the coil" / "Total wire length",
+ * n·√(C² + S²)) and the straight part of the same piece (spring lead, helix radial leg) that is already exact.
+ * rest() returns the true length of the whole piece.
+ */
+function coilWire(d: Design): { rest: () => number } | null {
+  const dim = (label: string) => d.dims.find((x) => x.label === label)?.value;
+  const spring = dim("Wire in the coil"), lead = dim("Straight lead");
+  if (spring != null && lead != null) {
+    return { rest: () => (lead > 1e-6 ? lead : 0) + spring };   // the builder has no lead wire below 1 µm
+  }
+  const helix = dim("Total wire length"), D = d.dims.find((x) => x.key === "D" && x.label.startsWith("Helix diameter"))?.value;
+  if (helix != null && D != null) return { rest: () => D / 2 + helix };
+  return null;
+}
+
 export function pieces(d: Design): Piece[] {
   const scale = Math.max(1e-3, ...d.wires.map(len));
   const tol = scale * 1e-6;
@@ -78,6 +94,9 @@ export function pieces(d: Design): Piece[] {
       wires: js.map((j) => live[j].i),
     });
   }
+  // coils are modelled as chords of the helix: the wire you cut follows the helix itself, which the builder reports
+  const coil = coilWire(d);
+  if (coil) for (const pc of out) if (pc.group === "driven" && pc.wires.some((i) => d.wires[i].tag === "H")) pc.length = coil.rest();
   // only the first of a set of identical parts carries the drawing tag: share it
   for (const pc of out) if (!pc.tag) pc.tag = out.find((q) => q.tag && q.group === pc.group && q.mech === pc.mech && Math.abs(q.dia - pc.dia) < 1e-6 && Math.abs(q.length - pc.length) < 0.5e-3)?.tag ?? "";
   return out;
@@ -107,7 +126,7 @@ export interface TuneRow {
 const NOT_TRIMMED: Record<string, string> = {
   helix: "Broadband: the helix is not tuned by length. Match it to 50 Ω with the feed strip or a λ/4 transformer and check the SWR across the band.",
   discone: "Broadband: check the SWR across your bands rather than trimming. Lengthen the cone rods to lower the cut-off frequency.",
-  collinear: "The coax sections are fixed by the velocity factor. Check the SWR; small corrections are made on the top whip.",
+  collinear: "The coax sections are fixed by the velocity factor and the top whip is cut to its listed length. Check the SWR across the band.",
   biquad: "The biquad is broadband (roughly 10 %): check the SWR across the band. The spacing to the reflector sets the match.",
   pagoda: "Not tuned by trimming: the board spacing sets the centre frequency (Baert's table: D1 grows about 0.15 mm and D2 about 0.24 mm per 100 MHz lower). Check the SWR across the band.",
   pcbloop: "Tune the small loop with the capacitors: Cs sets the resonance, Cp the match. A trimmer capacitor for Cs makes this easy.",
@@ -267,15 +286,19 @@ export function cutList(def: AntennaDef, d: Design, trimmedTags: Set<string>): C
 }
 
 function plateSize(pts: Vec3[]): { disc: boolean; a: number; b: number } {
-  // plates are planar: measure in their own plane
-  const o = pts[0];
-  let ax: number[] = [0, 0, 0];
-  for (const q of pts) { const v = [q[0] - o[0], q[1] - o[1], q[2] - o[2]]; if (Math.hypot(...v) > Math.hypot(...ax)) ax = v; }
-  const la = Math.hypot(...ax) || 1; const u = ax.map((c) => c / la);
-  const proj = pts.map((q) => { const v = [q[0] - o[0], q[1] - o[1], q[2] - o[2]]; const s = v[0] * u[0] + v[1] * u[1] + v[2] * u[2]; return { s, t: Math.hypot(v[0] - s * u[0], v[1] - s * u[1], v[2] - s * u[2]) }; });
-  const ss = proj.map((x) => x.s), ts = proj.map((x) => x.t);
   const disc = pts.length > 8;
   if (disc) { let m = 0; for (const p of pts) for (const q of pts) m = Math.max(m, Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2])); return { disc, a: m, b: m }; }
+  // plates are planar: axes u (first edge) and v = n × u, signed coordinates, extent of the bounding rectangle
+  const o = pts[0];
+  const sub = (p: Vec3, q: Vec3) => [p[0] - q[0], p[1] - q[1], p[2] - q[2]];
+  const nrm = (x: number[]) => { const l = Math.hypot(x[0], x[1], x[2]) || 1; return [x[0] / l, x[1] / l, x[2] / l]; };
+  const cross = (x: number[], y: number[]) => [x[1] * y[2] - x[2] * y[1], x[2] * y[0] - x[0] * y[2], x[0] * y[1] - x[1] * y[0]];
+  const u = nrm(sub(pts[1], o));
+  let n = [0, 0, 0];
+  for (const q of pts) { const c = cross(u, sub(q, o)); if (Math.hypot(...c) > Math.hypot(...n)) n = c; }
+  const w = cross(nrm(n), u);
+  const ss = pts.map((q) => { const x = sub(q, o); return x[0] * u[0] + x[1] * u[1] + x[2] * u[2]; });
+  const ts = pts.map((q) => { const x = sub(q, o); return x[0] * w[0] + x[1] * w[1] + x[2] * w[2]; });
   return { disc, a: Math.max(...ss) - Math.min(...ss), b: Math.max(...ts) - Math.min(...ts) };
 }
 
@@ -384,21 +407,30 @@ export function substrateNotes(def: AntennaDef, p: Params, d: Design): Msg[] {
 
 // ---------------------------------------------------------------- build steps
 
-export function steps(d: Design, hasBoom: boolean, tunable: boolean): Msg[] {
+/** What the cut list and bill of materials say, so the generic steps only mention what applies. */
+export interface StepsCtx { loop?: boolean; cutLong?: boolean; match?: boolean }
+
+export function steps(d: Design, hasBoom: boolean, tunable: boolean, ctx: StepsCtx = {}): Msg[] {
   const s: Msg[] = [];
-  if (d.pcb) {
+  if (ctx.loop) {
+    s.push(M("Make the board: etch the loop trace from the 1:1 template (black = copper; for toner transfer use the Mirrored option) or have it made to the loop dimensions. Keep the two gaps in the trace: Cs goes in the top one, Cp across the bottom one at the feed."));
+    s.push(M("Solder the connector at the feed gap, centre pin to one side and shield to the other, and keep the joint short."));
+    s.push(M("Solder the series capacitor Cs in the top gap and the shunt capacitor Cp across the feed, with the values of the Matching components table (C0G/NP0, short leads). For tuning, solder a trimmer capacitor in parallel with Cs."));
+    s.push(M("Set the Cs trimmer for the best match, then replace it with a fixed capacitor of the value you measured (Cp sets the 50 Ω match)."));
+  } else if (d.pcb) {
     s.push(M("Order the board from the Gerber files, or etch it at home with the 1:1 template (for toner transfer use the Mirrored option: the top layer prints mirrored and the bottom layer as seen through the board from the top, each toner side against its copper)."));
     if (d.pcb.levels?.length) s.push(M("Stack the boards on the coax at the listed spacings (align the drill holes and keep the spacing within ±0.1 mm, e.g. with spacers cut to the listed height) and solder them in place."));
     else s.push(M("Solder the connector at the feed port and keep the joint short."));
+    if (ctx.match) s.push(M("Fit the balun or feed network from the bill of materials between the connector and the feed port, as close to the board as you can."));
     const grounds = d.pcb.rects.filter((q) => /Ground/.test(q.label));
     if (new Set(grounds.map((q) => q.layer)).size > 1) s.push(M("Stitch the top and bottom ground pours with vias along their edges (usual practice; not part of the model)."));
   } else if (d.sheets?.length) {
     s.push(M("Print the 1:1 flat patterns, glue them onto the sheet and cut the parts out (tin snips, then file the edges)."));
     s.push(M("Roll each sector into its cone and each strip into its ring over a former, overlap or butt the seam and solder it along its length."));
-    s.push(M("Solder the hot element together (washer, cones, rim, lid) and the ground cone with its skirt. Solder the coax jacket into the ground cone apex and the centre pin into the washer, keeping the listed gap."));
+    s.push(d.sheets.some((x) => /skirt/i.test(x.label)) ? M("Solder the hot element together (washer, cones, rim, lid) and the ground cone with its skirt. Solder the coax jacket into the ground cone apex and the centre pin into the washer, keeping the listed gap.") : M("Solder the hot element together (washer, cones, rim, lid) and the ground cone. Solder the coax jacket into the ground cone apex and the centre pin into the washer, keeping the listed gap."));
   } else if (d.frames) {
     s.push(M("Print the 1:1 frame template (or the bending jig) and bend every frame over it with flat-nose pliers: all frames of a side must be identical."));
-    s.push(M("Solder the hot frames to the washer in the printed cradle and the ground frames to the collar on the coax jacket in the cup: one groove per frame keeps them at equal angles. Then solder the washer onto the coax centre pin at the listed gap."));
+    s.push(d.frames.pinCap ? M("Solder the hot frames to the washer in the printed cradle and the ground frames to the collar on the coax jacket in the cup: one groove per frame keeps them at equal angles. Then join the washer to the coax centre pin through the capacitor (see the capacitor step below), keeping the listed gap.") : M("Solder the hot frames to the washer in the printed cradle and the ground frames to the collar on the coax jacket in the cup: one groove per frame keeps them at equal angles. Then solder the washer onto the coax centre pin at the listed gap."));
     s.push(M("Bend each hoop on its step of the printed hoop mandrel (or into a ring of the listed diameter) and solder it against the outside of the frames at its bend, at every crossing. Keep the frames in their grooves while you do it."));
     if (d.frames.pinCap) s.push(M("Fit the {0} pF capacitor in the centre pin: solder it between the coax centre pin and the hot washer (it spans the listed gap), instead of a plain joint.", d.frames.pinCap));
     const sw = d.frames.short ?? [];
@@ -411,15 +443,15 @@ export function steps(d: Design, hasBoom: boolean, tunable: boolean): Msg[] {
       for (const cv of new Set(sw.map((q) => q.cap).filter((c): c is number => !!c))) s.push(M("Fit the {0} pF capacitor in series at the ground end of the shorting wire marked with it on the template: cut the wire there and solder the capacitor in, with short leads.", cv));
     }
   } else {
-    s.push(M("Cut every part to the cut length in the list. Driven parts are cut long so you can trim them."));
+    s.push(ctx.cutLong ? M("Cut every part to the cut length in the list. Driven parts are cut long so you can trim them.") : M("Cut every part to the cut length in the list."));
     if (hasBoom) s.push(M("Tape the 1:1 drilling strip to the boom, mark the element positions, then drill and fit the elements."));
     else s.push(M("Bend and assemble the parts using the dimensions and, where it fits on paper, the 1:1 template."));
-    s.push(M("Fit the feed line at the feed point, with the balun or match from the bill of materials."));
+    s.push(ctx.match ? M("Fit the feed line at the feed point, with the balun or match from the bill of materials.") : M("Fit the feed line at the feed point."));
   }
   s.push(M("Put the antenna in its final position, clear of metal, before you measure."));
   s.push(M("Measure S11 or SWR with a VNA or antenna analyser and note the frequency of the best match."));
   if (tunable) s.push(M("Trim in small steps using the tuning table and measure again after each step. If the resonance is already too high, the part is too short: add length or cut a new one."));
-  if (d.pcb) s.push(M("Measure again inside the final enclosure: plastic close to the antenna lowers the resonance."));
+  if (d.pcb || ctx.loop) s.push(M("Measure again inside the final enclosure: plastic close to the antenna lowers the resonance."));
   s.push(M("Load the measured .s1p in the Simulation tab to compare it with the model and get a trim suggestion."));
   if (!d.pcb) s.push(M("Seal the feed point against water (self-amalgamating tape) if the antenna goes outdoors."));
   return s;
@@ -441,7 +473,7 @@ export function buildPack(def: AntennaDef, p: Params, d = def.build(p)): BuildPa
   const t = tuning(def, p, d);
   const cuts = d.pcb ? [] : cutList(def, d, new Set(t.rows.map((r) => r.tag)));
   const hasBoom = !d.pcb && pieces(d).some((pc) => pc.mech && pc.length > 0.05);
-  return { bom: bom(def, d, cuts), cuts, tune: t.rows, tuneNote: t.note, substrate: substrateNotes(def, p, d), steps: steps(d, hasBoom, t.rows.length > 0), hasBoom };
+  return { bom: bom(def, d, cuts), cuts, tune: t.rows, tuneNote: t.note, substrate: substrateNotes(def, p, d), steps: steps(d, hasBoom, t.rows.length > 0, { loop: def.id === "pcbloop", cutLong: cuts.some((c) => c.cut > c.length + 1e-6), match: !!feedMatch(def, d) }), hasBoom };
 }
 
 // ---------------------------------------------------------------- measured vs model
@@ -505,7 +537,15 @@ export const BUILD_STRINGS = [
   "Order the board from the Gerber files, or etch it at home with the 1:1 template (for toner transfer use the Mirrored option: the top layer prints mirrored and the bottom layer as seen through the board from the top, each toner side against its copper).",
   "Solder the connector at the feed port and keep the joint short.",
   "Stitch the top and bottom ground pours with vias along their edges (usual practice; not part of the model).",
-  "Cut every part to the cut length in the list. Driven parts are cut long so you can trim them.",
+  "Cut every part to the cut length in the list. Driven parts are cut long so you can trim them.", "Cut every part to the cut length in the list.",
+  "Fit the feed line at the feed point.",
+  "Fit the balun or feed network from the bill of materials between the connector and the feed port, as close to the board as you can.",
+  "Make the board: etch the loop trace from the 1:1 template (black = copper; for toner transfer use the Mirrored option) or have it made to the loop dimensions. Keep the two gaps in the trace: Cs goes in the top one, Cp across the bottom one at the feed.",
+  "Solder the connector at the feed gap, centre pin to one side and shield to the other, and keep the joint short.",
+  "Solder the series capacitor Cs in the top gap and the shunt capacitor Cp across the feed, with the values of the Matching components table (C0G/NP0, short leads). For tuning, solder a trimmer capacitor in parallel with Cs.",
+  "Set the Cs trimmer for the best match, then replace it with a fixed capacitor of the value you measured (Cp sets the 50 Ω match).",
+  "Solder the hot element together (washer, cones, rim, lid) and the ground cone. Solder the coax jacket into the ground cone apex and the centre pin into the washer, keeping the listed gap.",
+  "Solder the hot frames to the washer in the printed cradle and the ground frames to the collar on the coax jacket in the cup: one groove per frame keeps them at equal angles. Then join the washer to the coax centre pin through the capacitor (see the capacitor step below), keeping the listed gap.",
   "Tape the 1:1 drilling strip to the boom, mark the element positions, then drill and fit the elements.",
   "Bend and assemble the parts using the dimensions and, where it fits on paper, the 1:1 template.",
   "Fit the feed line at the feed point, with the balun or match from the bill of materials.",
@@ -541,12 +581,18 @@ export const BUILD_STRINGS = [
 ];
 
 
+/** A length for files, as the app shows it: mm, and metres from 10 m up. */
+export function lenEn(m: number): string {
+  const mm = m * 1e3;
+  return Math.abs(mm) >= 1e4 ? `${(mm / 1e3).toFixed(3)} m` : `${mm.toFixed(Math.abs(mm) < 10 ? 2 : 1)} mm`;
+}
+
 /** English rendering of a message for files (README, PDF): lengths in mm. */
 export function en(m: Msg): string {
   const f = (a: Arg): string => {
     if (typeof a === "number") return String(+a.toPrecision(4));
     if (typeof a === "string") return a;
-    if ("len" in a) { const mm = a.len * 1e3; return `${mm.toFixed(Math.abs(mm) < 10 ? 2 : 1)} mm`; }
+    if ("len" in a) return lenEn(a.len);
     if ("hz" in a) { const x = Math.abs(a.hz); return x >= 1e9 ? `${(a.hz / 1e9).toFixed(3)} GHz` : x >= 1e6 ? `${(a.hz / 1e6).toFixed(3)} MHz` : `${(a.hz / 1e3).toFixed(1)} kHz`; }
     return `${a.pct.toFixed(2)} %`;
   };

@@ -6,7 +6,7 @@ export interface Imported { name: string; z: ZPoint[]; pattern: Pattern | null; 
 
 /** Touchstone 1-port: # <unit> S <RI|MA|DB> R <z0>. Returns input impedance points. */
 export function parseTouchstone(text: string, name: string): Imported {
-  let unit = 1e9, fmt = "MA", z0 = 50;
+  let unit = 1e9, fmt = "MA", z0 = 50, kind = "S", v2 = false;
   const z: ZPoint[] = [];
   // Columns per data row: 1 + 2 n² for an n-port (3 for .s1p, 9 for .s2p). Anything else, such as the 5-column noise block of an
   // .s2p, is not S-parameter data. Without a .sNp extension the first data row decides.
@@ -15,13 +15,16 @@ export function parseTouchstone(text: string, name: string): Imported {
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.replace(/!.*/, "").trim();
     if (!line) continue;
+    if (/^\[version\]\s*2/i.test(line)) { v2 = true; continue; }
     if (line.startsWith("#")) {
       const t = line.slice(1).trim().toUpperCase().split(/\s+/);
       for (let i = 0; i < t.length; i++) {
         if (["HZ", "KHZ", "MHZ", "GHZ"].includes(t[i])) unit = { HZ: 1, KHZ: 1e3, MHZ: 1e6, GHZ: 1e9 }[t[i] as "HZ"];
+        else if (["S", "Y", "Z", "H", "G"].includes(t[i])) kind = t[i];
         else if (["RI", "MA", "DB"].includes(t[i])) fmt = t[i];
         else if (t[i] === "R" && t[i + 1]) { const r = parseFloat(t[i + 1]); if (r > 0) z0 = r; }
       }
+      if (kind !== "S" && kind !== "Z" && kind !== "Y") throw new Error("Only S, Z or Y parameters are supported");
       continue;
     }
     const n = line.split(/\s+/).map(Number);
@@ -34,9 +37,17 @@ export function parseTouchstone(text: string, name: string): Imported {
       const mag = fmt === "DB" ? Math.pow(10, n[1] / 20) : n[1], ang = (n[2] * Math.PI) / 180;
       gr = mag * Math.cos(ang); gi = mag * Math.sin(ang);
     }
-    // Z = z0 (1 + Γ) / (1 − Γ)
-    const dr = 1 - gr, di = -gi, nr = 1 + gr, ni = gi, d = dr * dr + di * di;
-    const p = { f: n[0] * unit, r: (z0 * (nr * dr + ni * di)) / d, x: (z0 * (ni * dr - nr * di)) / d };
+    let p: ZPoint;
+    if (kind === "S") {
+      // Z = z0 (1 + Γ) / (1 − Γ)
+      const dr = 1 - gr, di = -gi, nr = 1 + gr, ni = gi, d = dr * dr + di * di;
+      p = { f: n[0] * unit, r: (z0 * (nr * dr + ni * di)) / d, x: (z0 * (ni * dr - nr * di)) / d };
+    } else {
+      // Touchstone 1.x stores Z and Y normalised to R; 2.0 stores ohms and siemens
+      const k = v2 ? 1 : z0;
+      if (kind === "Z") p = { f: n[0] * unit, r: gr * k, x: gi * k };
+      else { const d = (gr * gr + gi * gi) / k; p = { f: n[0] * unit, r: gr / d, x: -gi / d }; } // Z = 1 / Y
+    }
     // |Γ| = 1 at Γ = 1 (an open) has no finite impedance; f ≤ 0 is not a frequency
     if (p.f > 0 && Number.isFinite(p.r) && Number.isFinite(p.x)) z.push(p);
   }

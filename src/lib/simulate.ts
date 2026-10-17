@@ -279,6 +279,9 @@ export function toS1P(name: string, z: ZPoint[], z0: number): string {
 
 /** Every English string this module can show (for the i18n coverage test). */
 export const SIM_STRINGS = [
+  // FDTD notes (fdtdJob.ts, SynthPanel.tsx) are typed messages formatted in the UI
+  "FDTD ({0}): {1}×{2}×{3} cells, {4} steps, radiation efficiency {5} %.", "FDTD did not converge within {0} steps: the result is approximate.",
+  "FDTD ({0}) tuned, trim {1} %", "FDTD ({0}) tuned, trim {1} %, did not converge: approximate", "FDTD (not run): {0}",
   "Horizontal plane XY (θ = 90°)", "Vertical plane XZ (φ = 0°)", "Vertical plane YZ (φ = 90°)",
   "Patch: cavity-model impedance and two-slot pattern over an infinite ground plane (no back radiation). Use openEMS or another full-wave tool for final numbers.",
   "Collinear: ideal array-factor pattern (equal currents, in phase at the design frequency). No impedance: a wire model cannot represent the coax.",

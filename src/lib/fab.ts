@@ -15,6 +15,19 @@ function header(fn: string, gen: string): string[] {
   return [`%TF.GenerationSoftware,AntennaGenerator,,${gen}*%`, `%TF.FileFunction,${fn}*%`, "%TF.FilePolarity,Positive*%", "%FSLAX46Y46*%", "%MOMM*%", "%LPD*%", "G01*"];
 }
 
+/**
+ * The board rectangle a fab gets: the design's board, grown to enclose all copper when some sticks out
+ * (the IFA "arm too long" case), so the outline never clips copper. A custom polygon outline is left alone.
+ */
+export function fabBox(p: Pcb): { x0: number; y0: number; x1: number; y1: number; grown: boolean } {
+  const b = p.board, e = 1e-7;
+  if (p.outline) return { ...b, grown: false };
+  let { x0, y0, x1, y1 } = b;
+  for (const q of copperBoxes(p)) { x0 = Math.min(x0, q.x0); y0 = Math.min(y0, q.y0); x1 = Math.max(x1, q.x1); y1 = Math.max(y1, q.y1); }
+  const grown = x0 < b.x0 - e || y0 < b.y0 - e || x1 > b.x1 + e || y1 > b.y1 + e;
+  return grown ? { x0, y0, x1, y1, grown } : { ...b, grown: false };
+}
+
 const corners = (q: PcbRect): [number, number][] => [[q.x0, q.y0], [q.x1, q.y0], [q.x1, q.y1], [q.x0, q.y1]];
 
 /** Filled G36/G37 region, closed back to its first vertex. */
@@ -24,7 +37,7 @@ function region(pts: [number, number][], ox: number, oy: number): string[] {
 }
 
 export function gerberCopper(p: Pcb, layer: "top" | "bottom", gen = "1"): string {
-  const ox = p.board.x0, oy = p.board.y0;
+  const { x0: ox, y0: oy } = fabBox(p);
   const L = header(layer === "top" ? "Copper,L1,Top" : "Copper,L2,Bot", gen);
   if (isProbe(p)) L.push(`%ADD10C,${(PROBE_CLEAR * 1e3).toFixed(6)}*%`);
   for (const q of p.rects.filter((r) => r.layer === layer)) L.push(...region(corners(q), ox, oy));
@@ -38,10 +51,10 @@ export function gerberCopper(p: Pcb, layer: "top" | "bottom", gen = "1"): string
 }
 
 export function gerberOutline(p: Pcb, gen = "1"): string {
-  const w = p.board.x1 - p.board.x0, h = p.board.y1 - p.board.y0;
+  const fb = fabBox(p), w = fb.x1 - fb.x0, h = fb.y1 - fb.y0;
   const L = [...header("Profile,NP", gen), "%ADD10C,0.100000*%", "D10*"];
   if (p.outline) {
-    const at = ([x, y]: [number, number], op: string) => `X${g(x - p.board.x0)}Y${g(y - p.board.y0)}${op}*`;
+    const at = ([x, y]: [number, number], op: string) => `X${g(x - fb.x0)}Y${g(y - fb.y0)}${op}*`;
     L.push(at(p.outline[0], "D02"), ...p.outline.slice(1).map((q) => at(q, "D01")), at(p.outline[0], "D01"));
   } else L.push(`X0Y0D02*`, `X${g(w)}Y0D01*`, `X${g(w)}Y${g(h)}D01*`, `X0Y${g(h)}D01*`, `X0Y0D01*`);
   return [...L, "M02*"].join("\n") + "\n";
@@ -51,20 +64,20 @@ export function gerberOutline(p: Pcb, gen = "1"): string {
 const holes = (p: Pcb) => p.drills ?? (isProbe(p) ? [{ x: p.port.start[0], y: p.port.start[1], d: PROBE_DRILL }] : []);
 
 export function excellon(p: Pcb): string | null {
-  const hs = holes(p);
+  const hs = holes(p), fb = fabBox(p);
   if (!hs.length) return null;
   const sizes = [...new Set(hs.map((q) => +(q.d * 1e3).toFixed(3)))];
   const L = ["M48", isProbe(p) ? "; Antenna Generator: probe-feed hole" : "; Antenna Generator: plated holes", "; #@! TF.FileFunction,Plated,1,2,PTH", "FMAT,2", "METRIC,TZ", ...sizes.map((d, i) => `T${i + 1}C${d.toFixed(3)}`), "%", "G05"];
   sizes.forEach((d, i) => {
     L.push(`T${i + 1}`);
-    for (const q of hs.filter((h) => +(h.d * 1e3).toFixed(3) === d)) L.push(`X${((q.x - p.board.x0) * 1e3).toFixed(3)}Y${((q.y - p.board.y0) * 1e3).toFixed(3)}`);
+    for (const q of hs.filter((h) => +(h.d * 1e3).toFixed(3) === d)) L.push(`X${((q.x - fb.x0) * 1e3).toFixed(3)}Y${((q.y - fb.y0) * 1e3).toFixed(3)}`);
   });
   return [...L, "T0", "M30", ""].join("\n");
 }
 
 /** DXF R12 (AutoCAD 12 ASCII), mm. Layers OUTLINE, TOP, BOTTOM, PORT, DRILL. */
 export function toDXF(p: Pcb): string {
-  const ox = p.board.x0, oy = p.board.y0, mm = (v: number) => (v * 1e3).toFixed(4);
+  const fb = fabBox(p), ox = fb.x0, oy = fb.y0, mm = (v: number) => (v * 1e3).toFixed(4);
   const out: string[] = ["0", "SECTION", "2", "HEADER", "9", "$ACADVER", "1", "AC1009", "0", "ENDSEC",
     "0", "SECTION", "2", "TABLES", "0", "TABLE", "2", "LAYER", "70", "5"];
   for (const [name, col] of [["OUTLINE", 7], ["TOP", 1], ["BOTTOM", 5], ["PORT", 3], ["DRILL", 6]] as const) out.push("0", "LAYER", "2", name, "70", "0", "62", String(col), "6", "CONTINUOUS");
@@ -75,7 +88,7 @@ export function toDXF(p: Pcb): string {
     out.push("0", "SEQEND", "8", layer);
   };
   const box = (x0: number, y0: number, x1: number, y1: number): [number, number][] => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
-  poly("OUTLINE", p.outline ?? box(p.board.x0, p.board.y0, p.board.x1, p.board.y1));
+  poly("OUTLINE", p.outline ?? box(fb.x0, fb.y0, fb.x1, fb.y1));
   for (const q of p.drills ?? []) out.push("0", "CIRCLE", "8", "DRILL", "10", mm(q.x - ox), "20", mm(q.y - oy), "30", "0.0", "40", (q.d * 500).toFixed(4));
   for (const q of p.rects) poly(q.layer === "top" ? "TOP" : "BOTTOM", box(q.x0, q.y0, q.x1, q.y1));
   for (const q of p.polys ?? []) poly(q.layer === "top" ? "TOP" : "BOTTOM", q.pts);
@@ -112,16 +125,17 @@ export function fabZip(def: AntennaDef, p: Params, d: Design, base: string, gen:
 function readme(def: AntennaDef, p: Params, d: Design, names: string[]): string {
   const pcb = d.pcb!, pack = buildPack(def, p, d);
   const mm = (v: number) => `${(v * 1e3).toFixed(2)} mm`;
-  const port = pcb.port, ox = pcb.board.x0, oy = pcb.board.y0;
+  const port = pcb.port, fb = fabBox(pcb), ox = fb.x0, oy = fb.y0;
   const L = [
     `${def.name}: fabrication files from Antenna Generator`,
     "",
     `Design frequency: ${(d.f / 1e6).toFixed(3)} MHz`,
-    `Board: ${mm(pcb.board.x1 - pcb.board.x0)} x ${mm(pcb.board.y1 - pcb.board.y0)}, ${mm(pcb.h)} thick, er ${pcb.er}, tan d ${pcb.tanD}, copper ${(pcb.t * 1e6).toFixed(0)} um`,
+    `Board: ${mm(fb.x1 - fb.x0)} x ${mm(fb.y1 - fb.y0)}, ${mm(pcb.h)} thick, er ${pcb.er}, tan d ${pcb.tanD}, copper ${(pcb.t * 1e6).toFixed(0)} um`,
     ...(pcb.levels?.length ? [
       `Stack: ${pcb.levels.length + 1} boards of the same laminate (files _part1 = the top board, then downwards):`,
       ...boardsOf(pcb).map(({ label, pcb: b }, i) => `  part${i + 1}: ${label}, ${mm(b.board.x1 - b.board.x0)} across, bottom face at z = ${mm(i === 0 ? 0 : pcb.levels![i - 1].z0)}`),
     ] : []),
+    ...(fb.grown ? [`Note: some copper extends past the designed board edge, so the outline (.GKO/.dxf) was enlarged to enclose all copper. Check the design warnings: the antenna does not fit the board it was drawn for.`] : []),
     `Layers: ${copperBoxes(pcb).some((q) => q.layer === "bottom") ? "2 (top + bottom)" : "1 (top only; bottom copper not used)"}`,
     "Units: millimetres. Origin: lower-left corner of the board.",
     "",
@@ -135,6 +149,8 @@ function readme(def: AntennaDef, p: Params, d: Design, names: string[]): string 
       ? `  Coax through the stack: core to the centre pad on top of part1, shield to the pads of the other boards (port ${port.R} ohm).`
       : isProbe(pcb)
       ? `  Probe feed at X ${mm(port.start[0] - ox)} Y ${mm(port.start[1] - oy)}: ${(PROBE_DRILL * 1e3).toFixed(2)} mm plated hole, ${(PROBE_CLEAR * 1e3).toFixed(1)} mm clearance in the bottom ground (SMA panel jack from below).`
+      : Math.abs(port.stop[0] - port.start[0]) < 1e-9 || Math.abs(port.stop[1] - port.start[1]) < 1e-9
+      ? "  Edge-mount SMA: centre pin to the feed line, body to the bottom ground."
       : `  Port between X ${mm(Math.min(port.start[0], port.stop[0]) - ox)}..${mm(Math.max(port.start[0], port.stop[0]) - ox)}, Y ${mm(Math.min(port.start[1], port.stop[1]) - oy)}..${mm(Math.max(port.start[1], port.stop[1]) - oy)} (${port.R} ohm). Solder the connector across this gap.`,
     "",
     "Order notes:",

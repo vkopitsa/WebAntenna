@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { AntennaDef, Design, Params } from "../lib/types";
-import { patternChoices, s11, sweepBreaks, toS1P, type SimResult, type ZPoint } from "../lib/simulate";
+import { interpZ, patternChoices, s11, sweepBreaks, toS1P, type SimResult, type ZPoint } from "../lib/simulate";
 import { parseBands } from "../lib/bands";
 import { parseOpenEMS, parseTouchstone, type Imported } from "../lib/importers";
 import { fmtHz } from "../lib/units";
@@ -12,7 +12,7 @@ import { Select } from "./inputs";
 import { download } from "../download";
 import { phaseText, useFdtd } from "../useFdtd";
 import type { Engine } from "../fdtdJob";
-import { set, useStore } from "../store";
+import { clampParams, set, useStore } from "../store";
 import { advise, bestMatch, tuning } from "../lib/build";
 import { fmtLen } from "../format";
 import { fmtMsg } from "../msg";
@@ -22,13 +22,17 @@ const Z0S: [string, string][] = [["50", "50 Ω"], ["75", "75 Ω"], ["140", "140 
 function bandSummary(z: ZPoint[], z0: number, bands: [number, number][]) {
   return bands.map(([a, b]) => {
     // a NaN point (solver blow-up, odd .s1p) would make indexOf(min) −1
-    const pts = z.filter((p) => p.f >= a && p.f <= b && Number.isFinite(p.r) && Number.isFinite(p.x));
+    const ok = z.filter((p) => Number.isFinite(p.r) && Number.isFinite(p.x));
+    // the band edges and centre, interpolated: a narrow band holds only a couple of sweep points, and the edges are
+    // usually the worst SWR
+    const extra = [a, (a + b) / 2, b].map((f) => interpZ(ok, f)).filter((p): p is ZPoint => p != null);
+    const pts = [...ok.filter((p) => p.f >= a && p.f <= b), ...extra].sort((p, q) => p.f - q.f);
     if (!pts.length) return { a, b, none: true as const };
     const sw = pts.map((p) => s11(p, z0).swr);
     const best = sw.indexOf(Math.min(...sw));
     // the model stops inside the band (a fixed-shape table): say how far the numbers go
     const top = z[z.length - 1].f, upTo = top < b - (b - a) * 0.01 ? top : null;
-    return { a, b, none: false as const, minSwr: sw[best], fBest: pts[best].f, maxSwr: Math.max(...sw), zMid: pts[Math.floor(pts.length / 2)], upTo };
+    return { a, b, none: false as const, minSwr: sw[best], fBest: pts[best].f, maxSwr: Math.max(...sw), zMid: interpZ(ok, (a + b) / 2) ?? pts[Math.floor(pts.length / 2)], upTo };
   });
 }
 
@@ -108,7 +112,7 @@ export function SimPanel({ def, params, design, active = true }: { def: AntennaD
   const unit = useStore((s) => s.unit);
   const tune = useMemo(() => (imp ? tuning(def, params, design) : null), [imp, def, params, design]);
   const adv = useMemo(() => (imp && tune ? advise(def, params, tune.rows, imp.z, z0) : null), [imp, tune, def, params, z0]);
-  const applyTrim = (v: number) => set((s) => ({ params: { ...s.params, [def.id]: { ...s.params[def.id], trim: v } } }));
+  const applyTrim = (v: number) => set((s) => ({ params: { ...s.params, [def.id]: { ...s.params[def.id], ...clampParams(def.id, { trim: v }) } } }));
   return (
     <div className="sim">
       <div className="sim-bar">
@@ -161,7 +165,8 @@ export function SimPanel({ def, params, design, active = true }: { def: AntennaD
                 : <span>{t("SWR {0}–{1} (best at {2}), Z ≈ {3}", s.minSwr.toFixed(2), Number.isFinite(s.maxSwr) ? s.maxSwr.toFixed(2) : "∞", fmtHz(s.fBest, 3), `${s.zMid.r.toFixed(0)} ${s.zMid.x >= 0 ? "+" : "−"} j${Math.abs(s.zMid.x).toFixed(0)} Ω`)}{s.upTo != null && <span className="muted"> · {t("computed up to {0}", fmtHz(s.upTo, 3))}</span>}</span>}
             </span>)}
           </div>
-          {r?.notes.map((n) => <p key={n} className="hint">{n.startsWith("FDTD (") ? n : t(n)}</p>)}
+          {r?.notes.map((n) => <p key={n} className="hint">{t(n)}</p>)}
+          {fdOut?.notes.map((n, i) => <p key={i} className={i === 0 ? "hint" : "hint warn-text"}>{fmtMsg(t, unit, n)}</p>)}
           {imp && <p className="hint">{t("Loaded: {0}", imp.name)} ({imp.source === "openems" ? "openEMS" : "Touchstone"})</p>}
         </div>
       )}

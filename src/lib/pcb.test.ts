@@ -200,3 +200,28 @@ function unzipNames(z: Uint8Array): string[] {
   }
   return out;
 }
+
+describe("fab outline encloses all copper", () => {
+  const ifa = ANTENNA_BY_ID.ifa;
+  const long = ifa.build({ ...ifa.defaults, bands: "433e6-434e6" }), p = long.pcb!;
+  it("IFA too-long case: outline and DXF grow, README says so", () => {
+    expect(long.notes.some((n) => n.startsWith("Warning: the arm is longer"))).toBe(true);
+    const cuMax = Math.max(...p.rects.map((q) => q.x1)) - p.board.x0;
+    const m = /X(\d+)Y0D01/.exec(gerberOutline(p))!;
+    expect(Number(m[1]) / 1e9).toBeGreaterThanOrEqual(cuMax - 1e-9);
+    expect(toDXF(p)).toContain((cuMax * 1e3).toFixed(4));
+    const text = Buffer.from(fabZip(ifa, ifa.defaults, long, "x", "t")).toString("latin1");
+    expect(text).toContain("outline (.GKO/.dxf) was enlarged");
+  });
+  it("normal designs keep the board outline", () => {
+    const d = ifa.build(ifa.defaults);
+    expect(gerberOutline(d.pcb!)).toContain(`X${Math.round((d.pcb!.board.x1 - d.pcb!.board.x0) * 1e9)}Y0D01`);
+    const text = Buffer.from(fabZip(ifa, ifa.defaults, d, "x", "t")).toString("latin1");
+    expect(text).not.toContain("was enlarged");
+  });
+  it("edge-fed patch README names the edge-mount SMA", () => {
+    const def = ANTENNA_BY_ID.patch, d = def.build(def.defaults);
+    const text = Buffer.from(fabZip(def, def.defaults, d, "x", "t")).toString("latin1");
+    expect(text).toContain("Edge-mount SMA: centre pin to the feed line, body to the bottom ground.");
+  });
+});

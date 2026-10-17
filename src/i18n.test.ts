@@ -16,13 +16,13 @@ const VARIANTS: Record<string, Params[]> = {
   jpole: [{ bands: "2.4e9-2.5e9", sp: 5e-3 }],
   printeddipole: [{ bands: "20e9-21e9", w: 8e-3 }],
   pcbmonopole: [{ w: 0.01, bw: 0.01 }],
-  patch: [{ feed: "probe" }, { z0: 500 }, { bands: "2e9-3e9" }],
+  patch: [{ feed: "probe" }, { z0: 500 }, { bands: "2e9-3e9" }, { bands: "5.8e9-5.8e9", er: 2.2, h: 3.2e-3, z0: 45 }, { z0: 200, h: 0.2e-3 }],
   moxon: [{ d: 0.5 }, { bands: "144e6-146e6;430e6-440e6" }],
   fandipole: [{ bands: "3.5e6-3.8e6;7e6-7.2e6;14e6-14.35e6;21e6-21.45e6;28e6-29.7e6" }, { bands: "3.5e6-3.8e6;7e6-7.2e6;10.1e6-10.15e6;14e6-14.35e6;18e6-18.2e6;21e6-21.45e6;28e6-29.7e6" }],
   discone: [{ bands: "100e6-2000e6" }],
   pcbloop: [{ a: 0.003, b: 0.003, qc: 1 }],
   meander: [{ W: 0.06 }, { P: 0.5e-3 }],
-  ifa: [{ bw: 0.01 }, { bands: "6e9-6.1e9", H: 0.05 }],
+  ifa: [{ bw: 0.01 }, { bands: "6e9-6.1e9", H: 0.05 }, { H: 1e-3 }],
   helix: [{ bands: "1e9-3e9" }, { d: 0.05 }],
   cloverleaf: [{ leaves: "4", hand: "lhcp" }],
   dualbanddipole: [{ bands: "2.4e9-2.5e9" }],
@@ -54,6 +54,7 @@ export function libStrings(): Set<string> {
       d.perf.forEach((x) => { add(x.label); if (/[A-Za-z]{4,}/.test(x.value)) add(x.value); });
       d.notes.forEach(add);
       d.plates.forEach((p) => add(p.label));
+      d.cuts?.forEach((c) => { add(c.what); add(c.note); });
     }
   }
   return out;

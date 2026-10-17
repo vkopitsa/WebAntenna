@@ -77,7 +77,7 @@ function clean(id: string, saved: Params): Params {
   return out;
 }
 
-function clearHash() {
+export function clearHash() {
   try { history.replaceState(null, "", location.pathname + location.search); } catch { /* ignore */ }
 }
 
@@ -121,6 +121,24 @@ export function set(patch: Partial<State> | ((s: State) => Partial<State>)) {
     localStorage.setItem(KEY, JSON.stringify({ type, params, unit, lang, theme, showDims }));
   } catch { /* ignore */ }
   subs.forEach((f) => f());
+}
+/** `patch` with every value clamped to its ParamDef range (unknown keys and unusable values dropped). */
+export function clampParams(id: string, patch: Params): Params {
+  const out: Params = {};
+  for (const pd of ANTENNA_BY_ID[id].params) {
+    if (!(pd.key in patch)) continue;
+    const v = sanitizeParam(pd, patch[pd.key]);
+    if (v !== undefined) out[pd.key] = v;
+  }
+  return out;
+}
+
+/** Put the share link in the address bar (clipboard blocked) and remove it again at the next state change:
+ *  a leftover hash would be applied over later edits on reload. */
+export function showHashUntilEdit(hash: string) {
+  try { history.replaceState(null, "", hash); } catch { return; }
+  const f = () => { subs.delete(f); clearHash(); };
+  subs.add(f);
 }
 export function setParam(key: string, value: number | string) {
   if (key === "bands") return set((s) => ({ params: withBands(s.params, value) }));
